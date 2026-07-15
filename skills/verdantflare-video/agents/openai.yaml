@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Video"
+  short_description: "Generate SD2 videos from text and local media"
+  default_prompt: "Use $verdantflare-video to generate an SD2 video from this prompt and these local media files."
