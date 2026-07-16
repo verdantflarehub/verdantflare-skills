@@ -2,7 +2,7 @@
 
 ## verdantflare-video
 
-This repository contains the cross-platform `verdantflare-video` Skill for Codex. It supports macOS and Windows, creates SD2 video tasks through the VerdantFlare API, uploads local references to the configured temporary bucket, tracks asynchronous status, and downloads completed results.
+`verdantflare-video` 是一个兼容 macOS 和 Windows 的 Codex Skill。它通过 VerdantFlare API 创建 SD2 视频任务，上传本地参考素材，跟踪异步任务状态，并下载生成结果。
 
 ### 安装命令
 
