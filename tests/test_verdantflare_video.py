@@ -15,9 +15,9 @@ sys.path.insert(0, str(SCRIPTS))
 
 os.environ["VERDANTFLARE_VIDEO_TEST_MODE"] = "1"
 
-from config import ConfigError, build_config, ensure_mc, parse_env_text
+from config import ConfigError, build_config, ensure_mc, load_config, parse_env_text
 from task_store import list_tasks, load_task, save_task
-from video_client import ClientError, build_payload, generate
+from video_client import ClientError, _media_upload_error, build_payload, generate
 
 
 class VideoHandler(BaseHTTPRequestHandler):
@@ -157,6 +157,37 @@ class VideoSkillTests(unittest.TestCase):
                 config.mc_path.parent.mkdir(parents=True, exist_ok=True)
                 config.mc_path.write_bytes(b"verified-test-cache")
                 self.assertEqual(ensure_mc(config), config.mc_path)
+
+    def test_runtime_loads_discovered_windows_config(self):
+        values = parse_env_text(
+            "VERDANTFLARE_VIDEO_API_KEY=api\n"
+            "VERDANTFLARE_VIDEO_S3_ACCESS_KEY=access\n"
+            "VERDANTFLARE_VIDEO_S3_SECRET_KEY=secret\n"
+        )
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "mnt" / "c" / "Users" / "Mengk" / "AppData" / "Local" / "VerdantFlare" / "Video" / ".env"
+            path.parent.mkdir(parents=True)
+            path.write_text("".join(f"{key}={value}\n" for key, value in values.items()), encoding="utf-8")
+            with mock.patch("config._config_file_candidates", return_value=[path]):
+                config = load_config()
+            self.assertEqual(config.config_file, path)
+
+    def test_missing_config_reports_all_searched_paths(self):
+        paths = [Path("/home/code/.config/verdantflare/video/.env"), Path("/mnt/c/Users/Mengk/AppData/Local/VerdantFlare/Video/.env")]
+        with mock.patch("config._config_file_candidates", return_value=paths):
+            with self.assertRaisesRegex(ConfigError, "searched:"):
+                load_config()
+
+    def test_bucket_failure_explains_that_video_was_not_submitted(self):
+        values = parse_env_text(
+            "VERDANTFLARE_VIDEO_API_KEY=api\n"
+            "VERDANTFLARE_VIDEO_S3_ACCESS_KEY=access\n"
+            "VERDANTFLARE_VIDEO_S3_SECRET_KEY=secret\n"
+        )
+        config = build_config(values)
+        message = _media_upload_error(config, "The specified bucket does not exist.")
+        self.assertIn("before video submission", message)
+        self.assertIn(config.s3_bucket, message)
 
     def test_config_rejects_duplicate_and_unknown_fields(self):
         with self.assertRaises(ConfigError):

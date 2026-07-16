@@ -132,6 +132,48 @@ def _default_state_dir() -> Path:
     return _expand_path(DEFAULT_STATE_DIR)
 
 
+def _is_wsl_runtime() -> bool:
+    if platform.system() != "Linux":
+        return False
+    if os.environ.get("WSL_DISTRO_NAME") or os.environ.get("WSL_INTEROP"):
+        return True
+    try:
+        return "microsoft" in Path("/proc/version").read_text(encoding="utf-8").lower()
+    except OSError:
+        return False
+
+
+def _wsl_windows_config_candidates() -> list[Path]:
+    if not _is_wsl_runtime():
+        return []
+    candidates: list[Path] = []
+    mounts = Path("/mnt")
+    try:
+        for drive in sorted(mounts.iterdir()):
+            profiles = drive / "Users"
+            if not profiles.is_dir():
+                continue
+            for profile in sorted(profiles.iterdir()):
+                path = profile / "AppData" / "Local" / "VerdantFlare" / "Video" / ".env"
+                if path.is_file():
+                    candidates.append(path)
+    except OSError:
+        return []
+    return candidates
+
+
+def _config_file_candidates(env_file: str | None = None) -> list[Path]:
+    configured_path = env_file or os.environ.get("VERDANTFLARE_VIDEO_ENV_FILE")
+    if configured_path:
+        return [_expand_path(configured_path)]
+    candidates = [_default_config_file(), *_wsl_windows_config_candidates()]
+    unique: list[Path] = []
+    for path in candidates:
+        if path not in unique:
+            unique.append(path)
+    return unique
+
+
 def parse_env_text(text: str) -> dict[str, str]:
     """Parse the intentionally small, non-shell .env grammar."""
     if len(text.encode("utf-8")) > 32 * 1024:
@@ -333,10 +375,15 @@ def build_config(values: Mapping[str, str], *, config_file: Path | None = None) 
 
 
 def load_config(*, env_file: str | None = None) -> Config:
-    configured_path = env_file or os.environ.get("VERDANTFLARE_VIDEO_ENV_FILE")
-    path = _expand_path(configured_path) if configured_path else _default_config_file()
-    if not path.exists():
-        raise ConfigError(f"configuration file does not exist: {path}")
+    candidates = _config_file_candidates(env_file)
+    existing = [path for path in candidates if path.is_file()]
+    if len(existing) > 1:
+        paths = ", ".join(str(path) for path in existing)
+        raise ConfigError(f"multiple configuration files found; choose one with VERDANTFLARE_VIDEO_ENV_FILE: {paths}")
+    if not existing:
+        searched = ", ".join(str(path) for path in candidates)
+        raise ConfigError(f"configuration file not found; searched: {searched}")
+    path = existing[0]
     return build_config(read_env_file(path), config_file=path)
 
 

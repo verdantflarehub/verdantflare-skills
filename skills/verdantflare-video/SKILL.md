@@ -22,6 +22,10 @@ Windows: py -3 scripts/video_client.py generate --prompt "..." [options]
 
 Use the platform wrapper in `scripts/` when configuration is missing or rejected: `install-config-macos.sh` on macOS or `install-config-windows.ps1` on Windows. Both wrappers invoke `install-config.py`, read the one-time configuration URL through a hidden TTY prompt, and download a pinned `mc` binary when needed. Never place a configuration URL, API key, or S3 secret in command arguments, environment overrides, prompts, logs, or task records.
 
+Configuration discovery uses the native platform path first: `%LOCALAPPDATA%\\VerdantFlare\\Video\\.env` on Windows and `~/.config/verdantflare/video/.env` on macOS/Linux. When running inside WSL, also search mounted Windows profiles under `/mnt/<drive>/Users/<user>/AppData/Local/VerdantFlare/Video/.env`. If no file is found, report every searched path. If multiple files are found, report them and identify `VERDANTFLARE_VIDEO_ENV_FILE` as the process-level disambiguation option.
+
+When local media is used, upload to the configured S3-compatible bucket happens before `POST /videos`. A missing or inaccessible bucket must be reported as an object-storage provisioning/configuration error and must state that no video task was submitted. Text-only generation does not perform this upload step.
+
 ## Request Mapping
 
 - Keep the prompt non-empty and put it in the first text content item.

@@ -213,6 +213,21 @@ def _object_url(config: Config, key: str) -> str:
     return config.s3_public_base_url.rstrip("/") + "/" + "/".join(urllib.parse.quote(part, safe="") for part in key.split("/"))
 
 
+def _media_upload_error(config: Config, stderr: str) -> str:
+    detail = stderr.lower()
+    if "nosuchbucket" in detail or "bucket does not exist" in detail or "specified bucket" in detail:
+        return (
+            f"media upload failed before video submission: bucket '{config.s3_bucket}' does not exist "
+            "or has not been provisioned; ask the administrator to update the bootstrap configuration"
+        )
+    if "accessdenied" in detail or "access denied" in detail or "forbidden" in detail:
+        return (
+            f"media upload failed before video submission: access to bucket '{config.s3_bucket}' was denied; "
+            "ask the administrator to provision access for this installation"
+        )
+    return f"media upload failed before video submission: {redact_message(stderr or 'object storage request failed')}"
+
+
 def upload_media(config: Config, media: Media) -> Media:
     if media.url:
         return media
@@ -244,7 +259,7 @@ def upload_media(config: Config, media: Media) -> Media:
         except (OSError, subprocess.SubprocessError) as exc:
             raise ClientError("media upload failed") from exc
     if result.returncode != 0:
-        raise ClientError(f"media upload failed: {redact_message(result.stderr or 'mc failed')}")
+        raise ClientError(_media_upload_error(config, result.stderr or "mc failed"))
     return Media(kind=media.kind, source=media.source, url=_object_url(config, key), size=media.size)
 
 
