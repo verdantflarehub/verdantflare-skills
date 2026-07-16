@@ -44,4 +44,6 @@ VERDANTFLARE_VIDEO_S3_SECRET_KEY=<required>
 使用 $verdantflare-video，根据 ~/Desktop/product.png 生成一个 9:16、10 秒的产品广告视频。
 ```
 
-变更记录见 [`Changes.md`](Changes.md)。
+## 变更记录
+
+详见 [`Changes.md`](Changes.md)。
