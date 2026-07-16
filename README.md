@@ -6,12 +6,12 @@
 
 ### 安装命令
 
-当前发布版本：`verdantflare-video-v0.2.1`。
+当前发布版本：`verdantflare-video-v0.2.0`。
 
 在 Codex 中执行以下命令，从固定 Release 安装 `verdantflare-video` Skill：
 
 ```text
-使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.2.1/skills/verdantflare-video 安装 Skill。
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.2.0/skills/verdantflare-video 安装 Skill。
 ```
 
 安装完成后，Skill 默认位于以下目录：
