@@ -47,6 +47,8 @@ Paste one-time VerdantFlare configuration URL:
 
 一次性配置地址由 VerdantFlare 私下提供。
 
+如果配置时返回 `HTTP Error 403: Forbidden`，请重新获取一次性配置地址后再次执行命令。该地址具有有效期且只能成功使用一次。
+
 配置地址返回的 `.env` 内容必须包含以下三项：
 
 ```dotenv
