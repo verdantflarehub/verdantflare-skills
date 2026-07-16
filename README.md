@@ -36,10 +36,10 @@ bash "${CODEX_HOME:-$HOME/.codex}/skills/verdantflare-video/scripts/install-conf
 Windows PowerShell：
 
 ```powershell
-$codexHome = $env:CODEX_HOME
-if ([string]::IsNullOrWhiteSpace($codexHome)) { $codexHome = Join-Path $HOME ".codex" }
-& (Join-Path $codexHome "skills\verdantflare-video\scripts\install-config-windows.ps1")
+& "$HOME\.codex\skills\verdantflare-video\scripts\install-config-windows.ps1"
 ```
+
+如果设置了自定义 `CODEX_HOME`，将命令中的 `$HOME\.codex` 替换为该目录。
 
 执行前请确认本机已安装 Python `3.10` 或更高版本。脚本会通过隐藏的 TTY 提示读取一次性 HTTPS 配置地址：
 
