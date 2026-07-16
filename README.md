@@ -2,31 +2,44 @@
 
 ## verdantflare-video
 
-This repository contains the `verdantflare-video` Skill for Codex. It creates SD2 video tasks through the VerdantFlare API, uploads local references to the configured temporary bucket, tracks asynchronous status, and downloads completed results.
+This repository contains the cross-platform `verdantflare-video` Skill for Codex. It supports macOS and Windows, creates SD2 video tasks through the VerdantFlare API, uploads local references to the configured temporary bucket, tracks asynchronous status, and downloads completed results.
 
 ### 安装命令
+
+当前发布版本：`verdantflare-video-v0.2.0`。
 
 在 Codex 中执行以下命令，从固定 Release 安装 `verdantflare-video` Skill：
 
 ```text
-使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.1.0/skills/verdantflare-video 安装 Skill。
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.2.0/skills/verdantflare-video 安装 Skill。
 ```
 
 安装完成后，Skill 默认位于以下目录：
 
 ```text
-${CODEX_HOME:-$HOME/.codex}/skills/verdantflare-video
+macOS:  ${CODEX_HOME:-$HOME/.codex}/skills/verdantflare-video
+Windows: %CODEX_HOME%\skills\verdantflare-video (默认：%USERPROFILE%\.codex\skills\verdantflare-video)
 ```
 
 ### 配置命令
 
-Skill 安装完成后，在 macOS 终端执行：
+Skill 安装完成后，根据操作系统执行对应命令。
+
+macOS 终端：
 
 ```bash
 bash "${CODEX_HOME:-$HOME/.codex}/skills/verdantflare-video/scripts/install-config-macos.sh"
 ```
 
-执行前请确认本机已安装 `python3 >= 3.10`。脚本会通过隐藏的 TTY 提示读取一次性 HTTPS 配置地址：
+Windows PowerShell：
+
+```powershell
+$codexHome = $env:CODEX_HOME
+if ([string]::IsNullOrWhiteSpace($codexHome)) { $codexHome = Join-Path $HOME ".codex" }
+& (Join-Path $codexHome "skills\verdantflare-video\scripts\install-config-windows.ps1")
+```
+
+执行前请确认本机已安装 Python `3.10` 或更高版本。脚本会通过隐藏的 TTY 提示读取一次性 HTTPS 配置地址：
 
 ```text
 Paste one-time VerdantFlare configuration URL:
@@ -42,7 +55,7 @@ VERDANTFLARE_VIDEO_S3_ACCESS_KEY=<required>
 VERDANTFLARE_VIDEO_S3_SECRET_KEY=<required>
 ```
 
-其余配置项均为可选，使用当前 Skill Release 的内置默认值。脚本会自动校验配置、创建权限受限的配置和状态目录，并在需要时下载和校验固定版本的 MinIO `mc`。用户不需要手工安装 `mc`、配置 Alias 或编辑 `.env`。
+其余配置项均为可选，使用当前 Skill Release 的内置默认值。脚本会自动校验配置、创建配置和状态目录，并在需要时下载和校验对应平台的固定版本 MinIO `mc`。
 
 ### 使用 Skill
 

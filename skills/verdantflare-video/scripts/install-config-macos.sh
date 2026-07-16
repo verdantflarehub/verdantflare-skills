@@ -17,4 +17,4 @@ if ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) e
   exit 1
 fi
 
-exec python3 "$SCRIPT_DIR/config.py" install
+exec python3 "$SCRIPT_DIR/install-config.py"

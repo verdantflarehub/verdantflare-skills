@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import contextlib
-import fcntl
 import hashlib
 import json
 import os
@@ -14,6 +13,11 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from config import Config
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 
 class BusyTaskError(RuntimeError):
@@ -118,17 +122,33 @@ def task_lock(config: Config, task_id: str, *, blocking: bool = False) -> Iterat
     path = config.locks_dir / (hashlib.sha256(task_id.encode("utf-8")).hexdigest() + ".lock")
     with path.open("a+") as stream:
         os.chmod(path, 0o600)
-        flags = fcntl.LOCK_EX
-        if not blocking:
-            flags |= fcntl.LOCK_NB
-        try:
-            fcntl.flock(stream.fileno(), flags)
-        except BlockingIOError as exc:
-            raise BusyTaskError(task_id) from exc
+        if os.name == "nt":
+            stream.seek(0, os.SEEK_END)
+            if stream.tell() == 0:
+                stream.write("0")
+                stream.flush()
+            stream.seek(0)
+            try:
+                mode = msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK
+                msvcrt.locking(stream.fileno(), mode, 1)
+            except OSError as exc:
+                raise BusyTaskError(task_id) from exc
+        else:
+            flags = fcntl.LOCK_EX
+            if not blocking:
+                flags |= fcntl.LOCK_NB
+            try:
+                fcntl.flock(stream.fileno(), flags)
+            except BlockingIOError as exc:
+                raise BusyTaskError(task_id) from exc
         try:
             yield
         finally:
-            fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+            if os.name == "nt":
+                stream.seek(0)
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
 def find_task(config: Config, task_id: str) -> dict[str, Any]:

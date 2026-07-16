@@ -139,6 +139,25 @@ class VideoSkillTests(unittest.TestCase):
             self.assertEqual(config.poll_interval, 8)
             self.assertTrue(config.upload_prefix.startswith("vscode/verdantflare/input/ak-"))
 
+    def test_windows_defaults_use_local_app_data_and_executable_mc_path(self):
+        values = parse_env_text(
+            "VERDANTFLARE_VIDEO_API_KEY=api\n"
+            "VERDANTFLARE_VIDEO_S3_ACCESS_KEY=access\n"
+            "VERDANTFLARE_VIDEO_S3_SECRET_KEY=secret\n"
+        )
+        with tempfile.TemporaryDirectory() as root:
+            with mock.patch("config.platform.system", return_value="Windows"), mock.patch.dict(
+                os.environ, {"LOCALAPPDATA": root}, clear=False
+            ):
+                config = build_config(values)
+                self.assertEqual(config.config_file, Path(root) / "VerdantFlare" / "Video" / ".env")
+                self.assertEqual(config.state_dir, Path(root) / "VerdantFlare" / "Video" / "state")
+                self.assertEqual(config.mc_path.name, "mc.exe")
+                config.ensure_dirs()
+                config.mc_path.parent.mkdir(parents=True, exist_ok=True)
+                config.mc_path.write_bytes(b"verified-test-cache")
+                self.assertEqual(ensure_mc(config), config.mc_path)
+
     def test_config_rejects_duplicate_and_unknown_fields(self):
         with self.assertRaises(ConfigError):
             parse_env_text("VERDANTFLARE_VIDEO_API_KEY=a\nVERDANTFLARE_VIDEO_API_KEY=b\n")

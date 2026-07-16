@@ -36,15 +36,20 @@ DEFAULT_RETRY_LIMIT = 5
 
 MC_RELEASE = "RELEASE.2025-08-13T08-35-41Z"
 MC_ASSETS = {
-    "arm64": (
+    ("Darwin", "arm64"): (
         f"https://github.com/minio/mc/releases/download/{MC_RELEASE}/"
         f"mc.darwin-arm64.{MC_RELEASE}",
         "a877fd0c183409da9f20f9d6e1811987298bbbca1aa03428eebdffba79fb9445",
     ),
-    "x86_64": (
+    ("Darwin", "x86_64"): (
         f"https://github.com/minio/mc/releases/download/{MC_RELEASE}/"
         f"mc.darwin-amd64.{MC_RELEASE}",
         "2862c79cce11b09be9a8911a279b2e9465bebf74b9f01abca9c348a0d795f0cb",
+    ),
+    ("Windows", "amd64"): (
+        f"https://github.com/minio/mc/releases/download/{MC_RELEASE}/"
+        f"mc.windows-amd64.{MC_RELEASE}.exe",
+        "c8db13ebeda31497f354c0e950809db0ae9b2a2a69b8afee68c128c37300c157",
     ),
 }
 MC_ALLOWED_REDIRECT_HOSTS = {"github.com", "release-assets.githubusercontent.com"}
@@ -111,6 +116,20 @@ def _expand_path(value: str) -> Path:
     if not path.is_absolute():
         raise ConfigError("path must be absolute")
     return path
+
+
+def _default_config_file() -> Path:
+    if platform.system() == "Windows":
+        root = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        return Path(root) / "VerdantFlare" / "Video" / ".env"
+    return _expand_path(DEFAULT_CONFIG_FILE)
+
+
+def _default_state_dir() -> Path:
+    if platform.system() == "Windows":
+        root = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        return Path(root) / "VerdantFlare" / "Video" / "state"
+    return _expand_path(DEFAULT_STATE_DIR)
 
 
 def parse_env_text(text: str) -> dict[str, str]:
@@ -225,7 +244,8 @@ class Config:
 
     @property
     def mc_path(self) -> Path:
-        return self.state_dir / "runtime" / "bin" / "mc"
+        filename = "mc.exe" if platform.system() == "Windows" else "mc"
+        return self.state_dir / "runtime" / "bin" / filename
 
     @property
     def upload_prefix(self) -> str:
@@ -287,11 +307,15 @@ def build_config(values: Mapping[str, str], *, config_file: Path | None = None) 
     prefix = values.get("VERDANTFLARE_VIDEO_S3_PREFIX", DEFAULT_S3_PREFIX)
     if not prefix or prefix.startswith("/") or prefix.endswith("/") or not re.fullmatch(r"[a-z0-9._/-]+", prefix):
         raise ConfigError("invalid S3 prefix")
-    state_dir = _expand_path(values.get("VERDANTFLARE_VIDEO_STATE_DIR", DEFAULT_STATE_DIR))
+    state_dir = (
+        _expand_path(values["VERDANTFLARE_VIDEO_STATE_DIR"])
+        if "VERDANTFLARE_VIDEO_STATE_DIR" in values
+        else _default_state_dir()
+    )
     output_raw = values.get("VERDANTFLARE_VIDEO_DEFAULT_OUTPUT_DIR", "")
     output_dir = _expand_path(output_raw) if output_raw else None
     return Config(
-        config_file=config_file or _expand_path(DEFAULT_CONFIG_FILE),
+        config_file=config_file or _default_config_file(),
         state_dir=state_dir,
         api_base_url=api_base,
         api_key=values["VERDANTFLARE_VIDEO_API_KEY"],
@@ -309,7 +333,8 @@ def build_config(values: Mapping[str, str], *, config_file: Path | None = None) 
 
 
 def load_config(*, env_file: str | None = None) -> Config:
-    path = _expand_path(env_file or os.environ.get("VERDANTFLARE_VIDEO_ENV_FILE", DEFAULT_CONFIG_FILE))
+    configured_path = env_file or os.environ.get("VERDANTFLARE_VIDEO_ENV_FILE")
+    path = _expand_path(configured_path) if configured_path else _default_config_file()
     if not path.exists():
         raise ConfigError(f"configuration file does not exist: {path}")
     return build_config(read_env_file(path), config_file=path)
@@ -343,10 +368,16 @@ def _download(url: str, destination: Path, *, max_bytes: int, allowed_hosts: set
 def ensure_mc(config: Config) -> Path:
     if TEST_MODE and config.mc_path.exists():
         return config.mc_path
-    arch = platform.machine()
-    if arch not in MC_ASSETS:
-        raise ConfigError(f"unsupported macOS architecture: {arch}")
-    url, expected_sha = MC_ASSETS[arch]
+    system = platform.system()
+    arch = platform.machine().lower()
+    if system == "Darwin":
+        arch = {"aarch64": "arm64", "amd64": "x86_64"}.get(arch, arch)
+    elif system == "Windows":
+        arch = {"x86_64": "amd64", "x64": "amd64", "arm64": "amd64"}.get(arch, arch)
+    asset = MC_ASSETS.get((system, arch))
+    if asset is None:
+        raise ConfigError(f"unsupported platform or architecture: {system} {platform.machine()}")
+    url, expected_sha = asset
     target = config.mc_path
     target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(target.parent, 0o700)
@@ -387,8 +418,8 @@ def _validate_mc_binary(path: Path, arch: str) -> None:
             file_info = subprocess.run(["file", str(path)], capture_output=True, text=True, timeout=10)
         except (OSError, subprocess.SubprocessError) as exc:
             raise ConfigError("mc architecture check failed") from exc
-        expected_arch = "arm64" if arch == "arm64" else "x86_64"
-        if expected_arch not in file_info.stdout:
+        expected_arches = {"arm64"} if arch == "arm64" else {"x86_64", "x86-64", "AMD64"}
+        if not any(expected_arch in file_info.stdout for expected_arch in expected_arches):
             raise ConfigError("mc architecture mismatch")
 
 
