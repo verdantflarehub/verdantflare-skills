@@ -19,8 +19,8 @@
 安装完成后，Skill 默认位于以下目录：
 
 ```text
-macOS:  ${CODEX_HOME:-$HOME/.codex}/skills/verdantflare-video
-Windows: %CODEX_HOME%\skills\verdantflare-video (默认：%USERPROFILE%\.codex\skills\verdantflare-video)
+macOS:  $HOME/.codex/skills/verdantflare-video
+Windows: $HOME\.codex\skills\verdantflare-video
 ```
 
 ### 配置命令
@@ -30,7 +30,7 @@ Skill 安装完成后，根据操作系统执行对应命令。
 macOS 终端：
 
 ```bash
-bash "${CODEX_HOME:-$HOME/.codex}/skills/verdantflare-video/scripts/install-config-macos.sh"
+bash "$HOME/.codex/skills/verdantflare-video/scripts/install-config-macos.sh"
 ```
 
 Windows PowerShell：
@@ -38,8 +38,6 @@ Windows PowerShell：
 ```powershell
 & "$HOME\.codex\skills\verdantflare-video\scripts\install-config-windows.ps1"
 ```
-
-如果设置了自定义 `CODEX_HOME`，将命令中的 `$HOME\.codex` 替换为该目录。
 
 执行前请确认本机已安装 Python `3.10` 或更高版本。脚本会通过隐藏的 TTY 提示读取一次性 HTTPS 配置地址：
 
