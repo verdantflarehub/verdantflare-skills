@@ -4,6 +4,8 @@
 
 `verdantflare-video` 是一个兼容 macOS 和 Windows 的 Codex Skill。它通过 VerdantFlare API 创建 SD2 视频任务，上传本地参考素材，跟踪异步任务状态，并下载生成结果。
 
+说明：本 README 是 Skill 的外部安装与配置指南。仅修改本文件时不升级 Skill 版本；只有 `skills/verdantflare-video` 内容发生变化时才发布新版本。
+
 ### 安装命令
 
 当前发布版本：`verdantflare-video-v0.2.0`。
