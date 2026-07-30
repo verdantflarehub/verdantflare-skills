@@ -33,7 +33,7 @@ from task_store import BusyTaskError, delete_submission, list_tasks, load_task, 
 
 MAX_IMAGE_COUNT = 9
 MAX_AUDIO_COUNT = 1
-MAX_VIDEO_COUNT = 1
+MAX_VIDEO_COUNT = 3
 MAX_IMAGE_BYTES = 3 * 1024 * 1024
 MAX_AUDIO_BYTES = 6 * 1024 * 1024
 MAX_VIDEO_BYTES = 12 * 1024 * 1024
@@ -179,7 +179,7 @@ def collect_media(args: argparse.Namespace) -> list[Media]:
     if counts["audio"] > MAX_AUDIO_COUNT:
         raise ClientError("v1 supports at most 1 audio reference")
     if counts["video"] > MAX_VIDEO_COUNT:
-        raise ClientError("v1 supports at most 1 video reference")
+        raise ClientError("v1 supports at most 3 video references")
     if sum(item.size for item in media) > MAX_LOCAL_TOTAL_BYTES:
         raise ClientError("local media exceeds the 48 MiB request limit")
     return media

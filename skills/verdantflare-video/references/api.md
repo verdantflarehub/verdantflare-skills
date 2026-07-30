@@ -20,7 +20,9 @@ Send `Authorization: Bearer <API key>` only to the API host. Send `X-Request-ID`
       "content": [
         {"type": "text", "text": "A concise creative prompt"},
         {"type": "image_url", "image_url": {"url": "https://assets.example/image.jpg"}},
-        {"type": "video_url", "video_url": {"url": "https://assets.example/ref.mp4"}},
+        {"type": "video_url", "video_url": {"url": "https://assets.example/ref-1.mp4"}},
+        {"type": "video_url", "video_url": {"url": "https://assets.example/ref-2.mp4"}},
+        {"type": "video_url", "video_url": {"url": "https://assets.example/ref-3.mp4"}},
         {"type": "audio_url", "audio_url": {"url": "https://assets.example/ref.mp3"}}
       ]
     }
@@ -32,7 +34,7 @@ Send `Authorization: Bearer <API key>` only to the API host. Send `X-Request-ID`
 }
 ```
 
-The first content item must be non-empty text. Keep media items separate and preserve their user-declared order. Do not mix `messages[].content[]` with `metadata.content`.
+The first content item must be non-empty text. Keep media items separate and preserve their collected order. Accept at most 9 image references, 1 audio reference, and 3 video references; local files and HTTPS URLs count toward the same per-type limit. Refer to ordered videos as `video 1`, `video 2`, and `video 3` in the prompt. Do not mix `messages[].content[]` with `metadata.content`.
 
 ## Responses
 

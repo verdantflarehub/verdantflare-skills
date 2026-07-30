@@ -17,7 +17,7 @@ os.environ["VERDANTFLARE_VIDEO_TEST_MODE"] = "1"
 
 from config import ConfigError, build_config, ensure_mc, load_config, parse_env_text
 from task_store import list_tasks, load_task, save_task
-from video_client import ClientError, _media_upload_error, build_payload, generate
+from video_client import ClientError, _media_upload_error, build_payload, collect_media, generate
 
 
 class VideoHandler(BaseHTTPRequestHandler):
@@ -228,6 +228,57 @@ class VideoSkillTests(unittest.TestCase):
         self.assertEqual(payload["messages"][0]["content"][1]["type"], "image_url")
         self.assertNotIn("metadata", payload)
 
+    def test_three_video_references_preserve_collected_order(self):
+        with tempfile.TemporaryDirectory() as root:
+            first = Path(root) / "first.mp4"
+            second = Path(root) / "second.mp4"
+            first.write_bytes(b"\x00\x00\x00\x18ftypmp42first")
+            second.write_bytes(b"\x00\x00\x00\x18ftypmp42second")
+            args = SimpleNamespace(
+                image=[],
+                image_url=[],
+                audio=[],
+                audio_url=[],
+                video=[str(first), str(second)],
+                video_url=["http://127.0.0.1/reference-3.mp4"],
+            )
+            media = collect_media(args)
+            media[0].url = "https://assets.example/reference-1.mp4"
+            media[1].url = "https://assets.example/reference-2.mp4"
+            payload = build_payload(
+                "Use video 1 for motion, video 2 for camera work, and video 3 for pacing",
+                media,
+                duration=10,
+                ratio="16:9",
+                generate_audio=True,
+                watermark=False,
+            )
+            video_urls = [
+                item["video_url"]["url"]
+                for item in payload["messages"][0]["content"]
+                if item["type"] == "video_url"
+            ]
+            self.assertEqual(
+                video_urls,
+                [
+                    "https://assets.example/reference-1.mp4",
+                    "https://assets.example/reference-2.mp4",
+                    "http://127.0.0.1/reference-3.mp4",
+                ],
+            )
+
+    def test_four_video_references_are_rejected_before_submission(self):
+        args = SimpleNamespace(
+            image=[],
+            image_url=[],
+            audio=[],
+            audio_url=[],
+            video=[],
+            video_url=[f"http://127.0.0.1/reference-{index}.mp4" for index in range(1, 5)],
+        )
+        with self.assertRaisesRegex(ClientError, "at most 3 video references"):
+            collect_media(args)
+
     def test_generate_persists_and_downloads_public_task(self):
         VideoHandler.polls = 0
         server = ThreadingHTTPServer(("127.0.0.1", 0), VideoHandler)
@@ -257,7 +308,8 @@ class VideoSkillTests(unittest.TestCase):
                     generate_audio=True,
                     watermark=False,
                 )
-                self.assertEqual(generate(config, args), 0)
+                with mock.patch("video_client.shutil.which", return_value=None):
+                    self.assertEqual(generate(config, args), 0)
                 self.assertEqual(server.received["model"], "verdantflare-sd2")
                 records = list_tasks(config)
                 self.assertEqual(records[0]["status"], "completed")
@@ -292,7 +344,8 @@ class VideoSkillTests(unittest.TestCase):
                     image=[], image_url=[], audio=[], audio_url=[], video=[], video_url=[],
                     generate_audio=True, watermark=False,
                 )
-                self.assertEqual(generate(config, args), 0)
+                with mock.patch("video_client.shutil.which", return_value=None):
+                    self.assertEqual(generate(config, args), 0)
                 self.assertEqual(RefreshHandler.posts, 1)
                 self.assertEqual(RefreshHandler.polls, 2)
                 record = list_tasks(config)[0]

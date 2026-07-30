@@ -33,7 +33,8 @@ When local media is used, upload to the configured S3-compatible bucket happens 
 - Use `--duration` from 1 to 15 seconds; default to 10.
 - Use one of `16:9`, `9:16`, `1:1`, `4:3`, or `3:4`; default to `16:9`.
 - Keep `--generate-audio` enabled unless the user explicitly requests silence. Use `--no-generate-audio` for silence.
-- Do not submit more than 9 images, 1 audio reference, or 1 video reference in v1.
+- Do not submit more than 9 images, 1 audio reference, or 3 video references in v1. Count local files and HTTPS URLs together for each media type.
+- Preserve the collected video order so the prompt can refer to them as `video 1`, `video 2`, and `video 3`.
 - Do not add `metadata.content`; the client sends the structured `messages` form from `references/api.md`.
 
 ## Recovery Rules
