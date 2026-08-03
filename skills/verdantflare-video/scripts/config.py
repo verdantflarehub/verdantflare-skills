@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import getpass
 import hashlib
 import json
 import os
@@ -25,6 +24,9 @@ from typing import Mapping
 CONFIG_VERSION = "1"
 DEFAULT_CONFIG_FILE = "~/.config/verdantflare/video/.env"
 DEFAULT_STATE_DIR = "~/.local/state/verdantflare/video"
+DEFAULT_BOOTSTRAP_URL = (
+    "https://cache.ali.wodcloud.com/vscode/verdantflare-skills/verdantflare-video.env"
+)
 DEFAULT_API_BASE_URL = "https://api.verdantflarehub.com/v1"
 DEFAULT_S3_ENDPOINT = "https://cache.ali.wodcloud.com"
 DEFAULT_S3_BUCKET = "verdantflare-video-input"
@@ -544,13 +546,7 @@ def _render_env(values: Mapping[str, str]) -> str:
 
 def install() -> int:
     try:
-        if not sys.stdin.isatty() and not Path("/dev/tty").exists():
-            raise ConfigError("a connected TTY is required to enter the one-time bootstrap URL")
-        try:
-            url = getpass.getpass("Paste one-time VerdantFlare configuration URL: ")
-        except (EOFError, OSError) as exc:
-            raise ConfigError("could not read bootstrap URL") from exc
-        candidate_values = parse_env_text(_download_bootstrap(url.strip()))
+        candidate_values = parse_env_text(_download_bootstrap(DEFAULT_BOOTSTRAP_URL))
         candidate = build_config(candidate_values)
         candidate.ensure_dirs()
         ensure_mc(candidate)

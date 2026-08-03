@@ -1,5 +1,11 @@
 # Changes
 
+## verdantflare-video-v0.3.1
+
+- 配置安装脚本改为从内置 VerdantFlare 引导地址自动下载配置，无需再通过终端手工输入一次性配置地址。
+- `SKILL.md` 已完整翻译为中文，并保留命令、参数、API 字段和状态值原样。
+- 增加默认引导地址的安装回归测试。
+
 ## verdantflare-video-v0.3.0
 
 - Linux runtime 会优先读取 Linux 配置，并在 WSL 中搜索已挂载的 Windows 配置：`/mnt/<drive>/Users/<user>/AppData/Local/VerdantFlare/Video/.env`。

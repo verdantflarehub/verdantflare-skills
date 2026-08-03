@@ -6,12 +6,12 @@
 
 ### 安装命令
 
-当前版本：`verdantflare-video-v0.3.0`
+当前版本：`verdantflare-video-v0.3.1`
 
 在 Codex 中执行：
 
 ```text
-使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.3.0/skills/verdantflare-video 安装 Skill。
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.3.1/skills/verdantflare-video 安装 Skill。
 ```
 
 ### 配置命令
@@ -28,7 +28,7 @@ Windows PowerShell：
 & "$HOME\.codex\skills\verdantflare-video\scripts\install-config-windows.ps1"
 ```
 
-本机需要 Python `3.10` 或更高版本。配置脚本会提示输入一次性配置地址。
+本机需要 Python `3.10` 或更高版本。配置脚本会从内置的 VerdantFlare 引导地址自动下载配置。
 
 配置必须包含以下三项：
 

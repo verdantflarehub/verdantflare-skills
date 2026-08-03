@@ -15,7 +15,15 @@ sys.path.insert(0, str(SCRIPTS))
 
 os.environ["VERDANTFLARE_VIDEO_TEST_MODE"] = "1"
 
-from config import ConfigError, build_config, ensure_mc, load_config, parse_env_text
+from config import (
+    DEFAULT_BOOTSTRAP_URL,
+    ConfigError,
+    build_config,
+    ensure_mc,
+    install,
+    load_config,
+    parse_env_text,
+)
 from task_store import list_tasks, load_task, save_task
 from video_client import ClientError, _media_upload_error, build_payload, collect_media, generate
 
@@ -126,6 +134,18 @@ class UnknownPostHandler(BaseHTTPRequestHandler):
 
 
 class VideoSkillTests(unittest.TestCase):
+    def test_install_uses_default_bootstrap_url(self):
+        candidate = mock.Mock()
+        candidate.config_file = Path("/tmp/verdantflare-video.env")
+        with mock.patch("config._download_bootstrap", return_value="credentials") as download, mock.patch(
+            "config.parse_env_text", return_value={"parsed": "config"}
+        ), mock.patch("config.build_config", return_value=candidate), mock.patch(
+            "config.ensure_mc"
+        ), mock.patch("config._api_models"), mock.patch("config._write_atomic"):
+            self.assertEqual(install(), 0)
+        download.assert_called_once_with(DEFAULT_BOOTSTRAP_URL)
+        candidate.ensure_dirs.assert_called_once_with()
+
     def test_minimal_config_uses_defaults(self):
         values = parse_env_text(
             "VERDANTFLARE_VIDEO_API_KEY=api\n"
