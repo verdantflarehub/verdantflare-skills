@@ -40,6 +40,7 @@ MAX_VIDEO_BYTES = 12 * 1024 * 1024
 MAX_LOCAL_TOTAL_BYTES = 48 * 1024 * 1024
 MAX_DOWNLOAD_BYTES = 1024 * 1024 * 1024
 DOWNLOAD_TIMEOUT_SECONDS = 10 * 60
+MEDIA_READINESS_DELAYS_SECONDS = (0, 1, 2, 4)
 ALLOWED_RATIOS = {"16:9", "9:16", "1:1", "4:3", "3:4"}
 EXTENSIONS = {
     "image": {".jpg", ".jpeg", ".png", ".webp"},
@@ -213,6 +214,38 @@ def _object_url(config: Config, key: str) -> str:
     return config.s3_public_base_url.rstrip("/") + "/" + "/".join(urllib.parse.quote(part, safe="") for part in key.split("/"))
 
 
+def _verify_uploaded_media(media: Media) -> None:
+    if not media.url:
+        raise ClientError("uploaded media URL is missing")
+    url = validate_external_url(media.url)
+    opener = urllib.request.build_opener(_ResultRedirectHandler())
+    last_status = 0
+    for delay in MEDIA_READINESS_DELAYS_SECONDS:
+        if delay:
+            time.sleep(delay)
+        request = urllib.request.Request(url, headers={"Accept": "*/*", "Range": "bytes=0-511"})
+        try:
+            with opener.open(request, timeout=30) as response:
+                last_status = response.status
+                if last_status not in (200, 206):
+                    continue
+                content_type = (response.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+                if content_type and content_type not in MIME_TYPES[media.kind] and content_type != "application/octet-stream":
+                    raise ClientError(f"uploaded {media.kind} response has an unexpected content type")
+                header = response.read(512)
+                if not _media_magic(media.kind, header):
+                    raise ClientError(f"uploaded {media.kind} is not readable as the expected media type")
+                return
+        except urllib.error.HTTPError as exc:
+            last_status = exc.code
+            if exc.code not in (403, 404, 408, 409, 425, 429, 500, 502, 503, 504):
+                break
+        except (urllib.error.URLError, TimeoutError, OSError):
+            last_status = 0
+    detail = f" (HTTP {last_status})" if last_status else ""
+    raise ClientError(f"uploaded media is not publicly readable before video submission{detail}; no video task was submitted")
+
+
 def _media_upload_error(config: Config, stderr: str) -> str:
     detail = stderr.lower()
     if "nosuchbucket" in detail or "bucket does not exist" in detail or "specified bucket" in detail:
@@ -260,7 +293,9 @@ def upload_media(config: Config, media: Media) -> Media:
             raise ClientError("media upload failed") from exc
     if result.returncode != 0:
         raise ClientError(_media_upload_error(config, result.stderr or "mc failed"))
-    return Media(kind=media.kind, source=media.source, url=_object_url(config, key), size=media.size)
+    uploaded = Media(kind=media.kind, source=media.source, url=_object_url(config, key), size=media.size)
+    _verify_uploaded_media(uploaded)
+    return uploaded
 
 
 def _json_body(data: bytes) -> Any:

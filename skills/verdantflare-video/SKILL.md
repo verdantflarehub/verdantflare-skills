@@ -24,7 +24,7 @@ Windows: py -3 scripts/video_client.py generate --prompt "..." [options]
 
 查找配置时，优先使用平台原生路径：Windows 为 `%LOCALAPPDATA%\\VerdantFlare\\Video\\.env`，macOS/Linux 为 `~/.config/verdantflare/video/.env`。在 WSL 中运行时，还需搜索挂载的 Windows 用户目录 `/mnt/<drive>/Users/<user>/AppData/Local/VerdantFlare/Video/.env`。如果找不到文件，报告搜索过的所有路径。如果找到多个文件，报告这些文件，并说明可通过进程级选项 `VERDANTFLARE_VIDEO_ENV_FILE` 明确指定配置。
 
-使用本地媒体时，先将文件上传至配置的 S3 兼容存储桶，再执行 `POST /videos`。存储桶缺失或无法访问时，将其报告为对象存储预配或配置错误，并明确说明尚未提交视频任务。纯文本生成无需执行上传步骤。
+使用本地媒体时，先将文件上传至配置的 S3 兼容存储桶，再通过公开 URL 执行实际的媒体读取校验；只有确认返回内容与本地媒体类型一致后，才执行 `POST /videos`。存储桶缺失、URL 映射错误或公网无法读取时，将其报告为对象存储预配或配置错误，并明确说明尚未提交视频任务。纯文本生成无需执行上传步骤。
 
 ## 请求映射
 

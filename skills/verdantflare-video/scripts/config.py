@@ -29,9 +29,9 @@ DEFAULT_BOOTSTRAP_URL = (
 )
 DEFAULT_API_BASE_URL = "https://api.verdantflarehub.com/v1"
 DEFAULT_S3_ENDPOINT = "https://cache.ali.wodcloud.com"
-DEFAULT_S3_BUCKET = "verdantflare-video-input"
-DEFAULT_S3_PUBLIC_BASE_URL = "https://cache.ali.wodcloud.com"
-DEFAULT_S3_PREFIX = "vscode/verdantflare/input"
+DEFAULT_S3_BUCKET = "vscode"
+DEFAULT_S3_PUBLIC_BASE_URL = "https://cache.ali.wodcloud.com/vscode"
+DEFAULT_S3_PREFIX = "verdantflare/input"
 DEFAULT_POLL_INTERVAL = 8
 DEFAULT_TASK_TIMEOUT = 900
 DEFAULT_RETRY_LIMIT = 5
