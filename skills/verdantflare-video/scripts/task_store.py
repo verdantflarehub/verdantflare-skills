@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import tempfile
+import uuid
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -33,7 +34,18 @@ def task_path(config: Config, task_id: str) -> Path:
 
 
 def submission_path(config: Config, client_request_id: str) -> Path:
-    return config.submissions_dir / f"{client_request_id}.json"
+    return config.submissions_dir / f"{_canonical_request_id(client_request_id)}.json"
+
+
+def _canonical_request_id(client_request_id: str) -> str:
+    try:
+        parsed = uuid.UUID(client_request_id)
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise ValueError("client_request_id must be a UUID") from exc
+    canonical = str(parsed)
+    if client_request_id != canonical:
+        raise ValueError("client_request_id must be a canonical UUID")
+    return canonical
 
 
 def _fsync_directory(path: Path) -> None:
@@ -94,8 +106,34 @@ def save_submission(config: Config, submission: dict[str, Any]) -> Path:
     return path
 
 
+def load_submission(config: Config, client_request_id: str) -> dict[str, Any]:
+    path = submission_path(config, client_request_id)
+    try:
+        submission = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("submission record is unreadable") from exc
+    if submission.get("client_request_id") != client_request_id or submission.get("schema_version") != 1:
+        raise ValueError("submission record is invalid")
+    return submission
+
+
 def delete_submission(config: Config, client_request_id: str) -> None:
     submission_path(config, client_request_id).unlink(missing_ok=True)
+
+
+def list_submissions(config: Config) -> list[dict[str, Any]]:
+    config.ensure_dirs()
+    submissions: list[dict[str, Any]] = []
+    for path in sorted(config.submissions_dir.glob("*.json")):
+        try:
+            submission = json.loads(path.read_text(encoding="utf-8"))
+            request_id = str(submission.get("client_request_id", ""))
+            if submission.get("schema_version") != 1 or path != submission_path(config, request_id):
+                raise ValueError("invalid submission record")
+            submissions.append(submission)
+        except (OSError, ValueError, json.JSONDecodeError):
+            continue
+    return submissions
 
 
 def list_tasks(config: Config) -> list[dict[str, Any]]:
@@ -149,6 +187,13 @@ def task_lock(config: Config, task_id: str, *, blocking: bool = False) -> Iterat
                 msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
             else:
                 fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
+
+@contextlib.contextmanager
+def submission_lock(config: Config, client_request_id: str, *, blocking: bool = False) -> Iterator[None]:
+    request_id = _canonical_request_id(client_request_id)
+    with task_lock(config, "submission:" + request_id, blocking=blocking):
+        yield
 
 
 def find_task(config: Config, task_id: str) -> dict[str, Any]:

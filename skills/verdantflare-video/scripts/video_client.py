@@ -7,6 +7,7 @@ import argparse
 import datetime as dt
 import email.utils
 import hashlib
+import hmac
 import ipaddress
 import json
 import os
@@ -28,7 +29,18 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from config import Config, ConfigError, ensure_mc, load_config
-from task_store import BusyTaskError, delete_submission, list_tasks, load_task, save_submission, save_task, task_lock, task_path
+from task_store import (
+    BusyTaskError,
+    list_submissions,
+    list_tasks,
+    load_submission,
+    load_task,
+    save_submission,
+    save_task,
+    submission_lock,
+    task_lock,
+    task_path,
+)
 
 
 MAX_IMAGE_COUNT = 9
@@ -41,6 +53,7 @@ MAX_LOCAL_TOTAL_BYTES = 48 * 1024 * 1024
 MAX_DOWNLOAD_BYTES = 1024 * 1024 * 1024
 DOWNLOAD_TIMEOUT_SECONDS = 10 * 60
 MEDIA_READINESS_DELAYS_SECONDS = (0, 1, 2, 4)
+UPLOAD_HARD_TTL_SECONDS = 7 * 24 * 60 * 60
 ALLOWED_RATIOS = {"16:9", "9:16", "1:1", "4:3", "3:4"}
 EXTENSIONS = {
     "image": {".jpg", ".jpeg", ".png", ".webp"},
@@ -81,10 +94,28 @@ class Media:
     url: str | None = None
     size: int = 0
     fingerprint: tuple[int, int, int, int] | None = None
+    object_key: str | None = None
 
 
 def utc_now() -> str:
     return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _utc_after(seconds: int) -> str:
+    value = dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=seconds)
+    return value.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _parse_utc(value: Any) -> dt.datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(dt.timezone.utc)
 
 
 def redact_message(message: str) -> str:
@@ -214,6 +245,124 @@ def _object_url(config: Config, key: str) -> str:
     return config.s3_public_base_url.rstrip("/") + "/" + "/".join(urllib.parse.quote(part, safe="") for part in key.split("/"))
 
 
+def _ownership_proof(config: Config, bucket: str, key: str) -> str:
+    message = f"verdantflare-video-owned\0{bucket}\0{key}".encode("utf-8")
+    return hmac.new(config.s3_secret_key.encode("utf-8"), message, hashlib.sha256).hexdigest()
+
+
+def _owned_object_record(config: Config, key: str) -> dict[str, Any]:
+    return {
+        "bucket": config.s3_bucket,
+        "key": key,
+        "ownership_proof": _ownership_proof(config, config.s3_bucket, key),
+        "planned_at": utc_now(),
+        "uploaded_at": None,
+        "delete_after": _utc_after(UPLOAD_HARD_TTL_SECONDS),
+        "upload_state": "PENDING",
+        "cleanup_state": "PENDING",
+        "cleaned_at": None,
+    }
+
+
+def _is_owned_object(config: Config, item: Any) -> bool:
+    if not isinstance(item, dict):
+        return False
+    bucket = item.get("bucket")
+    key = item.get("key")
+    proof = item.get("ownership_proof")
+    if bucket != config.s3_bucket or not isinstance(key, str) or not isinstance(proof, str):
+        return False
+    prefix = re.escape(config.object_prefix.rstrip("/"))
+    if not re.fullmatch(prefix + r"/\d{4}-\d{2}-\d{2}/[0-9a-f]{32}\.[a-z0-9]+", key):
+        return False
+    expected = _ownership_proof(config, bucket, key)
+    return hmac.compare_digest(proof, expected)
+
+
+def _lifecycle_rule_values(rule: Any) -> tuple[str, int | None, str]:
+    if not isinstance(rule, dict):
+        return "", None, ""
+    status = str(rule.get("Status", rule.get("status", ""))).lower()
+    expiration = rule.get("Expiration", rule.get("expiration"))
+    days: Any = None
+    if isinstance(expiration, dict):
+        days = expiration.get("Days", expiration.get("days"))
+    if days is None:
+        days = rule.get("ExpirationDays", rule.get("expiration_days"))
+    if isinstance(days, bool) or not isinstance(days, int):
+        days = None
+    prefix = rule.get("Prefix", rule.get("prefix", ""))
+    filter_value = rule.get("Filter", rule.get("filter"))
+    if not prefix and isinstance(filter_value, dict):
+        prefix = filter_value.get("Prefix", filter_value.get("prefix", ""))
+    return status, days, str(prefix or "")
+
+
+def _iter_lifecycle_rules(value: Any):
+    if isinstance(value, list):
+        for item in value:
+            yield from _iter_lifecycle_rules(item)
+        return
+    if not isinstance(value, dict):
+        return
+    status, days, _prefix = _lifecycle_rule_values(value)
+    if status and days is not None:
+        yield value
+    for key, nested in value.items():
+        if str(key).lower() in {"rule", "rules", "lifecycle", "config", "configuration"}:
+            yield from _iter_lifecycle_rules(nested)
+
+
+def _lifecycle_documents(stdout: str) -> list[Any]:
+    try:
+        return [json.loads(stdout)]
+    except json.JSONDecodeError:
+        pass
+    documents: list[Any] = []
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            documents.append(json.loads(line))
+        except json.JSONDecodeError:
+            return []
+    return documents
+
+
+def verify_bucket_lifecycle(config: Config) -> int:
+    """Read and verify an existing per-installation hard-TTL rule; never mutate it."""
+    mc = ensure_mc(config)
+    endpoint = urllib.parse.urlparse(config.s3_endpoint)
+    credentials = f"{urllib.parse.quote(config.s3_access_key, safe='')}:{urllib.parse.quote(config.s3_secret_key, safe='')}"
+    host_url = urllib.parse.urlunparse(endpoint._replace(netloc=f"{credentials}@{endpoint.netloc}"))
+    with tempfile.TemporaryDirectory(prefix="vf-mc-") as mc_config:
+        env = os.environ.copy()
+        env["MC_CONFIG_DIR"] = mc_config
+        env["MC_HOST_vfvideo"] = host_url
+        try:
+            result = subprocess.run(
+                [str(mc), "ilm", "rule", "ls", f"vfvideo/{config.s3_bucket}", "--expiry", "--json"],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise ClientError("temporary input lifecycle could not be verified; no media was uploaded or submitted") from exc
+    expected_prefix = config.object_prefix.rstrip("/")
+    if result.returncode == 0:
+        for document in _lifecycle_documents(result.stdout):
+            for rule in _iter_lifecycle_rules(document):
+                status, days, prefix = _lifecycle_rule_values(rule)
+                if status == "enabled" and days == 7 and prefix.rstrip("/") == expected_prefix:
+                    return days
+    raise ClientError(
+        "temporary input bucket requires an enabled lifecycle rule for this installation's upload prefix "
+        "with expiration of exactly 7 days; ask the administrator to configure it; no media was uploaded or submitted"
+    )
+
+
 def _verify_uploaded_media(media: Media) -> None:
     if not media.url:
         raise ClientError("uploaded media URL is missing")
@@ -261,7 +410,7 @@ def _media_upload_error(config: Config, stderr: str) -> str:
     return f"media upload failed before video submission: {redact_message(stderr or 'object storage request failed')}"
 
 
-def upload_media(config: Config, media: Media) -> Media:
+def upload_media(config: Config, media: Media, *, record_upload=None) -> Media:
     if media.url:
         return media
     if Path(media.source).is_symlink():
@@ -273,10 +422,14 @@ def upload_media(config: Config, media: Media) -> Media:
     mc = ensure_mc(config)
     date = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
     extension = Path(media.source).suffix.lower().lstrip(".")
-    key = f"{config.upload_prefix}/{date}/{uuid.uuid4().hex}.{extension}"
+    key = f"{config.object_prefix}/{date}/{uuid.uuid4().hex}.{extension}"
     endpoint = urllib.parse.urlparse(config.s3_endpoint)
     credentials = f"{urllib.parse.quote(config.s3_access_key, safe='')}:{urllib.parse.quote(config.s3_secret_key, safe='')}"
     host_url = urllib.parse.urlunparse(endpoint._replace(netloc=f"{credentials}@{endpoint.netloc}"))
+    owned_object = _owned_object_record(config, key)
+    if record_upload is None:
+        raise ClientError("media upload requires a durable ownership manifest")
+    record_upload(owned_object)
     with tempfile.TemporaryDirectory(prefix="vf-mc-") as mc_config:
         env = os.environ.copy()
         env["MC_CONFIG_DIR"] = mc_config
@@ -293,9 +446,90 @@ def upload_media(config: Config, media: Media) -> Media:
             raise ClientError("media upload failed") from exc
     if result.returncode != 0:
         raise ClientError(_media_upload_error(config, result.stderr or "mc failed"))
-    uploaded = Media(kind=media.kind, source=media.source, url=_object_url(config, key), size=media.size)
+    owned_object["upload_state"] = "UPLOADED"
+    owned_object["uploaded_at"] = utc_now()
+    record_upload(owned_object)
+    uploaded = Media(kind=media.kind, source=media.source, url=_object_url(config, key), size=media.size, object_key=key)
     _verify_uploaded_media(uploaded)
     return uploaded
+
+
+def _delete_owned_object(config: Config, item: dict[str, Any]) -> bool:
+    if not _is_owned_object(config, item):
+        return False
+    try:
+        mc = ensure_mc(config)
+    except (ConfigError, OSError):
+        return False
+    endpoint = urllib.parse.urlparse(config.s3_endpoint)
+    credentials = f"{urllib.parse.quote(config.s3_access_key, safe='')}:{urllib.parse.quote(config.s3_secret_key, safe='')}"
+    host_url = urllib.parse.urlunparse(endpoint._replace(netloc=f"{credentials}@{endpoint.netloc}"))
+    target = f"vfvideo/{item['bucket']}/{item['key']}"
+    try:
+        with tempfile.TemporaryDirectory(prefix="vf-mc-") as mc_config:
+            env = os.environ.copy()
+            env["MC_CONFIG_DIR"] = mc_config
+            env["MC_HOST_vfvideo"] = host_url
+            result = subprocess.run(
+                [str(mc), "rm", "--quiet", "--force", target],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0
+
+
+def cleanup_record_uploads(config: Config, record: dict[str, Any], *, force: bool = False) -> bool:
+    cleanup = record.get("cleanup")
+    if not isinstance(cleanup, dict) or not isinstance(cleanup.get("objects"), list):
+        return False
+    now = dt.datetime.now(dt.timezone.utc)
+    changed = False
+    for item in cleanup["objects"]:
+        if not isinstance(item, dict) or item.get("cleanup_state") == "CLEANED":
+            continue
+        deadline = _parse_utc(item.get("delete_after"))
+        if not force and (deadline is None or now < deadline):
+            continue
+        item["last_cleanup_at"] = utc_now()
+        if _delete_owned_object(config, item):
+            identity = item.get("ownership_proof")
+            item.clear()
+            item.update({"object_identity": identity, "cleanup_state": "CLEANED", "cleaned_at": utc_now()})
+        else:
+            item["cleanup_state"] = "PENDING"
+            item["last_cleanup_error"] = "object_cleanup_failed"
+        changed = True
+    if changed:
+        cleanup["updated_at"] = utc_now()
+        record["updated_at"] = utc_now()
+    return changed
+
+
+def cleanup_expired_uploads(config: Config) -> None:
+    for submission in list_submissions(config):
+        request_id = submission["client_request_id"]
+        try:
+            with submission_lock(config, request_id):
+                current = load_submission(config, request_id)
+                force = current.get("submission_state") == "REJECTED"
+                if cleanup_record_uploads(config, current, force=force):
+                    save_submission(config, current)
+        except (BusyTaskError, OSError, ValueError):
+            continue
+    for task in list_tasks(config):
+        task_id = task["task_id"]
+        try:
+            with task_lock(config, task_id):
+                current = load_task(config, task_id)
+                force = current.get("status") in {"completed", "failed", "failure"}
+                if cleanup_record_uploads(config, current, force=force):
+                    save_task(config, current)
+        except (BusyTaskError, OSError, ValueError):
+            continue
 
 
 def _json_body(data: bytes) -> Any:
@@ -306,7 +540,7 @@ def _json_body(data: bytes) -> Any:
 
 
 class _ApiRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Allow API redirects only when they stay on the configured API host."""
+    """Allow same-origin read redirects; mutation redirects require recovery."""
 
     def __init__(self, host: str):
         super().__init__()
@@ -314,6 +548,8 @@ class _ApiRedirectHandler(urllib.request.HTTPRedirectHandler):
         self.max_redirections = 2
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if req.get_method().upper() not in {"GET", "HEAD"}:
+            raise ClientError("API mutation redirected; recover the submission by client request id")
         parsed = urllib.parse.urlparse(newurl)
         host = (parsed.hostname or "").lower().rstrip(".")
         is_test = os.environ.get("VERDANTFLARE_VIDEO_TEST_MODE") == "1" and host in {"localhost", "127.0.0.1", "::1"}
@@ -327,15 +563,16 @@ class _ApiRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 
 class _ResultRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Revalidate every result redirect before following it."""
+    """Reject redirects from the stable VerdantFlare result proxy."""
 
-    def __init__(self):
+    def __init__(self, config: Config | None = None, task_id: str | None = None):
         super().__init__()
         self.max_redirections = 3
+        self.config = config
+        self.task_id = task_id
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        validate_external_url(newurl, result=True)
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
+        raise ClientError("result download redirected; the stable API content proxy must respond directly")
 
 
 def _api_opener(config: Config) -> urllib.request.OpenerDirector:
@@ -368,6 +605,7 @@ def api_request(config: Config, method: str, path: str, *, payload: dict[str, An
     if body is not None:
         headers["Content-Type"] = "application/json"
     if request_id:
+        headers["Idempotency-Key"] = request_id
         headers["X-Request-ID"] = request_id
     request = urllib.request.Request(config.api_base_url.rstrip("/") + path, data=body, headers=headers, method=method)
     try:
@@ -403,6 +641,73 @@ def _task_id_from_create(body: Any) -> str:
     if alternate is not None and alternate != task_id:
         raise ClientError("create response id and task_id do not match")
     return task_id
+
+
+def _api_error_code(body: Any) -> str:
+    if not isinstance(body, dict):
+        return ""
+    error = body.get("error")
+    if isinstance(error, dict):
+        return str(error.get("code", ""))
+    return str(body.get("code", ""))
+
+
+def _query_submission_with_retries(config: Config, client_request_id: str, *, retry_limit: int | None = None) -> dict[str, Any]:
+    failures = 0
+    allowed_retries = config.retry_limit if retry_limit is None else retry_limit
+    path = f"/video-submissions/{urllib.parse.quote(client_request_id, safe='')}"
+    while True:
+        try:
+            body = api_request(config, "GET", path)
+            if not isinstance(body, dict):
+                raise ProtocolError("submission query response is not a JSON object")
+            return body
+        except ApiError as exc:
+            if exc.status in (401, 403):
+                raise ClientError("API authorization failed; reinstall configuration") from exc
+            if exc.status == 404:
+                raise ClientError("video submission was not found") from exc
+            if exc.status not in (0, 408, 429) and not 500 <= exc.status < 600:
+                raise ClientError(_error_summary(exc.body)) from exc
+            failures += 1
+            if failures > allowed_retries:
+                raise ClientError("temporary submission query failures exceeded retry limit") from exc
+            delay = exc.retry_after
+            if delay is None:
+                delay = min(120, max(1, config.poll_interval * (2 ** min(failures - 1, 5))) + random.random())
+            time.sleep(delay)
+
+
+def _apply_submission_view(submission: dict[str, Any], response: dict[str, Any]) -> str:
+    request_id = response.get("client_request_id")
+    if request_id != submission["client_request_id"]:
+        raise ProtocolError("submission query returned a different client request id")
+    state = str(response.get("submission_state", "")).upper()
+    if state not in {"PREPARED", "SENDING", "CONFIRMED", "REJECTED", "UNKNOWN"}:
+        raise ProtocolError("submission query returned an unknown state")
+    public_task_id = response.get("public_task_id")
+    if state == "CONFIRMED" and (not isinstance(public_task_id, str) or not public_task_id):
+        raise ProtocolError("confirmed submission did not contain a public task id")
+    submission["submission_state"] = state
+    submission["updated_at"] = utc_now()
+    submission["remote"] = {
+        "billing_state": response.get("billing_state"),
+        "created_at": response.get("created_at"),
+        "updated_at": response.get("updated_at"),
+    }
+    if state == "CONFIRMED":
+        submission["task_id"] = public_task_id
+        submission["last_error"] = None
+    else:
+        submission.pop("task_id", None)
+        code = response.get("error_code")
+        message = response.get("error_message")
+        submission["last_error"] = (
+            {"code": str(code or "submission_unresolved"), "message": redact_message(str(message or "submission requires recovery"))}
+            if state in {"REJECTED", "UNKNOWN"}
+            else None
+        )
+    return state
 
 
 def _planned_path(output: Path, task_id: str, explicit_file: bool) -> Path:
@@ -458,20 +763,96 @@ def _new_task(task_id: str, request_id: str, payload: dict[str, Any], output: Pa
     }
 
 
+def _promote_confirmed_submission(config: Config, submission: dict[str, Any], response: dict[str, Any]) -> dict[str, Any]:
+    task_id = str(submission.get("task_id", ""))
+    if not task_id:
+        raise ProtocolError("confirmed submission does not contain a task id")
+    try:
+        existing = load_task(config, task_id)
+        if existing.get("client_request_id") != submission["client_request_id"]:
+            raise ProtocolError("task id belongs to another local submission")
+        return existing
+    except ValueError:
+        pass
+    output_spec = submission.get("output") if isinstance(submission.get("output"), dict) else {}
+    requested = output_spec.get("requested") or submission.get("output_directory") or config.default_output_dir or Path.cwd()
+    output = Path(requested).expanduser().resolve()
+    explicit_file = bool(output_spec.get("explicit_file"))
+    request_summary = submission.get("request") if isinstance(submission.get("request"), dict) else {}
+    payload = {
+        "messages": [{"content": [{"type": "text", "text": "[recovered submission]"}]}],
+        "ratio": request_summary.get("ratio", "16:9"),
+        "duration": request_summary.get("duration", 10),
+        "generate_audio": bool(request_summary.get("generate_audio", True)),
+        "watermark": bool(request_summary.get("watermark", False)),
+    }
+    task_response = {"status": str(response.get("task_status", "queued")).lower()}
+    task = _new_task(task_id, submission["client_request_id"], payload, output, explicit_file, task_response)
+    task["request"] = dict(request_summary)
+    task["cleanup"] = submission.get("cleanup", {"objects": []})
+    record_path = save_task(config, task)
+    task["record_path"] = str(record_path)
+    save_task(config, task)
+    submission["cleanup"] = {"objects": [], "transferred_to_task_id": task_id, "updated_at": utc_now()}
+    submission["updated_at"] = utc_now()
+    save_submission(config, submission)
+    return task
+
+
+def recover_submission_record(
+    config: Config, submission: dict[str, Any], *, retry_limit: int | None = None
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    try:
+        response = _query_submission_with_retries(config, submission["client_request_id"], retry_limit=retry_limit)
+        state = _apply_submission_view(submission, response)
+    except ClientError as exc:
+        submission["submission_state"] = "UNKNOWN"
+        submission["updated_at"] = utc_now()
+        submission["last_error"] = {"code": "recovery_failed", "message": redact_message(str(exc))}
+        save_submission(config, submission)
+        return submission, None
+    save_submission(config, submission)
+    if state == "REJECTED":
+        if cleanup_record_uploads(config, submission, force=True):
+            save_submission(config, submission)
+        return submission, None
+    if state != "CONFIRMED":
+        return submission, None
+    task = _promote_confirmed_submission(config, submission, response)
+    return submission, task
+
+
 def _save_error(task: dict[str, Any], code: str, message: str) -> None:
     task["last_error"] = {"code": code, "message": redact_message(message)}
     task["updated_at"] = utc_now()
 
 
-def _download_result(task: dict[str, Any], url: str) -> str:
+def _is_api_content_url(config: Config, task_id: str, url: str) -> bool:
+    api = urllib.parse.urlparse(config.api_base_url)
+    candidate = urllib.parse.urlparse(url)
+    if (candidate.scheme.lower(), candidate.hostname, candidate.port) != (api.scheme.lower(), api.hostname, api.port):
+        return False
+    expected_path = api.path.rstrip("/") + f"/videos/{urllib.parse.quote(task_id, safe='')}/content"
+    return candidate.path == expected_path and not candidate.params and not candidate.query and not candidate.fragment
+
+
+def _result_request_headers(config: Config, task_id: str, url: str) -> dict[str, str]:
+    headers = {"Accept": "video/mp4,application/octet-stream"}
+    if _is_api_content_url(config, task_id, url):
+        headers["Authorization"] = f"Bearer {config.api_key}"
+    return headers
+
+
+def _download_result(config: Config, task: dict[str, Any], url: str) -> str:
     planned = Path(task["output"]["planned_path"])
     if planned.is_symlink():
         raise ClientError("planned output is a symlink")
     planned.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     temp_path = planned.parent / f".{planned.name}.part.{os.getpid()}"
     parsed = urllib.parse.urlparse(validate_external_url(url, result=True))
-    request = urllib.request.Request(urllib.parse.urlunparse(parsed), headers={"Accept": "video/mp4,application/octet-stream"})
-    opener = urllib.request.build_opener(_ResultRedirectHandler())
+    headers = _result_request_headers(config, task["task_id"], url)
+    request = urllib.request.Request(urllib.parse.urlunparse(parsed), headers=headers)
+    opener = urllib.request.build_opener(_ResultRedirectHandler(config, task["task_id"]))
     deadline = time.monotonic() + DOWNLOAD_TIMEOUT_SECONDS
     try:
         with opener.open(request, timeout=60) as response:
@@ -571,7 +952,6 @@ def _query_with_retries(config: Config, task_id: str) -> dict[str, Any]:
 def poll_task(config: Config, task: dict[str, Any]) -> dict[str, Any]:
     task_id = task["task_id"]
     started = time.monotonic()
-    last_url_refresh = False
     previous_handlers: dict[int, Any] = {}
 
     def handle_signal(signum, _frame):
@@ -615,9 +995,12 @@ def poll_task(config: Config, task: dict[str, Any]) -> dict[str, Any]:
             error = response.get("error") if isinstance(response.get("error"), dict) else {}
             _save_error(task, str(error.get("code", "task_failed")), str(error.get("message", "task failed")))
             task["tracking_state"] = "FINISHED"
+            cleanup_record_uploads(config, task, force=True)
             save_task(config, task)
             return task
         elif status == "completed":
+            cleanup_record_uploads(config, task, force=True)
+            save_task(config, task)
             existing = task.get("result", {}).get("local_path")
             if task.get("result", {}).get("download_state") == "SUCCEEDED" and existing and Path(existing).is_file():
                 task["tracking_state"] = "FINISHED"
@@ -635,13 +1018,8 @@ def poll_task(config: Config, task: dict[str, Any]) -> dict[str, Any]:
             task["result"]["download_state"] = "DOWNLOADING"
             save_task(config, task)
             try:
-                local_path = _download_result(task, url)
+                local_path = _download_result(config, task, url)
             except ApiError as exc:
-                if exc.status in (403, 410) and not last_url_refresh:
-                    last_url_refresh = True
-                    task["result"]["download_state"] = "PENDING"
-                    save_task(config, task)
-                    continue
                 _save_error(task, "download_failed", str(exc))
                 task["result"]["download_state"] = "FAILED"
                 task["tracking_state"] = "PAUSED"
@@ -706,38 +1084,167 @@ def generate(config: Config, args: argparse.Namespace) -> int:
     config.ensure_dirs()
     media = collect_media(args)
     output, explicit_file = _prepare_output(config, args.output)
-    uploaded = [upload_media(config, item) for item in media]
-    payload = build_payload(args.prompt, uploaded, duration=args.duration, ratio=args.ratio, generate_audio=args.generate_audio, watermark=args.watermark)
     request_id = str(uuid.uuid4())
-    submission = {"schema_version": 1, "client_request_id": request_id, "submission_state": "PREPARED", "created_at": utc_now(), "updated_at": utc_now(), "request": {"ratio": args.ratio, "duration": args.duration, "generate_audio": args.generate_audio, "watermark": args.watermark, "media_counts": {kind: sum(item.kind == kind for item in media) for kind in EXTENSIONS}}, "output_directory": str(output.parent if explicit_file else output), "last_error": None}
+    submission = {
+        "schema_version": 1,
+        "client_request_id": request_id,
+        "submission_state": "PREPARED",
+        "created_at": utc_now(),
+        "updated_at": utc_now(),
+        "request": {
+            "ratio": args.ratio,
+            "duration": args.duration,
+            "generate_audio": args.generate_audio,
+            "watermark": args.watermark,
+            "media_counts": {kind: sum(item.kind == kind for item in media) for kind in EXTENSIONS},
+        },
+        "output": {"requested": str(output), "explicit_file": explicit_file},
+        "cleanup": {"objects": [], "updated_at": utc_now()},
+        "last_error": None,
+    }
     save_submission(config, submission)
-    submission["submission_state"] = "PENDING"
-    submission["updated_at"] = utc_now()
-    save_submission(config, submission)
-    try:
-        response = api_request(config, "POST", "/videos", payload=payload, request_id=request_id)
-        task_id = _task_id_from_create(response)
-    except ApiError as exc:
-        submission["submission_state"] = "REJECTED" if 400 <= exc.status < 500 else "UNKNOWN"
-        submission["last_error"] = {"code": f"http_{exc.status}" if exc.status else "network_error", "message": _error_summary(exc.body)}
+    task: dict[str, Any] | None = None
+    with submission_lock(config, request_id):
+        def record_upload(item: dict[str, Any]) -> None:
+            objects = submission["cleanup"]["objects"]
+            existing = next(
+                (
+                    value
+                    for value in objects
+                    if isinstance(value, dict) and value.get("ownership_proof") == item.get("ownership_proof")
+                ),
+                None,
+            )
+            if existing is None:
+                objects.append(item)
+            elif existing is not item:
+                existing.clear()
+                existing.update(item)
+            submission["updated_at"] = utc_now()
+            save_submission(config, submission)
+
+        try:
+            if any(item.url is None for item in media):
+                lifecycle_days = verify_bucket_lifecycle(config)
+                submission["lifecycle"] = {"verified_at": utc_now(), "expiration_days": lifecycle_days}
+                submission["updated_at"] = utc_now()
+                save_submission(config, submission)
+            uploaded = [upload_media(config, item, record_upload=record_upload) for item in media]
+            payload = build_payload(
+                args.prompt,
+                uploaded,
+                duration=args.duration,
+                ratio=args.ratio,
+                generate_audio=args.generate_audio,
+                watermark=args.watermark,
+            )
+        except (ClientError, ConfigError, OSError):
+            submission["submission_state"] = "REJECTED"
+            submission["last_error"] = {"code": "pre_submission_failed", "message": "request failed before video submission"}
+            cleanup_record_uploads(config, submission, force=True)
+            save_submission(config, submission)
+            raise
+        submission["submission_state"] = "PENDING"
         submission["updated_at"] = utc_now()
         save_submission(config, submission)
-        raise ClientError(f"submission {submission['submission_state']}: {submission['last_error']['message']}") from exc
-    except (ClientError, OSError) as exc:
-        submission["submission_state"] = "UNKNOWN"
-        submission["last_error"] = {"code": "protocol_error", "message": redact_message(str(exc))}
-        submission["updated_at"] = utc_now()
-        save_submission(config, submission)
-        raise
-    task = _new_task(task_id, request_id, payload, output, explicit_file, response if isinstance(response, dict) else {})
-    record_path = save_task(config, task)
-    task["record_path"] = str(record_path)
-    save_task(config, task)
-    delete_submission(config, request_id)
-    with task_lock(config, task_id):
+        try:
+            response = api_request(config, "POST", "/videos", payload=payload, request_id=request_id)
+            task_id = _task_id_from_create(response)
+        except ApiError as exc:
+            code = _api_error_code(exc.body)
+            should_query = exc.status in (0, 408, 429) or 500 <= exc.status < 600 or (
+                exc.status == 409 and code == "submission_in_progress"
+            )
+            if should_query:
+                submission, task = recover_submission_record(config, submission, retry_limit=0)
+                if task is None:
+                    state = submission["submission_state"]
+                    raise ClientError(f"submission {state}; recover with client request id {request_id}") from exc
+            else:
+                submission["submission_state"] = "UNKNOWN" if code == "submission_unknown" else "REJECTED"
+                submission["last_error"] = {
+                    "code": code or (f"http_{exc.status}" if exc.status else "network_error"),
+                    "message": _error_summary(exc.body),
+                }
+                submission["updated_at"] = utc_now()
+                if submission["submission_state"] == "REJECTED":
+                    cleanup_record_uploads(config, submission, force=True)
+                save_submission(config, submission)
+                raise ClientError(f"submission {submission['submission_state']}; client request id {request_id}") from exc
+        except (ClientError, OSError) as exc:
+            submission, task = recover_submission_record(config, submission, retry_limit=0)
+            if task is None:
+                raise ClientError(
+                    f"submission {submission['submission_state']}; recover with client request id {request_id}"
+                ) from exc
+        if task is None:
+            task = _new_task(task_id, request_id, payload, output, explicit_file, response if isinstance(response, dict) else {})
+            task["cleanup"] = submission["cleanup"]
+            record_path = save_task(config, task)
+            task["record_path"] = str(record_path)
+            save_task(config, task)
+            submission["submission_state"] = "CONFIRMED"
+            submission["task_id"] = task_id
+            submission["last_error"] = None
+            submission["cleanup"] = {"objects": [], "transferred_to_task_id": task_id, "updated_at": utc_now()}
+            submission["updated_at"] = utc_now()
+            save_submission(config, submission)
+    if task is None:
+        raise ClientError(f"submission UNKNOWN; recover with client request id {request_id}")
+    with task_lock(config, task["task_id"]):
         task = poll_task(config, task)
     print(json.dumps(summary(task), ensure_ascii=False, indent=2))
     return 0 if task.get("tracking_state") == "FINISHED" and task.get("result", {}).get("download_state") == "SUCCEEDED" else 1
+
+
+def submission_summary(submission: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "client_request_id": submission["client_request_id"],
+        "submission_state": submission.get("submission_state"),
+        "task_id": submission.get("task_id"),
+        "billing_state": submission.get("remote", {}).get("billing_state") if isinstance(submission.get("remote"), dict) else None,
+        "created_at": submission.get("created_at"),
+        "updated_at": submission.get("updated_at"),
+        "last_error": submission.get("last_error"),
+    }
+
+
+def recover(config: Config, client_request_id: str) -> int:
+    try:
+        request_id = str(uuid.UUID(client_request_id))
+    except ValueError as exc:
+        raise ClientError("client request id must be a UUID") from exc
+    if request_id != client_request_id:
+        raise ClientError("client request id must be a canonical UUID")
+    try:
+        submission = load_submission(config, request_id)
+    except ValueError:
+        output, explicit_file = _prepare_output(config, None)
+        submission = {
+            "schema_version": 1,
+            "client_request_id": request_id,
+            "submission_state": "UNKNOWN",
+            "created_at": utc_now(),
+            "updated_at": utc_now(),
+            "request": {},
+            "output": {"requested": str(output), "explicit_file": explicit_file},
+            "cleanup": {"objects": [], "updated_at": utc_now()},
+            "last_error": None,
+        }
+        save_submission(config, submission)
+    try:
+        with submission_lock(config, request_id):
+            submission, task = recover_submission_record(config, submission)
+    except BusyTaskError:
+        raise ClientError("submission is already being recovered by another process")
+    if task is None:
+        print(json.dumps(submission_summary(submission), ensure_ascii=False, indent=2))
+        return 1
+    with task_lock(config, task["task_id"]):
+        task["record_path"] = str(task_path(config, task["task_id"]))
+        task = poll_task(config, task)
+    print(json.dumps(summary(task), ensure_ascii=False, indent=2))
+    return 0 if task.get("tracking_state") == "FINISHED" and task.get("status") == "completed" and task.get("result", {}).get("download_state") == "SUCCEEDED" else 1
 
 
 def resume(config: Config, task_id: str) -> int:
@@ -772,6 +1279,8 @@ def make_parser() -> argparse.ArgumentParser:
     sub.add_parser("list")
     resume_parser = sub.add_parser("resume")
     resume_parser.add_argument("task_id")
+    recover_parser = sub.add_parser("recover")
+    recover_parser.add_argument("client_request_id")
     return parser
 
 
@@ -780,13 +1289,19 @@ def main() -> int:
     args = parser.parse_args()
     try:
         config = load_config()
+        config.ensure_dirs()
+        cleanup_expired_uploads(config)
         if args.command == "list":
             for task in list_tasks(config):
                 task["record_path"] = str(task_path(config, task["task_id"]))
                 print(json.dumps(summary(task), ensure_ascii=False))
+            for submission in list_submissions(config):
+                print(json.dumps(submission_summary(submission), ensure_ascii=False))
             return 0
         if args.command == "resume":
             return resume(config, args.task_id)
+        if args.command == "recover":
+            return recover(config, args.client_request_id)
         return generate(config, args)
     except (BusyTaskError, ConfigError, ClientError, OSError) as exc:
         print(f"VerdantFlare Video failed: {redact_message(str(exc))}", file=os.sys.stderr)

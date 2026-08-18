@@ -293,6 +293,10 @@ class Config:
 
     @property
     def upload_prefix(self) -> str:
+        return f"{self.s3_bucket}/{self.object_prefix}"
+
+    @property
+    def object_prefix(self) -> str:
         return f"{self.s3_prefix}/{installation_id(self.s3_access_key)}"
 
     def ensure_dirs(self) -> None:

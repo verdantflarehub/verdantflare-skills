@@ -56,7 +56,7 @@ class VideoHandler(BaseHTTPRequestHandler):
                     "id": "task_test",
                     "status": "completed",
                     "progress": 100,
-                    "metadata": {"url": f"http://127.0.0.1:{self.server.server_port}/redirect.mp4", "duration": 10, "ratio": "16:9"},
+                    "metadata": {"url": f"http://127.0.0.1:{self.server.server_port}/result.mp4", "duration": 10, "ratio": "16:9"},
                 }
             self.wfile.write(json.dumps(payload).encode())
             return
@@ -340,7 +340,7 @@ class VideoSkillTests(unittest.TestCase):
             thread.join(timeout=2)
             server.server_close()
 
-    def test_expired_result_refreshes_once_without_creating_again(self):
+    def test_result_proxy_forbidden_pauses_without_refresh_or_recreate(self):
         RefreshHandler.polls = 0
         RefreshHandler.posts = 0
         server = ThreadingHTTPServer(("127.0.0.1", 0), RefreshHandler)
@@ -365,11 +365,12 @@ class VideoSkillTests(unittest.TestCase):
                     generate_audio=True, watermark=False,
                 )
                 with mock.patch("video_client.shutil.which", return_value=None):
-                    self.assertEqual(generate(config, args), 0)
+                    self.assertEqual(generate(config, args), 1)
                 self.assertEqual(RefreshHandler.posts, 1)
-                self.assertEqual(RefreshHandler.polls, 2)
+                self.assertEqual(RefreshHandler.polls, 1)
                 record = list_tasks(config)[0]
-                self.assertEqual(record["result"]["download_state"], "SUCCEEDED")
+                self.assertEqual(record["result"]["download_state"], "FAILED")
+                self.assertEqual(record["tracking_state"], "PAUSED")
         finally:
             server.shutdown()
             thread.join(timeout=2)
