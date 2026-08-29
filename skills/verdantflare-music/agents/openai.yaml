@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Music"
+  short_description: "Create reviewed songs from an idea to final masters"
+  default_prompt: "Use $verdantflare-music to turn this music idea into a reviewed song production and final delivery package."
