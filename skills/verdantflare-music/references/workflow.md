@@ -45,7 +45,7 @@
 - `Aligned_Lyrics.lrc` Artifact 的已校验文本
 - 批准的 BPM、目标响度和峰值上限
 
-输出 `Final_Song_Master.wav`、`Final_Song.mp3` 和 `Final_Song.lrc`。自动格式检查通过后进入审核点 5；人工终审通过后归档。
+输出 `Final_Song_Master.wav`、`<创作者显示名>-<歌曲名>.mp3` 和 `Final_Song.lrc`。如果工具 Artifact 的内部文件名为 `Final_Song.mp3`，下载到项目交付目录时直接使用新名称，不保留兼容副本。自动格式检查通过后进入审核点 5；人工终审通过后归档。
 
 ## 返工路由
 

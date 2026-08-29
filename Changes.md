@@ -1,5 +1,9 @@
 # Changes
 
+## verdantflare-music-v0.3.1
+
+- 最终 MP3 改为 `<创作者显示名>-<歌曲名>.mp3`，不再保留 `Final_Song.mp3` 兼容文件。
+
 ## verdantflare-music-v0.3.0
 
 - 新增显式 `lyrics.align` 歌词强制对齐阶段，以转换后干声和已批准逐行歌词生成 `Aligned_Lyrics.lrc` Artifact。
