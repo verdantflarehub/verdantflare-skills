@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Music MV"
+  short_description: "Direct and assemble reviewable full-song music videos"
+  default_prompt: "Use $verdantflare-music-mv to plan and produce an MV from this approved music asset."
