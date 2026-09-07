@@ -1,45 +1,98 @@
 ---
 name: verdantflare-music-mv
-description: 将已批准歌曲导演并制作成可审核、可恢复、可局部重做的完整音乐视频；当用户要求为歌曲创作 MV Treatment、Visual Bible、故事板、Animatic、Shot Timeline，调度逐镜视频生成，审核跨镜连续性，或使用批准母带装配约 200 秒 MV 时使用。不用于创作歌曲，也不直接操作 H3 Runtime。
+description: 以已批准歌曲为基础，专注于创作 30 秒核心高潮故事音乐视频（MV）。当用户要求输入项目、制定角色圣经与设计、根据一句话故事圣经设计 8~15 秒故事段落、审核角色/剧情/分镜、编排组合分镜调度 H3 渲染生成、以及质检装配 30 秒高潮 MV 时使用。不用于创作歌曲，目前不支持设计整首长片 MV，也不直接操作 H3 底层 Runtime。
 ---
 
 # VerdantFlare Music MV
 
-以已批准的 Music Asset Version 为音乐输入，将完整歌曲导演、拆镜、生成、审核并装配为音乐视频。需要推进阶段、返工或恢复项目时阅读 [references/workflow.md](references/workflow.md)；创建或校验项目文件与时间线时阅读 [references/contracts.md](references/contracts.md)；设计人物身份卡、服装或 H3 参考资产时阅读 [references/character-assets.md](references/character-assets.md)；到达审核点或收到批准、修改、重做、选择候选等指令时阅读 [references/review-gates.md](references/review-gates.md)。
+以已批准的歌曲高潮片段为基础，专注于创作 **30 秒核心高潮故事音乐视频（MV）**。需要推进阶段、返工或恢复项目时阅读 [references/workflow.md](references/workflow.md)；创建或校验项目文件与时间线时阅读 [references/contracts.md](references/contracts.md)；设计人物身份卡、服装或 H3 参考资产时阅读 [references/character-assets.md](references/character-assets.md)；到达审核点或收到批准、修改、重做、选择候选等指令时阅读 [references/review-gates.md](references/review-gates.md)。
 
 ## 职责边界
 
-- 负责 MV Treatment、Visual Bible、歌曲结构分析、故事板、全曲 Animatic、Shot Timeline、跨镜连续性、候选选择、Picture Lock、字幕和交付包。
+- 负责 30 秒高潮 MV Treatment、Visual Bible、故事圣经与段落设计、分镜板、内部 Shot 规划、跨镜连续性、候选选择、Picture Lock、字幕和交付包。
+- 目前技能不支持也不盲目铺开整首长片 MV，而是集中精力打磨 **30 秒核心高潮故事**。
 - 歌曲尚未批准时，使用 `verdantflare-music` 完成音乐生产；只接受通过 Music Gate 的 Master WAV、歌词、LRC、BPM 和可用 Stems 进入正式 MV 制作。
-- 将批准的连续素材需求冻结为 `GenerationUnit`，再使用 `verdantflare-video-h3` 执行 H3 原子素材生成。MV Skill 决定单元是连续单镜还是最多 2–3 个内部切镜，但不拼接 H3 HTTP 请求，不管理 `video_task_id`、GPU、模型下载或 Kubernetes。
+- 将批准的连续分镜组合冻结为 `GenerationUnit` 批次，再使用 `verdantflare-video-h3` 执行 H3 原子素材生成。MV Skill 决定单元批次组合与内部切点，但不拼接 H3 HTTP 请求，不管理 `video_task_id`、GPU、模型下载或 Kubernetes。
 - H3 不是所有镜头的必选来源。允许使用批准的已有素材、静帧运动、同一 Take 的不同裁切和传统剪辑，但每个最终 Shot 都必须有明确来源。
 - 不把视频逻辑写回 `verdantflare-music`，不调用固定 SD2 契约的 `verdantflare-video` 代替 H3，也不在能力失败时静默更换模型。
 
-## 项目状态
+## 核心创作工作流（五步人机协同闭环）
 
-使用 `.output/music-mv/<创作者>/<MV项目>/` 保存文本清单和受控 Artifact 引用。音频、视频、图像和模型不得提交 Git；项目文件只记录不可变资产 ID、摘要、审核记录和可公开的交付元数据，不记录签名 URL、凭据或内部存储地址。
+1. **步骤 1：项目名称（人类输入）**：人类输入项目名称（歌曲、创作者），指定已批准 Master WAV 音频事实源与画幅，系统初始化目录并锁定全局时钟与元数据。
+2. **步骤 2：角色圣经与设计（人类输入 + AI 制作 + 人类评审）**：人类输入至少一张清晰正面头像照片，AI 制作胸部以上四视图（正脸中性、微笑、左转15°、右转15°），人类最终评审确认并冻结至 `visualbible.md`。
+3. **步骤 3：故事圣经与设计（30 秒高潮故事 + 8~15 秒分段哲学 + 人类一句话）**：
+   - 技能专注于 **30 秒核心高潮故事**，不支持也不铺开整首长片 MV；
+   - 每个故事段落（Block，代号 `B01`, `B02`...）控制在 8~15 秒，**严禁按单个 Shot 碎片化设计故事**（因为 H3 单次最多渲染 15 秒，连续段落内一致性好，碎片化 Shot 随机性大、极易崩坏）；
+   - 人类必须输入**一句话**（情绪/片段，有故事性），AI 据此展开 30 秒故事设计方案提交人类审核。
+4. **步骤 4：审核故事（三大核心维度：角色 + 剧情 + 分镜）**：在单元 `review.md` 中集中审核：
+   - **审核角色**：穿什么服装？核心公式：**角色 = 人物 + 服装**（体现 7.5 头身的无脸人台三视图，人类决定艺术审美）；
+   - **审核剧情**：叙事起承转合与情绪推进是否符合一句话故事圣经；
+   - **审核分镜**：Picture 2 Storyboard Grid 与各 Shot 首尾帧条带图（Review Strips）。
+5. **步骤 5：提交渲染（分镜组合三同原则 + 批次确认）**：
+   - 当前没有视频生成模型支持单次生成 30 秒以上视频，分镜科学组合是保证一致性的关键；
+   - **分镜组合唯一黄金原则：三同定律（同一个角色、同一个地点、同一个时间）** 构成一个故事（Story）；
+   - **Story 未超过 15 秒（<= 15s）必须组合** 为一个生成单元提交，最大化利用模型内生连续性；**超过 15 秒（> 15s）必须拆分** 为多个 8~15 秒 Block；
+   - AI 依据原则自行组合分镜，整理为提交任务清单（Task Manifest）供人类确认后下发渲染。
 
-至少维护：
+## 项目结构与状态
 
-- `mv-project.yaml`：Music Asset Version、目标平台、画幅、当前阶段和项目状态；
-- `treatment.md` 与 `visual-bible.md`；
-- `song-timeline.yaml`、`shot-timeline.yaml` 和 `generation-units.yaml`；
-- `制作审核记录.md`：所有审核决定和返工原因，追加记录而不覆盖历史；
-- `artifacts.json`：故事板、Animatic、候选、批准镜头和交付物引用。
+使用 `.output/music-mv/<创作者>/<MV项目>/` 保存文本清单和受控 Artifact 引用。音频、视频、图像和模型不得提交 Git；项目文件只记录不可变资产 ID、摘要、审核记录和可公开的交付元数据，不记录签名 URL、凭据或内部存储地址。所有契约文件与素材文件名**严格采用纯英文规范（严禁使用中文作为文件名）**。
+
+项目采用**两级结构**：
+
+### 1. 项目全局层（Project Level）
+
+- `project.yaml`：Music Asset Version、全局时钟、画幅、目标平台、当前阶段和单元索引；
+- `treatment.md`：顶层导演概念、全曲叙事脉络与段落职责（原设计大纲）；
+- `visualbible.md`：人物唯一身份原型（人物设计胸部以上四视图：正脸中性、正脸微笑、左转15度、右转15度）、调色体系、摄影调性与全局负向约束；
+- `review.md`：**项目全局总审核入口**。审核全片 30 秒故事结构、各 Block 规划矩阵与状态、跨段连续性审查、Picture Lock 与成片交付；
+- `master.wav`：经 Music Gate 批准的唯一全局母带音频事实源；
+- `.archive/`：已完成重大更替的历史废弃版本或早期探路目录（归档隔离，不干扰当前主线）。
+
+### 2. 单元执行层（Unit Level，如 `units/<unit_id>/` 或 `<unit_id>/`）
+
+按 10 秒章节或独立叙事单元划分子目录，内部严格实行 **`source/`、`input/`、`output/` 三分法**：
+
+- `review.md`：**单元唯一固定审核入口**。在单元目录下统一命名为 `review.md`（不再加目录名前缀，杜绝冗余）；禁止新建 `Draft0.x` 审核副本，状态与决定就地追加更新；
+- `source/`：**原子源素材与确定性构建代码**。存放全局人物设计四视图（`01-front-neutral.png` 等）、单元角色设计无脸三视图（`05-wardrobe-turnaround.png`）、独立单格分镜原图（`F01.png` 等）、纯景图（`scene-design.png`）、母带切片（`master-clip.wav`）及组装脚本（`build/compose_inputs.go`），保证素材生成可追溯、可重新编译；
+- `input/`：**严格对齐模型输入协议的打包产物**。如 `01-character-card.png`（Picture 1 Character Card，由人物设计与角色设计确定性合成）、`02-storyboard-grid.png`（Picture 2 多格分镜图）、`03-scene-design.png`（Picture 3 纯场景设计图）、`04-audio-excerpt.wav`（Picture 4 单元音频切片），以及描述哈希、尺寸与版式的机器契约 `manifest.json`；
+- `output/`：**审阅物与模型生成产物**。包含 `review/`（供审阅的条带拼图与首尾帧对比，如 `Shot-1-S01-F1-F2.png`）、`generated/`（模型推理生成的各 Attempt 视频）与 `baseline/`（上一版最佳基线对照）。
+
+### 3. B-S-F 命名与代号体系
+
+为确保时序清晰、便于文件排序与跨团队沟通，统一采用 **B-S-F 三级层级代号**：
+
+- **`B01`, `B02`, `B03`...（Story Block / Beat，故事段落）**：
+  - 代表 5 至 15 秒具有明确叙事/情绪职责的独立单元（如“出发、漫游、抵达”各为一个 Block）；
+  - **`unit_id` 统一对齐故事段落编号**，单元目录直接命名为 `B01/`（或带版本 `B01-v1/`）；
+- **`S01`, `S02`, `S03`...（Shot，剪辑分镜/镜头）**：
+  - 代表成片中的最终单个剪辑镜头（通常 1 至 5 秒）；
+  - 隶属于对应故事段落，段落内部简写为 `S01`、`S02`，跨段落全称写为 `B01-S01`；
+- **`F01`, `F02`...（Frame，分镜画面/关键格）**：
+  - 代表多格分镜图中的具体某一格画面（如八格图 `F01` 至 `F08`）；
+  - 亦用于镜头起落幅标识：`S01-F1`（首帧）、`S01-F2`（尾帧）；
+- **生成单元切分（GenerationUnit）**：
+  - 当一个故事段落 `B01` 包含的 Shot 数量超出单次 H3 承载上限（2–3 个内部切点）时，切分为子生成单元：
+    - `B01-GU01`（覆盖 `S01–S02`，时长约 5 秒）；
+    - `B01-GU02`（覆盖 `S03–S04`，时长约 5 秒）；
+    - 也可简写为 `B01.1`、`B01.2`。
 
 恢复项目时先核对记录、时间线和 Artifact 是否一致，从最后一个未批准的审核门继续。冲突时停止并报告，不猜测状态，不重复已经成功且批准的昂贵生成。
 
 ## 核心规则
 
-1. Master WAV 是整支 MV 的全局时钟和最终歌曲音频唯一事实源。所有时码采用从 Master 起点开始的整数毫秒。
-2. 区分最终剪辑 `Shot` 与 H3 `GenerationUnit`：Shot 通常 2 至 8 秒；Generation Unit 必须为 4 至 15 秒，一个生成素材可裁出多个 Shot。
-3. 约 200 秒 MV 先规划完整覆盖，再决定生成数量。建议以 25 至 40 个 Shot 起草，但最终数量由歌曲、Treatment 和批准 Animatic 决定，不设置生成配额。
-4. 先完成全曲故事板和 Animatic，再投入批量 H3。Treatment 或 Animatic 未批准时不得批量生成正式候选。
-5. 优先验证身份、演唱表演和风格风险最高的代表镜头；代表镜头通过后才批量执行同类镜头。
-6. 候选技术成功不等于镜头通过。逐镜检查身份、表演、动作、连续性、构图、节奏、技术媒体参数和合规。
-7. 只返工失败镜头或受影响的下游装配。Treatment 概念不成立时回到导演阶段，不能继续消耗原子视频生成掩盖问题。
-8. Picture Lock 后移除或静音所有生成镜头内生音轨，统一挂载批准 Master WAV；环境声或拟音必须作为独立可审核音轨。
+1. **音频事实源**：Master WAV 是整支 MV 的全局时钟和最终歌曲音频唯一事实源。所有时码采用从 Master 起点开始的整数毫秒。
+2. **Shot 组合与 GenerationUnit 契约**：没有任何现存视频生成模型支持在单个视频内单次生成 30 秒以上的分镜，分镜科学组合至关重要。必须严格遵循**三同定律（同一个角色、同一个地点、同一个时间 = 一个 Story）**：未超过 15 秒（<= 15s）的 Story 必须组合为一个 GenerationUnit 一次性提交以保证连续性；超过 15 秒（> 15s）的 Story 必须按 8~15 秒切分为连续 Block/子单元（如 `B01-GU01`、`B01-GU02`）。不满足三同条件的镜头严禁强行拼入同一单元。
+3. **输入规范化与确定性组装**：送入模型的数据必须严格通过 `source/` 原子素材经确定性脚本编译至 `input/`，并同步更新 `manifest.json`。禁止手工随意拼图或向模型提交未记录哈希的临时图。
+4. **两级审核文档体系与就地迭代**：项目全局根目录维护一个 `review.md`（把控全片 30 秒故事结构、各 Block 规划矩阵、跨段连续性与成片交付）；各单元目录下维护各自的 `review.md`（把控微观角色服装、本段剧情、分镜条带与生成质检）。层级天然隔离职责，所有契约文件统一使用纯英文命名，重大修改就地更新，严禁泛滥新建 Draft 文件。
+5. **迭代垃圾与生命周期管理**：
+   - 运行时日志（`*.log`）、脚本缓存（`__pycache__/`）、临时调试文件严禁留在项目目录中，必须即生即消；
+   - 失败或被否决的生成尝试（Failed/Rejected Attempts），在大视频完成质量诊断并记录 Task ID 与结论后，可删除本地无效大视频文件，仅保留轻量抽帧/接触表；
+   - 重大架构更替或被整体替代的旧版目录整体移入 `.archive/`，保持主工作区清爽。
+6. **先全曲规划与审阅，后批量生成**：全曲 Treatment、分镜和 Animatic 未获批准前，不得批量调度正式视频生成；优先跑通高风险代表镜头。
+7. **逐镜多维质检**：候选技术成功不等于镜头通过。逐镜核对身份、表演、位移、连续性、构图、节奏、媒体参数和合规；不以生成成功掩盖概念不成立。
+8. **Picture Lock 与统一交付**：Picture Lock 后移除生成素材的所有内生音轨，从零时码统一挂载批准 Master WAV；字幕由批准 LRC 严格生成，环境声/拟音作为独立可审核音轨。
 
 ## 完成条件
 
-只有 Director、Animatic、Shot、Picture Lock 和 Release 五个审核门均明确通过，Shot Timeline 完整覆盖 Master 时长，所有最终 Shot 均解析到批准素材，成片使用批准 Master 且媒体、字幕、权利检查通过，才能声明 MV 完成。返回最终视频 Artifact、实际时长、画幅、Master Music Asset Version、审核记录和交付清单。
+只有人物审核、故事审核（角色/剧情/分镜）、渲染任务确认、Shot 逐镜质检和 Picture Lock / Release 各审核门均明确通过，30 秒高潮故事 Shot 完整覆盖目标音频区间，所有最终 Shot 均解析到批准素材，成片使用批准 Master 且媒体、字幕、权利检查通过，才能声明 30 秒高潮 MV 完成。返回最终视频 Artifact、实际时长、画幅、Master Music Asset Version、审核记录和交付清单。
