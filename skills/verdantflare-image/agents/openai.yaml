@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Image"
+  short_description: "Generate and edit atomic AI image assets via VerdantFlare Image MCP (defaults to codex / gpt-image-2)"
+  default_prompt: "Use $verdantflare-image to generate or edit atomic image assets for the current project using the codex engine (gpt-image-2) by default."

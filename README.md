@@ -70,24 +70,43 @@ VERDANTFLARE_VIDEO_S3_SECRET_KEY=<required>
 使用 $verdantflare-video，根据 ~/Desktop/product.png 生成一个 9:16、10 秒的产品广告视频。
 ```
 
-## verdantflare-image-codex
+## verdantflare-image
 
-`verdantflare-image-codex` 是专注于原子图像资产生成与局部重绘的 Codex / Antigravity Skill。它负责将上层视觉意图（如 MV 人物设计胸部四视图、服装无脸人台三视图、分镜单格图 F01~F08、纯场景设计图）转化为可执行的图像生成请求，默认权威采用 `gpt-image-2` 模型，并通过 `image.*` MCP 工具调度执行，最终将技术合格的不可变 `ImageCandidate` 受控归档到指定 `source/` 目录。
+`verdantflare-image` 是专注于原子图像资产生成、以图生图与局部重绘的领域级 Skill。它负责将上层视觉意图（如 MV 人物设计胸部四视图、服装无脸人台三视图、分镜单格图 F01~F08、纯场景设计图）转化为技术受控的生图请求，默认采用 `codex`（`gpt-image-2`）引擎驱动，亦支持 `gemini`（`gemini-3.1-flash-image`），通过 `image.*` MCP 工具与 REST 接口调度执行，最终将技术合格且校验 SHA-256 的不可变 `ImageCandidate` 资产受控归档到指定 `source/` 目录。
 
 ### 安装命令
 
-当前版本：`verdantflare-image-codex-v0.1.0`
+当前版本：`verdantflare-image-v0.1.0`
 
 在 Codex 中执行：
 
 ```text
-使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/dev/skills/verdantflare-image-codex 安装 Skill。
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/dev/skills/verdantflare-image 安装 Skill。
+```
+
+同时在本地 Codex 注册 Image MCP 服务：
+
+```bash
+codex mcp add verdantflare-image \
+  --url "${IMAGE_MCP_URL}" \
+  --bearer-token-env-var IMAGE_MCP_BEARER_TOKEN
 ```
 
 ### 使用 Skill
 
 ```text
-使用 $verdantflare-image-codex，为项目 mengsk/加油吧小月 生成 B01 单元的角色服装无脸人台三视图，采用 gpt-image-2 模型，画幅 16:9。
+使用 $verdantflare-image，为项目 creator/project-demo 生成 B01 单元的角色服装无脸人台三视图，采用 codex 引擎，画幅 16:9。
+```
+
+### 命令行客户端 (CLI)
+
+技能随附纯 Python 标准库驱动工具 `scripts/image_client.py`，支持独立在终端执行生图、轮询与哈希校验下载（默认使用 `codex` 引擎）：
+
+```bash
+python3 skills/verdantflare-image/scripts/image_client.py generate \
+  --prompt "科技风极简标志设计，绿色与深色背景" \
+  --engine codex \
+  --output /tmp/test-image.png
 ```
 
 ## 变更记录

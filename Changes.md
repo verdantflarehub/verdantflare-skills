@@ -1,5 +1,14 @@
 # Changes
 
+## verdantflare-image-v0.1.0
+
+- 新增规范的 `verdantflare-image` Skill，全面废除旧 `verdantflare-image-codex`。
+- 完整接入 VerdantFlare Image MCP 服务（`artifact.import`、`image.generate`、`image.edit`、`image.inpaint`、`image.status`、`image.result`、`image.list`）。
+- 支持 `codex`（`gpt-image-2`）与 `gemini`（`gemini-3.1-flash-image`）双核 API 引擎。
+- 增加人物设计四视图、服装无脸人台三视图、分镜单格画面的视觉规格文档与异步生成工作流。
+- 增加零第三方依赖的 Python 客户端工具 `scripts/image_client.py`，支持终端直接生图、轮询等待与不可变 SHA-256 校验。
+- 增加全面的自动化单元测试套件 `tests/test_verdantflare_image.py`。
+
 ## verdantflare-music-v0.3.1
 
 - 最终 MP3 改为 `<创作者显示名>-<歌曲名>.mp3`，不再保留 `Final_Song.mp3` 兼容文件。
