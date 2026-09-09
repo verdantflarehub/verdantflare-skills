@@ -70,6 +70,26 @@ VERDANTFLARE_VIDEO_S3_SECRET_KEY=<required>
 使用 $verdantflare-video，根据 ~/Desktop/product.png 生成一个 9:16、10 秒的产品广告视频。
 ```
 
+## verdantflare-image-codex
+
+`verdantflare-image-codex` 是专注于原子图像资产生成与局部重绘的 Codex / Antigravity Skill。它负责将上层视觉意图（如 MV 人物设计胸部四视图、服装无脸人台三视图、分镜单格图 F01~F08、纯场景设计图）转化为可执行的图像生成请求，默认权威采用 `gpt-image-2` 模型，并通过 `image.*` MCP 工具调度执行，最终将技术合格的不可变 `ImageCandidate` 受控归档到指定 `source/` 目录。
+
+### 安装命令
+
+当前版本：`verdantflare-image-codex-v0.1.0`
+
+在 Codex 中执行：
+
+```text
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/dev/skills/verdantflare-image-codex 安装 Skill。
+```
+
+### 使用 Skill
+
+```text
+使用 $verdantflare-image-codex，为项目 mengsk/加油吧小月 生成 B01 单元的角色服装无脸人台三视图，采用 gpt-image-2 模型，画幅 16:9。
+```
+
 ## 变更记录
 
 详见 [`Changes.md`](Changes.md)。
