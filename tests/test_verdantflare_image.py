@@ -201,7 +201,7 @@ class TestVerdantflareImage(unittest.TestCase):
             self.assertEqual(image_client.calculate_sha256(content), expected_sha)
             self.assertEqual(len(MockImageServerHandler.received_tasks), 1)
             self.assertEqual(MockImageServerHandler.received_tasks[0]["engine"], "codex")
-            self.assertEqual(MockImageServerHandler.received_tasks[0]["model"], "gpt-image-2")
+            self.assertEqual(MockImageServerHandler.received_tasks[0]["model"], "gpt-image-2.5-sunburst")
 
 
 if __name__ == "__main__":

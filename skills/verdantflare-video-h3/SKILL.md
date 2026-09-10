@@ -1,11 +1,27 @@
 ---
 name: verdantflare-video-h3
-description: 使用领域级 video MCP 可靠执行 MiniMax H3 Ref2VA 原子视频生成；当用户或上层 Skill 提供已冻结的 4 至 15 秒 Generation Unit，要求编译 H3 Prompt、提交、查询、恢复、下载、校验或重试 Shot Candidate 时使用。不负责完整 MV 的 Treatment、故事板、跨单元导演、候选批准或最终剪辑。
+description: 默认采用 h3-sol（Sol-H3），使用领域级 video MCP 可靠执行 MiniMax H3 Ref2VA 原子视频生成；当用户或上层 Skill 提供已冻结的 4 至 15 秒 Generation Unit，要求编译 H3 Prompt、提交、查询、恢复、下载、校验或重试 Shot Candidate 时使用。不负责完整 MV 的 Treatment、故事板、跨单元导演、候选批准或最终剪辑。
 ---
 
 # VerdantFlare Video H3
 
 将一个已冻结的 `GenerationUnit` 可靠执行为可审核的 `ShotCandidate`。区分首帧、首尾帧和全参考需求时阅读 [references/input-modes.md](references/input-modes.md)；提交、恢复或重试时阅读 [references/workflow.md](references/workflow.md)；构造和解释领域 MCP 请求时阅读 [references/video-mcp.md](references/video-mcp.md)；设计或评审 Ref2VA 动态提示词时阅读 [references/prompting.md](references/prompting.md)；判断某个控制项是否可信时阅读 [references/control-evidence.md](references/control-evidence.md)；校验输入限制和输出媒体时阅读 [references/validation.md](references/validation.md)。
+
+## 默认模型与接口映射
+
+对用户区分以下两个 H3 选项；它们属于同一 MiniMax H3 模型族：
+
+| 名称 | 含义 | 选择规则 |
+| --- | --- | --- |
+| MiniMax H3 | MiniMax H3 基础模型；用户所说的“原版”对应现有非 Sol 推理路线 | 用户明确指定原版时采用 |
+| MiniMax H3 Sol（`h3-sol` / Sol-H3） | 基于 MiniMax H3、采用 NVIDIA Sol-H3 优化推理引擎的版本 | 未指定时默认采用 |
+
+Sol-H3 沿用 MiniMax H3 基础权重，当前 Ref2VA 路线还使用 LightX2V Turbo 四步 LoRA；不能描述为 NVIDIA 重新训练的独立基础模型，也不能承诺画质完全一致或在所有硬件上更快。现有非 Sol 服务是否使用加速适配器须以实际配置为准，不能将“原版”自动等同于未经优化的 Base H3。
+
+- 用户未指定推理路线时，默认采用 `h3-sol`（Sol-H3）。提交前核对宿主 MCP 能力声明，确认该路线已接入并满足当前 Generation Unit 的要求；缺少明确支持时停止并报告，不得自动回退到旧 H3 Runtime。
+- 用户明确指定 MiniMax H3 原版时，选择宿主明确提供的非 Sol 路线；泛指“H3”且未限定版本时仍采用默认 Sol 路线。两种路线都必须先确认能力与实际映射，不能仅凭同一个 `model` 标识判断版本。
+- `h3-sol` 是推理路线名称；现有领域契约的 `model` 标识仍为 `minimax-h3-ref2va`。仅在宿主明确声明该标识映射至 Sol-H3 时，才能沿用此契约提交默认任务。不得将 `h3-sol` 擅自写入尚未支持它的 `model` 字段，也不得臆造引擎选择参数。
+- 将实际推理路线及服务返回的运行时版本写入 Attempt 和候选来源记录，不能仅凭模型标识声称已使用 Sol-H3。已冻结输入或已有任务指定其他路线时，不得静默切换；已有任务沿原引用查询、恢复和下载。
 
 ## 职责边界
 

@@ -8,8 +8,10 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
+import mimetypes
 import os
 import sys
 import time
@@ -245,8 +247,171 @@ def download_artifact(
     print(f"[+] 图像已保存至: {output_path} (大小: {len(content):,} bytes, SHA-256: {actual_sha})")
 
 
+def parse_sse_data_events(response: urllib.response.addinfourl) -> list[dict[str, Any]]:
+    """解析 SSE 流数据事件。"""
+    events: list[dict[str, Any]] = []
+    event_type = ""
+    data_lines: list[str] = []
+
+    def flush() -> None:
+        nonlocal event_type, data_lines
+        if not data_lines:
+            event_type = ""
+            return
+        current_event_type = event_type
+        raw = "\n".join(data_lines).strip()
+        event_type = ""
+        data_lines = []
+        if not raw or raw == "[DONE]":
+            return
+        try:
+            item = json.loads(raw)
+        except json.JSONDecodeError:
+            return
+        if current_event_type and "type" not in item:
+            item["type"] = current_event_type
+        events.append(item)
+
+    for raw_line in response:
+        line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+        if not line:
+            flush()
+            continue
+        if line.startswith(":"):
+            continue
+        if line.startswith("event:"):
+            event_type = line[len("event:") :].strip()
+            continue
+        if line.startswith("data:"):
+            data_lines.append(line[len("data:") :].strip())
+            continue
+
+    flush()
+    return events
+
+
+def collect_b64_values(value: Any) -> list[str]:
+    """从结构化响应中递归提取 base64 图像数据。"""
+    found: list[str] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if key in {"result", "b64_json", "partial_image_b64"} and isinstance(child, str) and child:
+                found.append(child)
+            else:
+                found.extend(collect_b64_values(child))
+    elif isinstance(value, list):
+        for child in value:
+            found.extend(collect_b64_values(child))
+    return found
+
+
+def execute_reference_generation(args: argparse.Namespace) -> int:
+    """基于参考底图执行生图任务（遵循 Picture 1 / 角色圣经引导生成）。"""
+    image_path = Path(args.image).resolve()
+    if not image_path.is_file():
+        print(f"[-] 错误: 参考底图不存在: {image_path}", file=sys.stderr)
+        return 1
+
+    prompt = args.prompt.strip()
+    if not prompt:
+        print("[-] 错误: --prompt 不能为空", file=sys.stderr)
+        return 1
+
+    env_file = find_env_file()
+    env_vars = parse_env_file(env_file) if env_file else {}
+    base_url = os.environ.get("OPENAI_BASE_URL") or env_vars.get("OPENAI_BASE_URL", "https://sub2api.wodcloud.com/v1")
+    api_key = os.environ.get("OPENAI_API_KEY") or env_vars.get("OPENAI_API_KEY", "")
+    if not api_key:
+        print("[-] 错误: 未检测到 OPENAI_API_KEY 配置", file=sys.stderr)
+        return 1
+
+    base_url = base_url.rstrip("/")
+    endpoint = f"{base_url}/responses"
+
+    mime_type = mimetypes.guess_type(str(image_path))[0] or "image/png"
+    image_b64 = base64.b64encode(image_path.read_bytes()).decode("utf-8")
+    data_url = f"data:{mime_type};base64,{image_b64}"
+
+    ratio_size_map = {
+        "16:9": "2048x1152",
+        "9:16": "1152x2048",
+        "1:1": "1024x1024",
+        "4:3": "1792x1344",
+        "3:4": "1344x1792",
+    }
+    size = ratio_size_map.get(args.aspect_ratio, "2048x1152")
+
+    target_quality = getattr(args, "quality", "high") or "high"
+    bg = getattr(args, "background", "auto") or "auto"
+    tool = {
+        "type": "image_generation",
+        "size": size,
+        "quality": target_quality,
+        "background": bg,
+        "output_format": "png",
+        "partial_images": 3,
+    }
+    user_content = [
+        {"type": "input_image", "image_url": data_url},
+        {"type": "input_text", "text": prompt},
+    ]
+    payload = {
+        "model": args.model or "gpt-image-2.5-sunburst",
+        "input": [{"type": "message", "role": "user", "content": user_content}],
+        "tools": [tool],
+        "tool_choice": {"type": "image_generation"},
+        "stream": True,
+    }
+
+    print(f"[*] 提交参考图驱动生图 -> {endpoint} (参考底图: {image_path.name}, ratio={args.aspect_ratio}, size={size})")
+    start_time = time.time()
+
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(
+        endpoint,
+        data=body,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream, application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=args.timeout) as resp:
+            events = parse_sse_data_events(resp)
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace")
+        print(f"[-] 请求失败 HTTP {e.code}: {err_body}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"[-] 请求异常: {e}", file=sys.stderr)
+        return 1
+
+    images_b64 = collect_b64_values(events)
+    if not images_b64:
+        print("[-] 未在响应流中提取到生成的图像数据", file=sys.stderr)
+        return 1
+
+    image_bytes = base64.b64decode(images_b64[-1])
+    sha256 = calculate_sha256(image_bytes)
+    duration = time.time() - start_time
+    print(f"[+] 任务生成完成! 实际耗时: {duration:.2f}s, 大小: {len(image_bytes):,} bytes, SHA-256: {sha256}")
+
+    if args.output:
+        out_path = Path(args.output).resolve()
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_bytes(image_bytes)
+        print(f"[+] 产物已保存至: {out_path}")
+
+    return 0
+
+
 def cmd_generate(args: argparse.Namespace) -> int:
     """提交原子生图任务。"""
+    if getattr(args, "image", None):
+        return execute_reference_generation(args)
     base_url, token = load_config()
     prompt = args.prompt.strip()
     if not prompt:
@@ -256,7 +421,10 @@ def cmd_generate(args: argparse.Namespace) -> int:
     engine = (args.engine or "codex").lower()
     project_id = args.project_id
     idempotency_key = args.idempotency_key or f"cli-{int(time.time() * 1000)}"
-    resolved_model = args.model or ("gpt-image-2" if engine == "codex" else "gemini-3.1-flash-image")
+    resolved_model = args.model or ("gpt-image-2.5-sunburst" if engine == "codex" else "gemini-3.1-flash-image")
+
+    target_quality = getattr(args, "quality", "high") or "high"
+    background = getattr(args, "background", "auto") or "auto"
 
     payload: dict[str, Any] = {
         "project_id": project_id,
@@ -266,7 +434,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
         "model": resolved_model,
         "aspect_ratio": args.aspect_ratio,
         "resolution": args.resolution,
-        "quality": args.quality,
+        "quality": target_quality,
+        "background": background,
     }
 
     post_url = f"{base_url}/api/tasks"
@@ -388,14 +557,16 @@ def main() -> int:
     sub_gen = subparsers.add_parser("generate", help="提交生图任务")
     sub_gen.add_argument("--prompt", required=True, help="生图提示词")
     sub_gen.add_argument("--engine", choices=["codex", "gemini"], default="codex", help="底层引擎驱动 (默认 codex)")
-    sub_gen.add_argument("--model", default="", help="指定模型覆盖默认值 (codex 默认 gpt-image-2, gemini 默认 gemini-3.1-flash-image)")
+    sub_gen.add_argument("--model", default="", help="指定模型覆盖默认值 (codex 默认 gpt-image-2.5-sunburst, gemini 默认 gemini-3.1-flash-image)")
     sub_gen.add_argument("--aspect-ratio", choices=["16:9", "9:16", "1:1", "4:3", "3:4"], default="16:9", help="画幅比例 (默认 16:9)")
     sub_gen.add_argument("--resolution", choices=["2k", "4k"], default="2k", help="分辨率 (默认 2k)")
-    sub_gen.add_argument("--quality", choices=["auto", "standard", "hd"], default="auto", help="图像质量")
+    sub_gen.add_argument("--quality", choices=["auto", "low", "medium", "high", "xhigh", "max", "hd", "standard"], default="high", help="图像质量 (默认 high)")
+    sub_gen.add_argument("--background", choices=["auto", "transparent", "opaque"], default="auto", help="背景模式 (transparent 生成纯透明通道 PNG)")
     sub_gen.add_argument("--project-id", default="default", help="项目标识 (默认 default)")
     sub_gen.add_argument("--idempotency-key", default="", help="客户端幂等业务键")
     sub_gen.add_argument("--wait", action="store_true", help="等待任务生成完成")
     sub_gen.add_argument("--timeout", type=float, default=180.0, help="轮询超时时间 (秒，默认 180)")
+    sub_gen.add_argument("--image", "--reference", dest="image", default="", help="参考底图路径 (如 01-character-card.png)")
     sub_gen.add_argument("-o", "--output", default="", help="下载并保存产物的目标路径")
     sub_gen.set_defaults(func=cmd_generate)
 

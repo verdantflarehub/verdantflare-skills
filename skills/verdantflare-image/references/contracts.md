@@ -65,23 +65,28 @@
     "idempotency_key": "B01/wardrobe-v1",
     "prompt": "Cinematic concept artwork, 7.5 heads ratio mannequin wearing futuristic dark-blue mechanic outfit, clean neutral background, no text",
     "engine": "codex",
-    "model": "gpt-image-2",
+    "model": "gpt-image-2.5-sunburst",
     "aspect_ratio": "16:9",
     "resolution": "2k",
-    "quality": "auto"
+    "quality": "high",
+    "background": "auto"
   }
   ```
 - **参数说明**：
   - `project_id` (string, 必填)：项目标识。
   - `idempotency_key` (string, 必填)：客户端幂等性业务键（格式推荐 `<unit_id>/<attempt_id>`）。同一项目下相同键不会重复生成，直接复用既有记录。
-  - `prompt` (string, 必填)：生图提示词，必须明确构图、光影、主体及排除项。
-  - `engine` (string, 可选)：底层 API 引擎驱动。**默认指定为 `"codex"`**，亦可选 `"gemini"`。
-  - `model` (string, 可选)：覆盖具体模型名。默认缺省时：
-    - `engine="codex"`（默认）时默认 `gpt-image-2`；
+  - `prompt` (string, 必填)：生图提示词，建议采用官方四段式结构（`[Scene]`、`[Subject]`、`[Details]`、`[Constraints]`），精准文字须置于英文双引号内。
+  - `engine` (string, 可选)：底层 API 引擎驱动。**默认权威指定为 `"codex"`**，亦可选 `"gemini"`。
+  - `model` (string, 可选)：覆盖具体模型名。
+    - `engine="codex"`（默认）时推荐：
+      - **`gpt-image-2.5-sunburst`**（默认，画质基准主力，微观毛孔、发丝质感与复杂光影全面领先，杜绝塑料涂抹感）；
+      - **`gpt-image-2.5-flare`**（极速响应小模型，适合多方案快速探索或延迟敏感流程）；
+      - `gpt-image-2`（向下兼容）；
     - `engine="gemini"` 时默认 `gemini-3.1-flash-image`。
   - `aspect_ratio` (string, 可选)：画幅宽高比。支持 `"16:9"`（默认）、`"9:16"`、`"1:1"`、`"4:3"`、`"3:4"`。
-  - `resolution` (string, 可选)：图像分辨率级别。支持 `"2k"`（默认）与 `"4k"`。
-  - `quality` (string, 可选)：生成质量偏好。支持 `"auto"`（默认）、`"standard"`、`"hd"`。
+  - `resolution` (string, 可选)：图像分辨率级别。支持 `"2k"`（默认）与 `"4k"`（4K 严格遵循官方上限：单边 <= 3840 像素且为 16 整倍数，如 16:9 为 `3840x2160`，9:16 为 `2160x3840`，1:1 为 `2048x2048`）。
+  - `quality` (string, 可选)：生成质量偏好。官方支持：`"auto"`、`"low"`、`"medium"`、`"high"`（默认，极致保留微观细节）、`"xhigh"`、`"max"`（历史 `"hd"` 自动平滑兼容映射为 `"high"`）。
+  - `background` (string, 可选)：背景模式。支持 `"auto"`（默认）、`"transparent"`（生成纯透明背景，输出含 Alpha 通道之 PNG/WebP）、`"opaque"`（纯色/实体景深背景）。
 - **返回结构**：
   ```json
   {
@@ -95,7 +100,7 @@
 
 ### 2.3 `image.edit`
 
-以既有受控 Artifact 为底图进行多模态指令编辑或风格/服装微调。
+以既有受控 Artifact 为底图进行多模态指令编辑、骨相锁定换装或多图融合合成。
 
 - **入参（JSON Schema）**：
   ```json
@@ -103,17 +108,32 @@
     "project_id": "creator/demo-project",
     "idempotency_key": "B01/wardrobe-v2-edit",
     "source_artifact_id": "art-9f82d1c0",
-    "prompt": "Change the mechanic outfit color from dark-blue to silver-grey, keep the mannequin pose and background unchanged",
-    "engine": "codex"
+    "reference_artifact_ids": [
+      "art-jacket-01",
+      "art-boots-02"
+    ],
+    "prompt": "Change ONLY the clothing using the provided reference items. Preserve her exact face, facial features, skin tone, body shape, and pose in every way. Do not change the background or lighting.",
+    "engine": "codex",
+    "model": "gpt-image-2.5-sunburst",
+    "quality": "high",
+    "background": "auto"
   }
   ```
+- **参数说明**：
+  - `source_artifact_id` (string, 必填)：主参考图 Artifact ID（通常为主体肖像或主场景底图）。
+  - `reference_artifact_ids` (array[string], 可选)：附加参考图 Artifact ID 列表（例如服饰单品图、参考道具图或第二角色图，支持多图融合）。
+  - `prompt` (string, 必填)：编辑指令。务必遵循官方“严密隔离变更项与保留项”原则，使用“Change only X”句式并明确指出哪些特征绝对不可变。若输入多张参考图，须在提示词中明确分配各图职责（如“图 1 为面容身份，图 2 为服装款式”）。
+  - `engine` (string, 可选)：默认 `"codex"`。
+  - `model` (string, 可选)：`"gpt-image-2.5-sunburst"` 或 `"gpt-image-2.5-flare"`。
+  - `quality` (string, 可选)：`"auto"`, `"low"`, `"medium"`, `"high"`, `"xhigh"`, `"max"`。
+  - `background` (string, 可选)：`"auto"`, `"transparent"`, `"opaque"`。
 - **返回结构**：同 `image.generate`，返回 `task_id`、`status`、`created_at`。
 
 ---
 
 ### 2.4 `image.inpaint`
 
-基于遮罩（Mask）的局部重绘与擦除修复。
+基于遮罩（Mask）的精准局部重绘与无痕物体抹除。
 
 - **入参（JSON Schema）**：
   ```json
@@ -123,7 +143,9 @@
     "source_artifact_id": "art-9f82d1c0",
     "mask_artifact_id": "art-mask-8b21c4e1",
     "prompt": "Fix facial lighting to match warm sunset reflection, blend edges smoothly",
-    "engine": "codex"
+    "engine": "codex",
+    "model": "gpt-image-2.5-sunburst",
+    "background": "auto"
   }
   ```
 - **返回结构**：返回 `task_id`、`status`、`created_at`。
@@ -173,9 +195,10 @@
     "metadata": {
       "prompt": "...",
       "engine": "codex",
-      "model": "gpt-image-2",
+      "model": "gpt-image-2.5-sunburst",
       "aspect_ratio": "16:9",
-      "resolution": "2k"
+      "resolution": "2k",
+      "quality": "hd"
     },
     "duration_seconds": 14.2,
     "download_path": "/image/artifacts/art-3c4d5e6f/content"
@@ -203,7 +226,7 @@
         "project_id": "creator/demo-project",
         "status": "completed",
         "engine": "codex",
-        "model": "gpt-image-2",
+        "model": "gpt-image-2.5-sunburst",
         "prompt_preview": "Cinematic concept artwork...",
         "duration_seconds": 14.2,
         "artifact_id": "art-3c4d5e6f",

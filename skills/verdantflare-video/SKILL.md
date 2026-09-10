@@ -1,15 +1,22 @@
 ---
 name: verdantflare-video
-description: 通过 VerdantFlare API 的公共模型 verdantflare-sd2，基于文本提示词以及本地图像、音频或视频参考素材生成 SD2 视频；当用户要求生成 VerdantFlare 视频或 SD2 产品/广告视频、查询视频任务状态、恢复已有任务或下载结果时使用。该技能会验证本地媒体文件，将其上传至配置的临时存储桶，创建一个异步任务，轮询任务状态并下载结果。
+description: 默认采用 h3-sol（Sol-H3）生成 VerdantFlare 视频，按 verdantflare-video-h3 技能执行；用户明确指定 SD2 时，通过 VerdantFlare API 公共模型 verdantflare-sd2 生成视频。当用户要求生成视频、产品/广告视频、查询任务状态、恢复已有任务或下载结果时使用。
 ---
 
 # VerdantFlare 视频
 
-所有 API、对象存储、任务状态和下载操作均使用随技能提供的 Python 客户端。构造或解释 API 请求与响应时，阅读 `references/api.md`。
+## 默认模型与执行路由
+
+- 用户未指定模型时，默认采用 `h3-sol`（Sol-H3），先读取并遵循 [verdantflare-video-h3](../verdantflare-video-h3/SKILL.md) 及其相关参考规范，按其输入要求和审核门禁执行。
+- H3 选项统一称为 **MiniMax H3（原版路线）** 和 **MiniMax H3 Sol（NVIDIA 优化版，默认）**。两者属于同一基础模型族，具体区别以 H3 技能的模型说明为准。用户明确指定原版时，同样进入 H3 技能并选择非 Sol 路线；泛指“H3”不覆盖 Sol 默认值。
+- `h3-sol` 是默认推理路线；提交前必须确认宿主 MCP 明确支持该路线及其模型映射。未接入或能力无法确认时停止并报告，不得自动回退到旧 H3 Runtime 或 SD2。
+- 仅在用户明确指定 SD2 时使用下述公共 API 流程。已有任务始终沿原任务的 API 或 MCP 查询、恢复和下载，默认模型变更不触发重新生成。
+
+以下章节仅适用于 SD2。所有 API、对象存储、任务状态和下载操作均使用随技能提供的 Python 客户端。构造或解释 API 请求与响应时，阅读 `references/api.md`。
 
 ## 模型与渠道边界
 
-- 始终通过 `/v1/videos` 使用公共模型 `verdantflare-sd2`。客户端已经固定该模型，不提供 `--model` 覆盖参数。
+- SD2 流程始终通过 `/v1/videos` 使用公共模型 `verdantflare-sd2`。客户端已经固定该模型，不提供 `--model` 覆盖参数；不得使用此客户端提交 `h3-sol` 任务。
 - 将供应商选择、上游模型映射、渠道锁定和计费视为 VerdantFlare API 的内部职责。不得把供应商渠道名、上游模型名、渠道 ID、Base URL 或供应商凭据暴露为技能参数，也不得绕过 VerdantFlare 直连供应商。
 - 创建后只查询原公开 Task ID；渠道不可用、熔断或余额不足时停止并报告，不得换渠道重放、改用新的 UUID 或直接提交另一笔任务。
 - 当前公开契约固定为 720P。不要添加分辨率选项或发送其他分辨率；需要开放新分辨率时必须先更新公共 API 契约、计价与客户端验证。

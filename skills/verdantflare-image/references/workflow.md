@@ -43,7 +43,7 @@ sequenceDiagram
 1. 确定项目标识 `project_id`（形如 `<creator>/<project_id>`，例如 `creator/demo-project`），禁止使用 `default`；
 2. 构造客户端唯一幂等键 `idempotency_key`（例如 `B01/identity-01-v1`）；
 3. 引擎与模型选择：
-   - 默认引擎：权威采用 `engine="codex"`（生图模型 `gpt-image-2`），提供极致商业质感与构图控制；
+   - 默认引擎：权威采用 `engine="codex"`（生图模型 `gpt-image-2.5-sunburst`，亦支持 `gpt-image-2.5-flare`），提供极致商业写真质感、真实毛孔细节与构图控制；
    - 备选引擎：若需快速概念迭代或多模态指令编辑，可显式指定 `engine="gemini"`（模型 `gemini-3.1-flash-image`）；
 4. 读取 `references/visual-specs.md` 确认尺寸比例（`16:9` 或 `1:1`）与分辨率（`2k` 或 `4k`）。
 

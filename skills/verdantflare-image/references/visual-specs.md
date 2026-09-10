@@ -23,7 +23,21 @@
 - **景别限制**：严格胸部以上（Bust-level）中近景。严禁全身或大半身，杜绝全身比例干扰人脸高频特征。
 - **纯净背景**：采用柔和中性漫射光，浅灰、米白或深蓝单色纯净背景。严禁装饰物、边框、光晕噪点、第二个人物。
 - **严禁文字污染**：严禁任何水印、文字、签名、LOGO、视图说明标签（如在图上印 FRONT / SIDE）。
-- **真实质感**：保留真实皮肤细纹与自然血色感，禁止磨皮塑料塑料人感。
+- **真实质感（防涂抹硬性红线）**：保留真实皮肤细纹、毛孔与自然血色感，严禁磨皮塑料人感与涂抹感。
+
+### 1.3 防涂抹与高频微观质感保真准则 (Anti-Smearing Protocol)
+
+为彻底消除扩散模型出图中的“严重涂抹感”（油画感、过度磨皮、胶感假脸、边缘失焦软化），必须遵守以下工程与提示词准则：
+
+1. **工程参数强约束**：
+   - **强制指定质量等级**：生图接口显式指定 `quality="high"`（或官方 `xhigh` / `max`，历史 `"hd"` 自动映射为 `"high"`，杜绝低步数潜在空间平滑）；
+   - **严格对齐官方尺寸约束**：单边尺寸严格不得超过 3,840 像素且为 16 的整倍数（如 16:9 4K 为 `3840x2160`，9:16 4K 为 `2160x3840`，1:1 2K 为 `2048x2048`），严禁使用历史超限尺寸（`4096x2304`）导致尺寸被拒或拉伸失真；
+   - **默认收敛至 Codex 旗舰模型**：优先采用 `gpt-image-2.5-sunburst`（OpenAI Responses 原生），其微观细节采样与高频皮肤毛孔纹理全面领先，彻底告别传统塑料平滑感；极速交互可选用 `gpt-image-2.5-flare`。
+2. **官方四段式反涂抹提示词模版**：
+   - **[Scene]**：空间尺度与真实采光（如 `Directional natural daylight, subtle shadow gradation, neutral studio backdrop`）；
+   - **[Subject]**：明确真实真人脸骨相特征、具体成年年龄、视线与姿态；
+   - **[Details]**：镜头与微观质感（`Shot like a 35mm film photograph, 50mm lens, visible skin pores, natural wrinkles, individual eyelashes, fine fabric weave`）；
+   - **[Constraints]**：严格排除项（`No heavy retouching, no airbrushed smooth skin, no porcelain doll effect, no beauty filter, no CGI look, no text, no watermarks`）。
 
 ---
 

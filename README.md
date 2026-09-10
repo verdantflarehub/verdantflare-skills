@@ -72,7 +72,7 @@ VERDANTFLARE_VIDEO_S3_SECRET_KEY=<required>
 
 ## verdantflare-image
 
-`verdantflare-image` 是专注于原子图像资产生成、以图生图与局部重绘的领域级 Skill。它负责将上层视觉意图（如 MV 人物设计胸部四视图、服装无脸人台三视图、分镜单格图 F01~F08、纯场景设计图）转化为技术受控的生图请求，默认采用 `codex`（`gpt-image-2`）引擎驱动，亦支持 `gemini`（`gemini-3.1-flash-image`），通过 `image.*` MCP 工具与 REST 接口调度执行，最终将技术合格且校验 SHA-256 的不可变 `ImageCandidate` 资产受控归档到指定 `source/` 目录。
+`verdantflare-image` 是专注于原子图像资产生成、以图生图与局部重绘的领域级 Skill。它负责将上层视觉意图（如 MV 人物设计胸部四视图、服装无脸人台三视图、分镜单格图 F01~F08、纯场景设计图）转化为技术受控的生图请求，默认采用 `codex`（`gpt-image-2.5-sunburst`，亦支持 `gpt-image-2.5-flare`）引擎驱动，亦支持 `gemini`（`gemini-3.1-flash-image`），通过 `image.*` MCP 工具与 REST 接口调度执行，最终将技术合格且校验 SHA-256 的不可变 `ImageCandidate` 资产受控归档到指定 `source/` 目录。
 
 ### 安装命令
 
