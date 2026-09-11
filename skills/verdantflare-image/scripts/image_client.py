@@ -247,171 +247,56 @@ def download_artifact(
     print(f"[+] 图像已保存至: {output_path} (大小: {len(content):,} bytes, SHA-256: {actual_sha})")
 
 
-def parse_sse_data_events(response: urllib.response.addinfourl) -> list[dict[str, Any]]:
-    """解析 SSE 流数据事件。"""
-    events: list[dict[str, Any]] = []
-    event_type = ""
-    data_lines: list[str] = []
+def upload_artifact_file(
+    base_url: str,
+    token: str,
+    project_id: str,
+    file_path: Path,
+    timeout: float = 60.0,
+) -> dict[str, Any]:
+    """通过 MCP 服务接口上传本地素材为受控 Artifact。"""
+    boundary = f"----ImageClientUpload{int(time.time() * 1000)}"
+    content_type = f"multipart/form-data; boundary={boundary}"
 
-    def flush() -> None:
-        nonlocal event_type, data_lines
-        if not data_lines:
-            event_type = ""
-            return
-        current_event_type = event_type
-        raw = "\n".join(data_lines).strip()
-        event_type = ""
-        data_lines = []
-        if not raw or raw == "[DONE]":
-            return
-        try:
-            item = json.loads(raw)
-        except json.JSONDecodeError:
-            return
-        if current_event_type and "type" not in item:
-            item["type"] = current_event_type
-        events.append(item)
+    file_bytes = file_path.read_bytes()
+    filename = file_path.name
+    media_type = mimetypes.guess_type(filename)[0] or "image/png"
 
-    for raw_line in response:
-        line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
-        if not line:
-            flush()
-            continue
-        if line.startswith(":"):
-            continue
-        if line.startswith("event:"):
-            event_type = line[len("event:") :].strip()
-            continue
-        if line.startswith("data:"):
-            data_lines.append(line[len("data:") :].strip())
-            continue
+    body = bytearray()
+    body.extend(f"--{boundary}\r\n".encode("utf-8"))
+    body.extend(f'Content-Disposition: form-data; name="project_id"\r\n\r\n'.encode("utf-8"))
+    body.extend(f"{project_id}\r\n".encode("utf-8"))
 
-    flush()
-    return events
+    body.extend(f"--{boundary}\r\n".encode("utf-8"))
+    body.extend(f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'.encode("utf-8"))
+    body.extend(f"Content-Type: {media_type}\r\n\r\n".encode("utf-8"))
+    body.extend(file_bytes)
+    body.extend(b"\r\n")
+    body.extend(f"--{boundary}--\r\n".encode("utf-8"))
 
-
-def collect_b64_values(value: Any) -> list[str]:
-    """从结构化响应中递归提取 base64 图像数据。"""
-    found: list[str] = []
-    if isinstance(value, dict):
-        for key, child in value.items():
-            if key in {"result", "b64_json", "partial_image_b64"} and isinstance(child, str) and child:
-                found.append(child)
-            else:
-                found.extend(collect_b64_values(child))
-    elif isinstance(value, list):
-        for child in value:
-            found.extend(collect_b64_values(child))
-    return found
-
-
-def execute_reference_generation(args: argparse.Namespace) -> int:
-    """基于参考底图执行生图任务（遵循 Picture 1 / 角色圣经引导生成）。"""
-    image_path = Path(args.image).resolve()
-    if not image_path.is_file():
-        print(f"[-] 错误: 参考底图不存在: {image_path}", file=sys.stderr)
-        return 1
-
-    prompt = args.prompt.strip()
-    if not prompt:
-        print("[-] 错误: --prompt 不能为空", file=sys.stderr)
-        return 1
-
-    env_file = find_env_file()
-    env_vars = parse_env_file(env_file) if env_file else {}
-    base_url = os.environ.get("OPENAI_BASE_URL") or env_vars.get("OPENAI_BASE_URL", "https://sub2api.wodcloud.com/v1")
-    api_key = os.environ.get("OPENAI_API_KEY") or env_vars.get("OPENAI_API_KEY", "")
-    if not api_key:
-        print("[-] 错误: 未检测到 OPENAI_API_KEY 配置", file=sys.stderr)
-        return 1
-
-    base_url = base_url.rstrip("/")
-    endpoint = f"{base_url}/responses"
-
-    mime_type = mimetypes.guess_type(str(image_path))[0] or "image/png"
-    image_b64 = base64.b64encode(image_path.read_bytes()).decode("utf-8")
-    data_url = f"data:{mime_type};base64,{image_b64}"
-
-    ratio_size_map = {
-        "16:9": "2048x1152",
-        "9:16": "1152x2048",
-        "1:1": "1024x1024",
-        "4:3": "1792x1344",
-        "3:4": "1344x1792",
+    url = f"{base_url}/api/artifacts/upload"
+    headers = {
+        "Content-Type": content_type,
+        "Accept": "application/json",
+        "User-Agent": "VerdantFlare-ImageClient/1.0",
     }
-    size = ratio_size_map.get(args.aspect_ratio, "2048x1152")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
 
-    target_quality = getattr(args, "quality", "high") or "high"
-    bg = getattr(args, "background", "auto") or "auto"
-    tool = {
-        "type": "image_generation",
-        "size": size,
-        "quality": target_quality,
-        "background": bg,
-        "output_format": "png",
-        "partial_images": 3,
-    }
-    user_content = [
-        {"type": "input_image", "image_url": data_url},
-        {"type": "input_text", "text": prompt},
-    ]
-    payload = {
-        "model": args.model or "gpt-image-2.5-sunburst",
-        "input": [{"type": "message", "role": "user", "content": user_content}],
-        "tools": [tool],
-        "tool_choice": {"type": "image_generation"},
-        "stream": True,
-    }
-
-    print(f"[*] 提交参考图驱动生图 -> {endpoint} (参考底图: {image_path.name}, ratio={args.aspect_ratio}, size={size})")
-    start_time = time.time()
-
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    req = urllib.request.Request(
-        endpoint,
-        data=body,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "Accept": "text/event-stream, application/json",
-        },
-        method="POST",
-    )
-
+    req = urllib.request.Request(url, data=bytes(body), headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=args.timeout) as resp:
-            events = parse_sse_data_events(resp)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            resp_body = resp.read().decode("utf-8")
+            return json.loads(resp_body)
     except urllib.error.HTTPError as e:
-        err_body = e.read().decode("utf-8", errors="replace")
-        print(f"[-] 请求失败 HTTP {e.code}: {err_body}", file=sys.stderr)
-        return 1
+        err = e.read().decode("utf-8", errors="replace")
+        raise ImageClientError(f"素材上传 MCP 失败 (HTTP {e.code}): {err}") from e
     except Exception as e:
-        print(f"[-] 请求异常: {e}", file=sys.stderr)
-        return 1
-
-    images_b64 = collect_b64_values(events)
-    if not images_b64:
-        print("[-] 未在响应流中提取到生成的图像数据", file=sys.stderr)
-        return 1
-
-    image_bytes = base64.b64decode(images_b64[-1])
-    sha256 = calculate_sha256(image_bytes)
-    duration = time.time() - start_time
-    print(f"[+] 任务生成完成! 实际耗时: {duration:.2f}s, 大小: {len(image_bytes):,} bytes, SHA-256: {sha256}")
-
-    if args.output:
-        out_path = Path(args.output).resolve()
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_bytes(image_bytes)
-        print(f"[+] 产物已保存至: {out_path}")
-
-    return 0
+        raise ImageClientError(f"素材上传 MCP 异常: {e}") from e
 
 
 def cmd_generate(args: argparse.Namespace) -> int:
-    """提交原子生图任务。"""
-    if getattr(args, "image", None):
-        return execute_reference_generation(args)
+    """提交原子生图任务（统一经由 Image MCP 网关）。"""
     base_url, token = load_config()
     prompt = args.prompt.strip()
     if not prompt:
@@ -426,6 +311,33 @@ def cmd_generate(args: argparse.Namespace) -> int:
     target_quality = getattr(args, "quality", "high") or "high"
     background = getattr(args, "background", "auto") or "auto"
 
+    source_artifact_id = ""
+    if getattr(args, "image", None):
+        img_path = Path(args.image).resolve()
+        if not img_path.is_file():
+            print(f"[-] 错误: 参考底图不存在: {img_path}", file=sys.stderr)
+            return 1
+        print(f"[*] 正在将本地参考图上传至 Image MCP 服务: {img_path.name}...")
+        try:
+            upload_res = upload_artifact_file(
+                base_url=base_url,
+                token=token,
+                project_id=project_id,
+                file_path=img_path,
+            )
+        except ImageClientError as e:
+            print(f"[-] 上传参考底图失败: {e}", file=sys.stderr)
+            return 1
+
+        artifact_data = upload_res.get("artifact", {})
+        source_artifact_id = artifact_data.get("artifact_id", "")
+        if not source_artifact_id:
+            print(f"[-] 上传响应中未包含有效的 artifact_id: {upload_res}", file=sys.stderr)
+            return 1
+        print(
+            f"[+] 本地参考图已通过 MCP 登记为受控 Artifact: {source_artifact_id} (SHA-256: {artifact_data.get('sha256', '')[:16]}...)"
+        )
+
     payload: dict[str, Any] = {
         "project_id": project_id,
         "idempotency_key": idempotency_key,
@@ -437,6 +349,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
         "quality": target_quality,
         "background": background,
     }
+    if source_artifact_id:
+        payload["source_artifact_id"] = source_artifact_id
 
     post_url = f"{base_url}/api/tasks"
     print(f"[*] 提交生图请求 -> {post_url} (engine={engine}, ratio={args.aspect_ratio}, res={args.resolution})")
