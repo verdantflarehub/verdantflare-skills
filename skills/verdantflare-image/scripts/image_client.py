@@ -338,12 +338,22 @@ def cmd_generate(args: argparse.Namespace) -> int:
             f"[+] 本地参考图已通过 MCP 登记为受控 Artifact: {source_artifact_id} (SHA-256: {artifact_data.get('sha256', '')[:16]}...)"
         )
 
+    ratio_size_map = {
+        "16:9": "2048x1152",
+        "9:16": "1152x2048",
+        "1:1": "1024x1024",
+        "4:3": "1792x1344",
+        "3:4": "1344x1792",
+    }
+    target_size = ratio_size_map.get(args.aspect_ratio, "2048x1152")
+
     payload: dict[str, Any] = {
         "project_id": project_id,
         "idempotency_key": idempotency_key,
         "prompt": prompt,
         "engine": engine,
         "model": resolved_model,
+        "size": target_size,
         "aspect_ratio": args.aspect_ratio,
         "resolution": args.resolution,
         "quality": target_quality,

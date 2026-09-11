@@ -46,7 +46,7 @@
   "video_task_id": "video_task_01J...",
   "artifact_id": "artifact_video_01J...",
   "model": "minimax-h3-ref2va",
-  "runtime_version": "vedio-minimax-h3-api-v0.3.0",
+  "runtime_version": "video-minimax-h3-api-v0.3.0",
   "input_digest": "sha256:...",
   "media": {
     "duration_ms": 12000,
