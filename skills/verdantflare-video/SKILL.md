@@ -70,3 +70,7 @@ Windows: py -3 scripts/video_client.py generate --prompt "..." [options]
 返回公开的 VerdantFlare Task ID、最终公开状态、本地文件绝对路径、任务记录路径以及已知的结果元数据。对于未确认的 Submission，返回其原始状态和 `client_request_id`，优先使用 `recover <client-request-id>` 查询；`UNKNOWN` 仍需 API Center 对账，不能重新提交。
 
 VerdantFlare 同源的 `/videos/{task-id}/content` 结果代理需要 Bearer；重定向时先移除继承的 Authorization，仅当目标仍严格匹配同一 API content 代理时重新添加。不得暴露上游供应商任务 ID、S3 对象名称、凭据、原始响应正文、错误信息中的签名 URL 查询参数或 `mc` 命令。
+
+## 环境变量加载
+
+本技能遵循 [技能环境变量加载规范](../ENVIRONMENT.md)：进程环境变量优先，其次是本技能目录的 `.env`，最后是项目目录的 `.env`。同名变量由高优先级来源覆盖；同目录 `.env.example` 仅用于说明变量，不参与运行时加载。 实际加载由本技能的 `scripts/load_env.py` 统一完成。

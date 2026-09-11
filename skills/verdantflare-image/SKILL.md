@@ -56,12 +56,12 @@ description: 通过 VerdantFlare Image MCP 服务执行领域级原子图像资�
 
 ## 3. 核心创作任务索引
 
-| 创作类别 | 交付文件名 | 核心规格与要求 | 详细规范 |
-| :--- | :--- | :--- | :--- |
-| **人物设计四视图**<br/>(人物圣经 / Identity) | `01-front-neutral.png`<br/>`02-front-smile.png`<br/>`03-left-15deg.png`<br/>`04-right-15deg.png` | 画幅 `1:1` (`2048x2048`) 或 `16:9`；严格胸部以上（Bust-level）中近景；单色纯净背景；无字无水印；显式写明保留真实皮肤毛孔与微小细纹。 | `references/visual-specs.md` §1 |
-| **角色服装三视图**<br/>(单元角色 / Wardrobe) | `05-wardrobe-turnaround.png` | 7.5 头身极简无脸人台（Faceless Mannequin），杜绝第二张脸污染；正、侧、背三面展示服装剪裁与面料垂坠感。亦支持 `background="transparent"` 透明底。 | `references/visual-specs.md` §2 |
-| **分镜单格画面**<br/>(Storyboard Grid) | `F01.png` ~ `F08.png` | 电影画幅 `16:9`，分辨率 2K（`2048x1152`）或 4K（`3840x2160`）；景别机位动态明确；光影调色严格遵从 Visual Bible 圣经。 | `references/visual-specs.md` §3 |
-| **场景概念图**<br/>(Environment) | `env-<场景名>.png` | `16:9` 2K/4K；纯空镜与空间透视，锁定环境光与时代特征。 | `references/visual-specs.md` §4 |
+| 创作类别                                     | 交付文件名                                                                                       | 核心规格与要求                                                                                                                                   | 详细规范                        |
+| :------------------------------------------- | :----------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------ |
+| **人物设计四视图**<br/>(人物圣经 / Identity) | `01-front-neutral.png`<br/>`02-front-smile.png`<br/>`03-left-15deg.png`<br/>`04-right-15deg.png` | 画幅 `1:1` (`2048x2048`) 或 `16:9`；严格胸部以上（Bust-level）中近景；单色纯净背景；无字无水印；显式写明保留真实皮肤毛孔与微小细纹。             | `references/visual-specs.md` §1 |
+| **角色服装三视图**<br/>(单元角色 / Wardrobe) | `05-wardrobe-turnaround.png`                                                                     | 7.5 头身极简无脸人台（Faceless Mannequin），杜绝第二张脸污染；正、侧、背三面展示服装剪裁与面料垂坠感。亦支持 `background="transparent"` 透明底。 | `references/visual-specs.md` §2 |
+| **分镜单格画面**<br/>(Storyboard Grid)       | `F01.png` ~ `F08.png`                                                                            | 电影画幅 `16:9`，分辨率 2K（`2048x1152`）或 4K（`3840x2160`）；景别机位动态明确；光影调色严格遵从 Visual Bible 圣经。                            | `references/visual-specs.md` §3 |
+| **场景概念图**<br/>(Environment)             | `env-<场景名>.png`                                                                               | `16:9` 2K/4K；纯空镜与空间透视，锁定环境光与时代特征。                                                                                           | `references/visual-specs.md` §4 |
 
 ---
 
@@ -168,7 +168,7 @@ python3 scripts/image_client.py list --project-id "creator/demo-project"
 python3 scripts/image_client.py status <task-id>
 ```
 
-配置从当前目录或上层目录的 `.env` 自动读取（`IMAGE_MCP_URL` 与 `IMAGE_MCP_BEARER_TOKEN`）。
+配置优先从技能目录的 `.env` 读取；不存在时再从当前目录或上层目录查找 `.env`（变量示例见同目录 `.env.example`）。需要 `IMAGE_MCP_URL` 与 `IMAGE_MCP_BEARER_TOKEN`。
 
 ---
 
@@ -190,3 +190,7 @@ python3 scripts/image_client.py status <task-id>
 3. 画幅比例与分辨率精确符合规格（如 16:9 / 2K 或 4K）；
 4. 本地文件 SHA-256 与服务端登记完全吻合；
 5. 不含任何多余文字、水印、参数印章或塑料涂抹畸变。
+
+## 环境变量加载
+
+本技能遵循 [技能环境变量加载规范](../ENVIRONMENT.md)：进程环境变量优先，其次是本技能目录的 `.env`，最后是项目目录的 `.env`。同名变量由高优先级来源覆盖；同目录 `.env.example` 仅用于说明变量，不参与运行时加载。 实际加载由本技能的 `scripts/load_env.py` 统一完成。

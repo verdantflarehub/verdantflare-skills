@@ -56,3 +56,7 @@ ready | queued | running -> cancelled
 ## 完成条件
 
 只有任务状态成功、结果 Artifact 已登记、媒体校验通过、Provenance 完整且三类审核帧已生成，才能返回 `ShotCandidate`。返回 Generation Unit、Attempt、Video Task、Artifact、运行时版本、输入摘要、媒体参数和技术检查；不得声称镜头或 MV 已批准。
+
+## 环境变量加载
+
+本技能遵循 [技能环境变量加载规范](../ENVIRONMENT.md)：进程环境变量优先，其次是本技能目录的 `.env`，最后是项目目录的 `.env`。同名变量由高优先级来源覆盖；同目录 `.env.example` 仅用于说明变量，不参与运行时加载。 实际加载由本技能的 `scripts/load_env.py` 统一完成。
