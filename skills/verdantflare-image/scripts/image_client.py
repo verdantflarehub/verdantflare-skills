@@ -335,8 +335,31 @@ def cmd_generate(args: argparse.Namespace) -> int:
             print(f"[-] 上传响应中未包含有效的 artifact_id: {upload_res}", file=sys.stderr)
             return 1
         print(
-            f"[+] 本地参考图已通过 MCP 登记为受控 Artifact: {source_artifact_id} (SHA-256: {artifact_data.get('sha256', '')[:16]}...)"
+            f"[+] 本地主参考图已通过 MCP 登记为受控 Artifact: {source_artifact_id} (SHA-256: {artifact_data.get('sha256', '')[:16]}...)"
         )
+
+    ref_artifact_ids: list[str] = []
+    if getattr(args, "ref_images", None):
+        for ref_img_str in args.ref_images:
+            r_path = Path(ref_img_str).resolve()
+            if not r_path.is_file():
+                print(f"[-] 错误: 附加参考底图不存在: {r_path}", file=sys.stderr)
+                return 1
+            print(f"[*] 正在将附加参考图上传至 Image MCP 服务: {r_path.name}...")
+            try:
+                upload_res = upload_artifact_file(
+                    base_url=base_url,
+                    token=token,
+                    project_id=project_id,
+                    file_path=r_path,
+                )
+            except ImageClientError as e:
+                print(f"[-] 上传附加参考图失败: {e}", file=sys.stderr)
+                return 1
+            rid = upload_res.get("artifact", {}).get("artifact_id", "")
+            if rid:
+                ref_artifact_ids.append(rid)
+                print(f"[+] 附加参考图已登记为受控 Artifact: {rid}")
 
     ratio_size_map = {
         "16:9": "2048x1152",
@@ -361,6 +384,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
     }
     if source_artifact_id:
         payload["source_artifact_id"] = source_artifact_id
+    if ref_artifact_ids:
+        payload["reference_artifact_ids"] = ref_artifact_ids
 
     post_url = f"{base_url}/api/tasks"
     print(f"[*] 提交生图请求 -> {post_url} (engine={engine}, ratio={args.aspect_ratio}, res={args.resolution})")
@@ -490,7 +515,8 @@ def main() -> int:
     sub_gen.add_argument("--idempotency-key", default="", help="客户端幂等业务键")
     sub_gen.add_argument("--wait", action="store_true", help="等待任务生成完成")
     sub_gen.add_argument("--timeout", type=float, default=180.0, help="轮询超时时间 (秒，默认 180)")
-    sub_gen.add_argument("--image", "--reference", dest="image", default="", help="参考底图路径 (如 01-character-card.png)")
+    sub_gen.add_argument("--image", "--reference", dest="image", default="", help="主参考底图路径 (如 01-character-card.png)")
+    sub_gen.add_argument("--ref-image", "--ref", dest="ref_images", action="append", default=[], help="附加参考图路径（可多次指定，支持多图融合）")
     sub_gen.add_argument("-o", "--output", default="", help="下载并保存产物的目标路径")
     sub_gen.set_defaults(func=cmd_generate)
 
