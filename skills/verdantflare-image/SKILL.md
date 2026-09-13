@@ -7,13 +7,13 @@ description: 通过 VerdantFlare Image MCP 生成或编辑图像候选，包括�
 
 交付具有不可变 Artifact 与 SHA-256 的图像候选；不负责 MV 导演或剪辑。仅解释或修改代码时不启动生图。
 
-| 当前操作 | 按需读取 |
-| --- | --- |
-| 构造生成、编辑、遮罩或导入请求 | [调用契约](references/contracts.md) 的对应工具章节 |
+| 当前操作                               | 按需读取                                            |
+| -------------------------------------- | --------------------------------------------------- |
+| 构造生成、编辑、遮罩或导入请求         | [调用契约](references/contracts.md) 的对应工具章节  |
 | 角色四视图、服装三视图、分镜或场景规格 | [视觉规格](references/visual-specs.md) 对应资产类型 |
-| 提交、轮询、恢复、下载与归档 | [执行流程](references/workflow.md) |
-| 使用本地客户端 | [CLI](references/cli.md)；参数不确定时运行 `--help` |
-| 连接或配置问题 | [环境说明](../ENVIRONMENT.md) |
+| 提交、轮询、恢复、下载与归档           | [执行流程](references/workflow.md)                  |
+| 使用本地客户端                         | [CLI](references/cli.md)；参数不确定时运行 `--help` |
+| 连接或配置问题                         | [环境说明](../ENVIRONMENT.md)                       |
 
 默认 codex / `gpt-image-2.5-sunburst`；用户明确选择优先，模型支持以宿主能力和调用契约为准。不绕过 MCP/受控客户端直连供应商。
 
