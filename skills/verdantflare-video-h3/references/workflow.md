@@ -28,7 +28,12 @@
 
 ## 重试
 
-- Runtime、队列、下载或媒体校验失败：保留 Generation Unit，创建新的 Attempt；
+- 下载或本地校验故障：先重取同一结果并修复本地问题，不重新生成；
+- 已确认的生成失败且授权预算允许重做：保留 Generation Unit，创建新的 Attempt；提交状态未知时只恢复查询，不创建新任务；
 - Prompt、引用、时长、画幅或模型变化：要求上层创建新的 Generation Unit Version；
 - 身份、表演、连续性或节奏未通过：这是创作审核失败，由上层决定是否产生新版本，本 Skill 不擅自修改输入；
 - 取消只作用于明确的 `video_task_id`，不得删除 Artifact、其他 Attempt 或项目输出。
+
+## 完成与记录
+
+保存 generation_unit_id、attempt_id、输入摘要、幂等键、video_task_id、原始 MCP 状态、Artifact、运行时版本和检查结果。结果登记且 validation.md 技术检查通过后才返回 ShotCandidate；保留原生音轨供审核，最终 MV 由上层替换为批准 Master。技术完成不代表创作批准。

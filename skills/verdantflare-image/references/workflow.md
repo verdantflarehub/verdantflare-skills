@@ -25,7 +25,7 @@ sequenceDiagram
     Agent->>MCP: 2. image.generate / edit / inpaint
     MCP-->>Agent: 返回 task_id & status="queued"
 
-    loop 异步轮询 (每 2 秒一次，超时 180s)
+    loop 异步轮询 (按客户端间隔与等待上限)
         Agent->>MCP: 3. image.status(task_id)
         MCP-->>Agent: 返回 status ("running" / "completed" / "failed")
     end
@@ -45,7 +45,7 @@ sequenceDiagram
 3. 引擎与模型选择：
    - 默认引擎：权威采用 `engine="codex"`（生图模型 `gpt-image-2.5-sunburst`，亦支持 `gpt-image-2.5-flare`），提供极致商业写真质感、真实毛孔细节与构图控制；
    - 备选引擎：若需快速概念迭代或多模态指令编辑，可显式指定 `engine="gemini"`（模型 `gemini-3.1-flash-image`）；
-4. 读取 `references/visual-specs.md` 确认尺寸比例（`16:9` 或 `1:1`）与分辨率（`2k` 或 `4k`）。
+4. 按资产类型读取 [视觉规格](visual-specs.md)，并核对用户要求与宿主支持的实际尺寸。
 
 ### 步骤二：参考图导入（仅当有外部参考底图时）
 
@@ -63,12 +63,12 @@ sequenceDiagram
 
 ### 步骤四：轮询任务状态
 
-1. 初始等待 3 秒；
+1. 使用客户端/宿主配置的轮询间隔；Image CLI 默认 2 秒、等待上限 180 秒，可用 `--timeout` 调整。
 2. 循环调用 `image.status(task_id)`：
-   - 若状态为 `queued` 或 `running`，睡眠 2 秒后继续轮询；
+   - 若状态为 `queued` 或 `running`，按配置间隔继续轮询；
    - 若状态为 `completed`，退出循环进入步骤五；
-   - 若状态为 `failed`，读取 `error` 字段并向用户报告具体失败原因，中止流程；
-   - 若轮询累计耗时超过 180 秒，触发超时保护，报告超时状态。
+   - 若状态为 `failed`，脱敏记录错误并排查；可恢复本地故障直接修复，重新生成须在授权预算内；
+   - 达到本次等待上限时保存任务 ID 与最近状态；等待超时不等于任务失败，可继续查询原任务，不重新生成。
 
 ### 步骤五：获取结果与产物下载
 
@@ -80,10 +80,10 @@ sequenceDiagram
 
 1. 对本地刚保存的图片计算 SHA-256 哈希；
 2. 将计算结果与步骤五返回的 `sha256` 进行强匹配校验；
-3. 若不一致，立即删除本地文件并报错（可能发生传输截断或损坏）。
+3. 若不一致，隔离本次损坏下载，重取同一 Artifact 后复验；不覆盖已有正确文件，不重新生成。
 
 ### 步骤七：归档与人工审核门
 
-1. 将技术合格的文件正式命名并归档；
+1. 检查文件非空、可解码、实际尺寸符合批准规格，再将技术合格文件正式命名并归档；
 2. 输出包含生成耗时、模型名称、分辨率、不可变 SHA-256 的产物摘要；
 3. 标记为 `ImageCandidate`，等待人类创作者进行艺术与风格审核。

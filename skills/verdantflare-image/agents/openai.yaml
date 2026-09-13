@@ -1,4 +1,4 @@
 interface:
   display_name: "VerdantFlare Image"
-  short_description: "Generate and edit atomic AI image assets via VerdantFlare Image MCP (defaults to codex / gpt-image-2.5-sunburst)"
-  default_prompt: "Use $verdantflare-image to generate or edit atomic image assets for the current project using the codex engine (gpt-image-2.5-sunburst) by default."
+  short_description: "Generate or edit image assets via Image MCP"
+  default_prompt: "Use $verdantflare-image to generate or edit image candidates for this project."

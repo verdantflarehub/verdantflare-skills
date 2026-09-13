@@ -1,4 +1,4 @@
 interface:
   display_name: "VerdantFlare Music MV"
-  short_description: "Direct and assemble reviewable full-song music videos"
-  default_prompt: "Use $verdantflare-music-mv to plan and produce an MV from this approved music asset."
+  short_description: "Direct and assemble a 30-second chorus MV"
+  default_prompt: "Use $verdantflare-music-mv to produce a 30-second chorus MV from this approved song."

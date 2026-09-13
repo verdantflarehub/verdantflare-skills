@@ -1,5 +1,7 @@
 # VerdantFlare Skills
 
+本文描述工作区开发版。下方版本标签是既有发布入口，不表示本次修改已发布或安装。当前可用技能还包括 [30 秒 MV](skills/verdantflare-music-mv/SKILL.md) 和 [H3 生成单元](skills/verdantflare-video-h3/SKILL.md)。
+
 ## verdantflare-music
 
 `verdantflare-music` 是从一句灵感推进到最终母带交付的 Codex Skill。它负责编制词曲企划、调用 VerdantFlare Music 制作工具，并通过五个人工审核点管理候选、分轨、个人音色、音色转换和母带结果。
@@ -19,16 +21,16 @@
 ### 使用 Skill
 
 ```text
-使用 $verdantflare-music，创作一首 3 分 20 秒、黑暗电影感的中文叙事歌曲，并在每个审核点等我确认。
+使用 $verdantflare-music，创作一首 最长 200 秒、黑暗电影感的中文叙事歌曲，并在每个审核点等我确认。
 ```
 
 Skill 通过 VerdantFlare Station 提供的 Music MCP 工具执行生成、分轨、音色训练与转换、已知歌词强制对齐、混音母带。Music3 候选使用最大生成时长作为上限并保留自然结尾，实际时长在审核点记录。音频、真人录音和人声模型不进入 Git。
 
-最终 MP3 使用 `<创作者显示名>-<歌曲名>.mp3` 命名，例如 `Mengsk-今天请嫁给我吧-测试.mp3`。
+最终 MP3 使用 `<创作者显示名>-<歌曲名>.mp3` 命名，例如 `Creator-Demo.mp3`。
 
 ## verdantflare-video
 
-`verdantflare-video` 是兼容 macOS 和 Windows 的 Codex Skill，用于通过 VerdantFlare API 生成 SD2 视频。
+`verdantflare-video` 是兼容 macOS 和 Windows 的 Codex Skill，用于未选模型时路由至 Sol-H3，或在明确选择 SD2 时通过 VerdantFlare API 生成视频。独立安装仅包含 SD2 客户端；H3 路线需要另行提供 H3 Skill 和宿主 MCP。
 
 ### 安装命令
 
@@ -67,7 +69,7 @@ VERDANTFLARE_VIDEO_S3_SECRET_KEY=<required>
 ### 使用 Skill
 
 ```text
-使用 $verdantflare-video，根据 ~/Desktop/product.png 生成一个 9:16、10 秒的产品广告视频。
+使用 $verdantflare-video，明确采用 SD2，根据 ~/Desktop/product.png 生成一个 9:16、10 秒的产品广告视频。
 ```
 
 ## verdantflare-image

@@ -1,4 +1,4 @@
 interface:
   display_name: "VerdantFlare Video"
-  short_description: "Generate SD2 videos from text and local media"
-  default_prompt: "Use $verdantflare-video to generate an SD2 video from this prompt and these local media files."
+  short_description: "Route video requests or run explicit SD2 tasks"
+  default_prompt: "Use $verdantflare-video to make a video from this brief using the default route unless I specify a model."

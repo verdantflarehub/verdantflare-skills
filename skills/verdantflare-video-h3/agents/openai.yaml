@@ -1,4 +1,4 @@
 interface:
   display_name: "VerdantFlare Video H3"
-  short_description: "Run recoverable MiniMax H3 single-shot generation"
-  default_prompt: "Use $verdantflare-video-h3 to generate and validate this approved H3 shot unit."
+  short_description: "Execute and recover MiniMax H3 video units"
+  default_prompt: "Use $verdantflare-video-h3 to execute and validate this frozen H3 generation unit."

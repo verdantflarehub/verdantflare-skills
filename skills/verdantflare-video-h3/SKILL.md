@@ -1,62 +1,24 @@
 ---
 name: verdantflare-video-h3
-description: 默认采用 h3-sol（Sol-H3），使用领域级 video MCP 可靠执行 MiniMax H3 Ref2VA 原子视频生成；当用户或上层 Skill 提供已冻结的 4 至 15 秒 Generation Unit，要求编译 H3 Prompt、提交、查询、恢复、下载、校验或重试 Shot Candidate 时使用。不负责完整 MV 的 Treatment、故事板、跨单元导演、候选批准或最终剪辑。
+description: 执行 MiniMax H3 生成单元的提示词编译、视频生成、查询、恢复和下载；不编排整支 MV。
 ---
 
 # VerdantFlare Video H3
 
-将一个已冻结的 `GenerationUnit` 可靠执行为可审核的 `ShotCandidate`。区分首帧、首尾帧和全参考需求时阅读 [references/input-modes.md](references/input-modes.md)；提交、恢复或重试时阅读 [references/workflow.md](references/workflow.md)；构造和解释领域 MCP 请求时阅读 [references/video-mcp.md](references/video-mcp.md)；设计或评审 Ref2VA 动态提示词时阅读 [references/prompting.md](references/prompting.md)；判断某个控制项是否可信时阅读 [references/control-evidence.md](references/control-evidence.md)；校验输入限制和输出媒体时阅读 [references/validation.md](references/validation.md)。
+将冻结的 `GenerationUnit` 执行为可审阅 `ShotCandidate`。用户直接请求 H3 时可先准备输入草案；缺少批准或冻结输入时只阻止提交。
 
-## 默认模型与接口映射
+| 当前操作 | 按需读取 |
+| --- | --- |
+| 选择 Sol/原版、确认能力或构造 MCP 请求 | [MCP 契约与路线](references/video-mcp.md) |
+| 区分首帧、首尾帧和全参考输入 | [输入模式](references/input-modes.md) |
+| 编译动态提示词 | [提示词](references/prompting.md) |
+| 判断控制参数可靠性 | [控制证据](references/control-evidence.md) |
+| 提交、恢复、重试与登记候选 | [执行流程](references/workflow.md) |
+| 检查输入与媒体结果 | [校验](references/validation.md) |
+| 配置问题 | [环境说明](../ENVIRONMENT.md) |
 
-对用户区分以下两个 H3 选项；它们属于同一 MiniMax H3 模型族：
+默认 Sol-H3，明确原版请求使用宿主的非 Sol 路线；不能静默回退。`h3-sol` 是路线，不臆造 `model` 参数；契约标识为 `minimax-h3-ref2va`。提交前确认实际映射。
 
-| 名称 | 含义 | 选择规则 |
-| --- | --- | --- |
-| MiniMax H3 | MiniMax H3 基础模型；用户所说的“原版”对应现有非 Sol 推理路线 | 用户明确指定原版时采用 |
-| MiniMax H3 Sol（`h3-sol` / Sol-H3） | 基于 MiniMax H3、采用 NVIDIA Sol-H3 优化推理引擎的版本 | 未指定时默认采用 |
+当前单元为 4–15 秒，至少包含图片或视频 Artifact，不能只有音频。通过 `video.generate/status/result` 执行，不绕道 Runtime。冻结的创作输入变化须新建版本；状态未知时恢复原任务，不重复收费。
 
-Sol-H3 沿用 MiniMax H3 基础权重，当前 Ref2VA 路线还使用 LightX2V Turbo 四步 LoRA；不能描述为 NVIDIA 重新训练的独立基础模型，也不能承诺画质完全一致或在所有硬件上更快。现有非 Sol 服务是否使用加速适配器须以实际配置为准，不能将“原版”自动等同于未经优化的 Base H3。
-
-- 用户未指定推理路线时，默认采用 `h3-sol`（Sol-H3）。提交前核对宿主 MCP 能力声明，确认该路线已接入并满足当前 Generation Unit 的要求；缺少明确支持时停止并报告，不得自动回退到旧 H3 Runtime。
-- 用户明确指定 MiniMax H3 原版时，选择宿主明确提供的非 Sol 路线；泛指“H3”且未限定版本时仍采用默认 Sol 路线。两种路线都必须先确认能力与实际映射，不能仅凭同一个 `model` 标识判断版本。
-- `h3-sol` 是推理路线名称；现有领域契约的 `model` 标识仍为 `minimax-h3-ref2va`。仅在宿主明确声明该标识映射至 Sol-H3 时，才能沿用此契约提交默认任务。不得将 `h3-sol` 擅自写入尚未支持它的 `model` 字段，也不得臆造引擎选择参数。
-- 将实际推理路线及服务返回的运行时版本写入 Attempt 和候选来源记录，不能仅凭模型标识声称已使用 Sol-H3。已冻结输入或已有任务指定其他路线时，不得静默切换；已有任务沿原引用查询、恢复和下载。
-
-## 职责边界
-
-- 只处理一个 H3 Generation Unit，不理解整首歌曲、Verse、Chorus、完整 MV 或跨 Generation Unit 的导演意图。一个单元可以是连续单镜，也可以是最多 2–3 个明确切点的内部多镜，但必须由上层冻结其形态。
-- 通过宿主提供的 `video.generate`、`video.status` 和 `video.result` 调用 `minimax-h3-ref2va`。不直接访问 H3 Runtime 的 `/v1/videos`，不管理 Kubernetes、GPU、模型权重或部署参数。
-- 不修改已冻结的 Prompt、时长、画幅或参考资产。创作输入变化必须由上层创建新的 Generation Unit Version。
-- MCP 工具缺失或契约不满足时停在提交前，报告缺少的能力和已校验输入。不得把 Runtime 冒烟接口当作 MCP，不能改用 `verdantflare-video`、其他模型或远端 Provider。
-- 任务完成只产生候选，不代表镜头批准。身份、表演、连续性、节奏和创作质量由 `verdantflare-music-mv` 或调用方审核。
-
-## 执行状态
-
-为每个 Attempt 持久化 `generation_unit_id`、`attempt_id`、输入摘要、幂等键、`video_task_id`、MCP 状态、Artifact 引用、媒体检查和错误。状态机为：
-
-```text
-ready -> submitting -> queued -> running -> validating -> candidate_ready
-submitting | queued | running | validating -> failed
-ready | queued | running -> cancelled
-```
-
-失败和拒绝不原地回退。相同创作输入需要技术重试时创建新 Attempt；输入变化时拒绝重试并要求新的 Generation Unit Version。
-
-## 核心规则
-
-1. 只接受状态为 `frozen`、时长 4 至 15 秒、模型为 `minimax-h3-ref2va` 的 Generation Unit。
-2. 音频参考不能作为唯一输入；每个请求必须至少包含一张图片或一段视频。引用必须是受控 Artifact，不接受宿主机绝对路径或未经登记的临时 URL。
-3. 使用稳定幂等键 `generation_unit_id/attempt_id` 调用 `video.generate`。同一 Attempt 不得再次创建任务。
-4. 获得 `video_task_id` 后立即持久化。进程重启、连接超时或状态不确定时只查询 `video.status`，不得重新提交。
-5. 当前没有可信的细粒度进度时只报告 `queued` 或 `running`，不估算完成百分比。
-6. `video.result` 成功后登记不可变 Artifact，再校验媒体、逐秒动态接触表和完整播放。只看首帧、关键帧、尾帧不能证明视频成立；校验失败是 Attempt 失败，不把损坏文件交给上层审核。
-7. 保留生成视频的原生音轨用于候选审核，但明确标记为非最终歌曲音轨；最终 MV 必须由上层静音并重新挂载批准 Master。
-
-## 完成条件
-
-只有任务状态成功、结果 Artifact 已登记、媒体校验通过、Provenance 完整且三类审核帧已生成，才能返回 `ShotCandidate`。返回 Generation Unit、Attempt、Video Task、Artifact、运行时版本、输入摘要、媒体参数和技术检查；不得声称镜头或 MV 已批准。
-
-## 环境变量加载
-
-本技能遵循 [技能环境变量加载规范](../ENVIRONMENT.md)：进程环境变量优先，其次是本技能目录的 `.env`，最后是项目目录的 `.env`。同名变量由高优先级来源覆盖；同目录 `.env.example` 仅用于说明变量，不参与运行时加载。 实际加载由本技能的 `scripts/load_env.py` 统一完成。
+自主完成已授权的准备、下载、校验和技术修复。技术校验完成后交付候选、任务引用与证据；候选选择和最终 MV 批准由调用方完成。
