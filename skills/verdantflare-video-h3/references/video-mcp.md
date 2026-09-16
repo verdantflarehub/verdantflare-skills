@@ -73,8 +73,8 @@
 
 Sol-H3 沿用 MiniMax H3 基础权重，当前 Ref2VA 路线还使用 LightX2V Turbo 四步 LoRA；不能描述为 NVIDIA 重新训练的独立基础模型，也不能承诺画质完全一致或在所有硬件上更快。现有非 Sol 服务是否使用加速适配器须以实际配置为准，不能将“原版”自动等同于未经优化的 Base H3。
 
-- 用户未指定推理路线时，默认采用 `h3-sol`（Sol-H3）。提交前核对宿主 MCP 能力声明，确认该路线已接入并满足当前 Generation Unit 的要求；缺少明确支持时停止并报告，不得自动回退到旧 H3 Runtime。
-- 用户明确指定 MiniMax H3 原版时，选择宿主明确提供的非 Sol 路线；泛指“H3”且未限定版本时仍采用默认 Sol 路线。两种路线都必须先确认能力与实际映射，不能仅凭同一个 `model` 标识判断版本。
+- 用户未指定推理路线时，使用宿主 MCP 的默认渠道配置（当前生产配置为 `h3-vdn`）。提交前核对宿主 MCP 能力声明，确认该路线已接入并满足当前 Generation Unit 的要求；缺少明确支持时停止并报告，不得自动回退。
+- 用户明确指定 MiniMax H3 原版时，选择宿主明确提供的非 Sol 路线；泛指“H3”且未限定版本时采用宿主配置的默认路线。两种路线都必须先确认能力与实际映射，不能仅凭同一个 `model` 标识判断版本。
 - `h3-sol` 是推理路线名称；现有领域契约的 `model` 标识仍为 `minimax-h3-ref2va`。仅在宿主明确声明该标识映射至 Sol-H3 时，才能沿用此契约提交默认任务。不得将 `h3-sol` 擅自写入尚未支持它的 `model` 字段，也不得臆造引擎选择参数。
-- `model` 与 runtime route identity 是两个字段：`model=minimax-h3-ref2va` 表示业务模型类型；服务器规范渠道为 `route=h3-sol`（A）和 `route=h3-sol-4090`（4090 实验 B）。route identity 不得替代 `model`，A/B 切换必须显式传递 route 并留下运行时记录。宿主兼容历史别名 `minimax-h3-sol-ref2va` 与 `minimax-h3-sol-ref2va-4090`，新请求优先使用规范渠道名。
+- `model` 与 runtime route identity 是两个字段：`model=minimax-h3-ref2va` 表示业务模型类型；服务器渠道由宿主能力声明决定，当前生产规范渠道为 `route=h3-vdn`；历史 Sol 渠道仅在宿主明确重新接入时可选。route identity 不得替代 `model`，A/B 切换必须显式传递 route 并留下运行时记录。宿主兼容历史别名 `minimax-h3-sol-ref2va` 与 `minimax-h3-sol-ref2va-4090`，新请求优先使用规范渠道名。
 - 将实际推理路线及服务返回的运行时版本写入 Attempt 和候选来源记录，不能仅凭模型标识声称已使用 Sol-H3。已冻结输入或已有任务指定其他路线时，不得静默切换；已有任务沿原引用查询、恢复和下载。
