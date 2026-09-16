@@ -1,6 +1,6 @@
 # VerdantFlare Skills
 
-本文描述工作区开发版。下方版本标签是既有发布入口，不表示本次修改已发布或安装。当前可用技能还包括 [30 秒 MV](skills/verdantflare-music-mv/SKILL.md) 和 [H3 生成单元](skills/verdantflare-video-h3/SKILL.md)。
+本文描述工作区开发版。下方版本标签是既有发布入口，不表示本次修改已发布或安装。当前可用技能还包括 [30 秒 MV](skills/verdantflare-music-mv/SKILL.md)。
 
 ## verdantflare-music
 
@@ -30,7 +30,7 @@ Skill 通过 VerdantFlare Station 提供的 Music MCP 工具执行生成、分�
 
 ## verdantflare-video
 
-`verdantflare-video` 是兼容 macOS 和 Windows 的 Codex Skill，用于未选模型时路由至 Sol-H3，或在明确选择 SD2 时通过 VerdantFlare API 生成视频。独立安装仅包含 SD2 客户端；H3 路线需要另行提供 H3 Skill 和宿主 MCP。
+`verdantflare-video` 是兼容 macOS 和 Windows 的 Codex Skill，通过一个 Video MCP 统一支持模型与渠道选择，未指定时使用宿主默认渠道（当前为 H3-VDN），也支持明确指定 H3、SD2 或其他已声明渠道。
 
 ### 安装命令
 

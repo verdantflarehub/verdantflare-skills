@@ -13,7 +13,7 @@ description: 基于已批准歌曲，导演、审核并装配 30 秒高潮 MV；
 | 项目结构、B/S/F/GU 命名、时间线或机器清单 | [契约](references/contracts.md)                                                                          |
 | 人物四视图、服装、角色卡、参考网格        | [角色资产](references/character-assets.md)；需要生图时再读 [Image Skill](../verdantflare-image/SKILL.md) |
 | 到达审核点、收到批准或候选选择            | [审核门](references/review-gates.md)                                                                     |
-| 执行已冻结视频生成单元                    | [H3 Skill](../verdantflare-video-h3/SKILL.md)                                                            |
+| 执行已冻结视频生成单元                    | [H3 Skill](../verdantflare-video/SKILL.md)                                                            |
 | 确实需要制作或修复歌曲                    | [Music Skill](../verdantflare-music/SKILL.md)                                                            |
 | 配置问题                                  | [环境说明](../ENVIRONMENT.md)                                                                            |
 
