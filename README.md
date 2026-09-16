@@ -30,7 +30,7 @@ Skill 通过 VerdantFlare Station 提供的 Music MCP 工具执行生成、分�
 
 ## verdantflare-video
 
-`verdantflare-video` 是兼容 macOS 和 Windows 的 Codex Skill，通过一个 Video MCP 统一支持模型与渠道选择，未指定时使用宿主默认渠道（当前为 H3-VDN），也支持明确指定 H3、SD2 或其他已声明渠道。
+`verdantflare-video` 是兼容 macOS 和 Windows 的 Codex Skill，通过一个 Video MCP 统一支持模型与渠道选择，未指定时使用宿主默认模型与渠道（当前模型为 H3、渠道为 H3-VDN），也支持明确指定模型简称（H3、SD2）及已声明的推理渠道。
 
 ### 安装命令
 
