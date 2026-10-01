@@ -30,7 +30,7 @@ Skill 通过 VerdantFlare Station 提供的 Music MCP 工具执行生成、分�
 
 ## verdantflare-video
 
-`verdantflare-video` 是兼容 macOS 和 Windows 的 Codex Skill，通过一个 Video MCP 统一支持模型与渠道选择，未指定时使用宿主默认模型与渠道（当前模型为 H3、渠道为 H3-VDN），也支持明确指定模型简称（H3、SD2）及已声明的推理渠道。
+`verdantflare-video` 是兼容 macOS 和 Windows 的 Codex Skill，通过一个 Video MCP 统一支持模型与渠道选择，未指定时使用宿主默认模型与渠道（当前模型为 H3、渠道为 H3-VDN），也支持明确指定模型简称（H3、SD2）及已声明的推理渠道。fal 已作为 H3 Reference-to-Video 的显式渠道开放；调用固定传入当前 `project_id` 与 `route=fal`，是否可用以宿主 MCP 能力声明为准，且不会失败回退。
 
 ### 安装命令
 
@@ -65,6 +65,17 @@ VERDANTFLARE_VIDEO_API_KEY=<required>
 VERDANTFLARE_VIDEO_S3_ACCESS_KEY=<required>
 VERDANTFLARE_VIDEO_S3_SECRET_KEY=<required>
 ```
+
+显式使用 fal 渠道时，命令行脚本通过统一 Video MCP 调用，还需要：
+
+```dotenv
+VIDEO_MCP_URL=https://mcp.example.com/video
+VIDEO_MCP_BEARER_TOKEN=<required>
+```
+
+供应商 `FAL_KEY` 只配置在 Video MCP Server，不能放入 Skill 配置。可用统一客户端
+`python3 scripts/video_client.py check` 检查 MCP 工具，再通过 `generate`、
+`status`、`result` 或 `resume` 执行和恢复 fal Ref2VA 任务。
 
 ### 使用 Skill
 

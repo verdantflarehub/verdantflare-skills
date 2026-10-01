@@ -8,7 +8,7 @@
 
 硬控制只保证请求规格。例如画幅和时长可验收，但不保证人物构图或动作质量。
 
-Provider Schema 不是全局模型契约。fal H3 Max 另公开 T2V、首帧/首尾帧、全参考、Prompt Expansion 和部分 LoRA 能力；它们只证明 fal endpoint 接收这些输入，不能自动视为当前成都 Runtime 或领域 MCP 已支持。模式和 Provider 差异见 [input-modes.md](input-modes.md)。
+Provider Schema 不是全局模型契约。当前领域 MCP 只开放 fal 的 Reference-to-Video；fal 另行公开的 T2V、首帧/首尾帧、Prompt Expansion 和 LoRA 能力仍不属于已批准契约。模式和 Provider 差异见 [input-modes.md](input-modes.md)。
 
 ## 参考控制
 

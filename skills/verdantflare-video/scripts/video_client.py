@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate, resume, list, and download VerdantFlare Video tasks."""
+"""Use one CLI for VerdantFlare Video generation, recovery, and Artifact workflows."""
 
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from config import Config, ConfigError, ensure_mc, load_config
+from load_env import load_env
 from task_store import (
     BusyTaskError,
     list_submissions,
@@ -55,6 +56,12 @@ DOWNLOAD_TIMEOUT_SECONDS = 10 * 60
 MEDIA_READINESS_DELAYS_SECONDS = (0, 1, 2, 4)
 UPLOAD_HARD_TTL_SECONDS = 7 * 24 * 60 * 60
 ALLOWED_RATIOS = {"16:9", "9:16", "1:1", "4:3", "3:4"}
+FAL_MODEL = "minimax-h3-ref2va"
+FAL_ROUTE = "fal"
+FAL_ALLOWED_RATIOS = {"adaptive", "21:9", *ALLOWED_RATIOS}
+PROJECT_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+MCP_TASK_ID_PATTERN = re.compile(r"video_task_[0-9a-f]{32}")
+SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 EXTENSIONS = {
     "image": {".jpg", ".jpeg", ".png", ".webp"},
     "audio": {".mp3", ".wav", ".m4a"},
@@ -87,6 +94,13 @@ class ApiError(ClientError):
         self.retry_after = retry_after
 
 
+@dataclass(frozen=True)
+class MCPConfig:
+    url: str
+    token: str
+    state_dir: Path
+
+
 @dataclass
 class Media:
     kind: str
@@ -99,6 +113,298 @@ class Media:
 
 def utc_now() -> str:
     return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+class _MCPNoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ClientError("Video MCP redirected a request; refusing to forward credentials")
+
+
+def _validate_mcp_url(value: str) -> str:
+    parsed = urllib.parse.urlsplit(value.strip())
+    local_test = os.environ.get("VERDANTFLARE_VIDEO_TEST_MODE") == "1" and parsed.hostname in {
+        "127.0.0.1",
+        "localhost",
+        "::1",
+    }
+    if (
+        parsed.scheme not in ({"http", "https"} if local_test else {"https"})
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ClientError("VIDEO_MCP_URL must be an absolute trusted HTTPS endpoint")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ClientError("VIDEO_MCP_URL has an invalid port") from exc
+    if not local_test and port not in {None, 443}:
+        raise ClientError("VIDEO_MCP_URL must use HTTPS port 443")
+    return value.strip().rstrip("/")
+
+
+def load_mcp_config() -> MCPConfig:
+    values = load_env()
+    url = _validate_mcp_url(values.get("VIDEO_MCP_URL", ""))
+    token = values.get("VIDEO_MCP_BEARER_TOKEN", "").strip()
+    if not token or any(ord(char) < 0x20 or ord(char) == 0x7F for char in token):
+        raise ClientError("VIDEO_MCP_BEARER_TOKEN is missing or invalid")
+    configured_state = values.get("VERDANTFLARE_VIDEO_STATE_DIR", "").strip()
+    state_dir = Path(os.path.expanduser(configured_state or "~/.local/state/verdantflare/video"))
+    if not state_dir.is_absolute():
+        raise ClientError("VERDANTFLARE_VIDEO_STATE_DIR must be absolute")
+    return MCPConfig(url=url, token=token, state_dir=state_dir)
+
+
+def _mcp_opener() -> urllib.request.OpenerDirector:
+    return urllib.request.build_opener(_MCPNoRedirectHandler())
+
+
+def _mcp_json_request(config: MCPConfig, method: str, params: dict[str, Any]) -> dict[str, Any]:
+    request_id = hashlib.sha256(os.urandom(32)).hexdigest()[:24]
+    payload = json.dumps(
+        {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    request = urllib.request.Request(
+        config.url,
+        data=payload,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {config.token}",
+            "Accept": "application/json, text/event-stream",
+            "Content-Type": "application/json; charset=utf-8",
+            "User-Agent": "VerdantFlare-VideoClient/1.0",
+        },
+    )
+    try:
+        with _mcp_opener().open(request, timeout=60) as response:
+            if response.status != 200:
+                raise ClientError(f"Video MCP returned HTTP {response.status}")
+            raw = response.read(2 * 1024 * 1024 + 1)
+    except ClientError:
+        raise
+    except urllib.error.HTTPError as exc:
+        raise ClientError(f"Video MCP returned HTTP {exc.code}") from exc
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise ClientError("Video MCP is unavailable") from exc
+    if len(raw) > 2 * 1024 * 1024:
+        raise ClientError("Video MCP response exceeds 2 MiB")
+    try:
+        body = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ClientError("Video MCP returned invalid JSON") from exc
+    if not isinstance(body, dict) or body.get("id") != request_id:
+        raise ClientError("Video MCP returned a mismatched response")
+    if body.get("error") is not None:
+        raise ClientError("Video MCP rejected the JSON-RPC request")
+    result = body.get("result")
+    if not isinstance(result, dict):
+        raise ClientError("Video MCP response is missing a result")
+    return result
+
+
+def call_mcp_tool(config: MCPConfig, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    result = _mcp_json_request(config, "tools/call", {"name": name, "arguments": arguments})
+    if result.get("isError"):
+        raise ClientError(f"Video MCP tool {name} failed")
+    structured = result.get("structuredContent")
+    if isinstance(structured, dict):
+        return structured
+    content = result.get("content")
+    if isinstance(content, list) and content and isinstance(content[0], dict):
+        text = content[0].get("text")
+        if isinstance(text, str):
+            try:
+                value = json.loads(text)
+            except json.JSONDecodeError as exc:
+                raise ClientError(f"Video MCP tool {name} returned invalid content") from exc
+            if isinstance(value, dict):
+                return value
+    raise ClientError(f"Video MCP tool {name} returned no structured content")
+
+
+def check_mcp_tools(config: MCPConfig) -> dict[str, Any]:
+    result = _mcp_json_request(config, "tools/list", {})
+    tools = result.get("tools")
+    if not isinstance(tools, list):
+        raise ClientError("Video MCP tool inventory is invalid")
+    names = {tool.get("name") for tool in tools if isinstance(tool, dict)}
+    required = {"artifact.import", "video.generate", "video.status", "video.result"}
+    missing = sorted(required - names)
+    if missing:
+        raise ClientError("Video MCP is missing required tools: " + ", ".join(missing))
+    return {"status": "ok", "model": FAL_MODEL, "route": FAL_ROUTE, "tools": sorted(required)}
+
+
+def _mcp_reference(value: str) -> dict[str, str]:
+    artifact_id, separator, purpose = value.partition("=")
+    artifact_id = artifact_id.strip()
+    purpose = purpose.strip()
+    if not separator or not artifact_id or not purpose or len(artifact_id) > 128 or len(purpose) > 256:
+        raise ClientError("references must use ARTIFACT_ID=PURPOSE")
+    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in value):
+        raise ClientError("reference contains control characters")
+    return {"artifact_id": artifact_id, "purpose": purpose}
+
+
+def _mcp_references(args: argparse.Namespace) -> dict[str, list[dict[str, str]]]:
+    references = {
+        "images": [_mcp_reference(value) for value in args.image_ref],
+        "videos": [_mcp_reference(value) for value in args.video_ref],
+        "audios": [_mcp_reference(value) for value in args.audio_ref],
+    }
+    if len(references["images"]) > 9 or len(references["videos"]) > 3 or len(references["audios"]) > 3:
+        raise ClientError("fal supports at most 9 images, 3 videos, and 3 audio references")
+    if not 1 <= sum(map(len, references.values())) <= 12:
+        raise ClientError("fal requires 1 to 12 references")
+    return references
+
+
+def _validate_project_id(value: str | None) -> str:
+    if not isinstance(value, str) or not PROJECT_ID_PATTERN.fullmatch(value):
+        raise ClientError("project_id is invalid")
+    return value
+
+
+def _validate_mcp_task_id(value: str) -> str:
+    if not MCP_TASK_ID_PATTERN.fullmatch(value):
+        raise ClientError("video_task_id is invalid")
+    return value
+
+
+def _mcp_attempt_path(config: MCPConfig, project_id: str, idempotency_key: str) -> Path:
+    digest = hashlib.sha256(f"{project_id}\0{idempotency_key}".encode("utf-8")).hexdigest()
+    return config.state_dir / "mcp-attempts" / f"{digest}.json"
+
+
+def _save_mcp_attempt(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(path.parent, 0o700)
+    encoded = (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.", delete=False) as stream:
+        temporary = Path(stream.name)
+        stream.write(encoded)
+        stream.flush()
+        os.fsync(stream.fileno())
+    try:
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, path)
+        os.chmod(path, 0o600)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
+    if args.model != FAL_MODEL or args.route != FAL_ROUTE:
+        raise ClientError(f"fal generation requires --model {FAL_MODEL} --route {FAL_ROUTE}")
+    if any((args.image, args.image_url, args.video, args.video_url, args.audio, args.audio_url)):
+        raise ClientError("fal generation accepts project Artifacts only; import inputs first and use --*-ref")
+    if args.output or args.watermark or not args.generate_audio:
+        raise ClientError(
+            "fal generation returns a project Artifact; --output, --watermark, and --no-generate-audio are not supported"
+        )
+    project_id = _validate_project_id(args.project_id)
+    idempotency_key = (args.idempotency_key or "").strip()
+    if (
+        not idempotency_key
+        or len(idempotency_key) > 128
+        or any(ord(char) < 0x20 or ord(char) == 0x7F for char in idempotency_key)
+    ):
+        raise ClientError("idempotency_key is invalid")
+    prompt = args.prompt.strip()
+    if not prompt:
+        raise ClientError("prompt must not be empty")
+    duration = 5 if args.duration is None else args.duration
+    ratio = args.ratio or "adaptive"
+    if not 5 <= duration <= 15:
+        raise ClientError("fal duration must be between 5 and 15 seconds")
+    if ratio not in FAL_ALLOWED_RATIOS:
+        raise ClientError(f"unsupported fal ratio: {ratio}")
+    request = {
+        "project_id": project_id,
+        "idempotency_key": idempotency_key,
+        "model": FAL_MODEL,
+        "route": FAL_ROUTE,
+        "prompt": prompt,
+        "duration_seconds": duration,
+        "aspect_ratio": ratio,
+        "references": _mcp_references(args),
+    }
+    attempt = {
+        "schema_version": 1,
+        "state": "submitting",
+        "created_at": utc_now(),
+        "request": request,
+    }
+    path = _mcp_attempt_path(config, project_id, idempotency_key)
+    _save_mcp_attempt(path, attempt)
+    try:
+        result = call_mcp_tool(config, "video.generate", request)
+    except Exception:
+        attempt["state"] = "submission_unknown"
+        attempt["updated_at"] = utc_now()
+        _save_mcp_attempt(path, attempt)
+        raise
+    task_id = result.get("video_task_id")
+    if not isinstance(task_id, str) or not MCP_TASK_ID_PATTERN.fullmatch(task_id):
+        attempt["state"] = "submission_unknown"
+        attempt["updated_at"] = utc_now()
+        _save_mcp_attempt(path, attempt)
+        raise ClientError("video.generate returned an invalid task id")
+    attempt.update(state="confirmed", updated_at=utc_now(), video_task_id=task_id, response=result)
+    _save_mcp_attempt(path, attempt)
+    return {**result, "attempt_path": str(path)}
+
+
+def mcp_status(config: MCPConfig, task_id: str) -> dict[str, Any]:
+    return call_mcp_tool(config, "video.status", {"video_task_id": _validate_mcp_task_id(task_id)})
+
+
+def mcp_result(config: MCPConfig, task_id: str) -> dict[str, Any]:
+    return call_mcp_tool(config, "video.result", {"video_task_id": _validate_mcp_task_id(task_id)})
+
+
+def resume_mcp(config: MCPConfig, task_id: str, poll_interval: float, timeout: float) -> dict[str, Any]:
+    task_id = _validate_mcp_task_id(task_id)
+    if poll_interval < 1 or timeout < poll_interval:
+        raise ClientError("poll interval and timeout are invalid")
+    deadline = time.monotonic() + timeout
+    while True:
+        current = mcp_status(config, task_id)
+        state = current.get("status")
+        if state == "succeeded":
+            return mcp_result(config, task_id)
+        if state in {"failed", "cancelled"}:
+            return current
+        if state not in {"queued", "running"}:
+            raise ClientError("video.status returned an unknown state")
+        if time.monotonic() >= deadline:
+            raise ClientError("task polling timed out; resume the same task id later")
+        time.sleep(poll_interval)
+
+
+def import_mcp_artifact(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
+    project_id = _validate_project_id(args.project_id)
+    digest = args.sha256.strip().lower()
+    if not SHA256_PATTERN.fullmatch(digest):
+        raise ClientError("sha256 must contain exactly 64 hexadecimal characters")
+    source = urllib.parse.urlsplit(args.source_url)
+    if source.scheme != "https" or not source.hostname or source.username or source.password or source.fragment:
+        raise ClientError("source_url must be an absolute HTTPS URL")
+    return call_mcp_tool(
+        config,
+        "artifact.import",
+        {
+            "project_id": project_id,
+            "source_url": args.source_url,
+            "filename": args.filename,
+            "expected_sha256": digest,
+        },
+    )
 
 
 def _utc_after(seconds: int) -> str:
@@ -1081,6 +1387,16 @@ def summary(task: dict[str, Any]) -> dict[str, Any]:
 
 
 def generate(config: Config, args: argparse.Namespace) -> int:
+    if getattr(args, "model", "verdantflare-sd2") != "verdantflare-sd2" or getattr(args, "route", None) is not None:
+        raise ClientError("public API generation requires --model verdantflare-sd2 without --route")
+    if getattr(args, "project_id", None) or getattr(args, "idempotency_key", None) or any(
+        (getattr(args, "image_ref", []), getattr(args, "video_ref", []), getattr(args, "audio_ref", []))
+    ):
+        raise ClientError("project_id, idempotency_key, and Artifact references are only accepted with route=fal")
+    if args.duration is None:
+        args.duration = 10
+    if args.ratio is None:
+        args.ratio = "16:9"
     config.ensure_dirs()
     media = collect_media(args)
     output, explicit_file = _prepare_output(config, args.output)
@@ -1262,23 +1578,47 @@ def resume(config: Config, task_id: str) -> int:
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("check", help="verify the unified Video MCP tools required by route=fal")
+    artifact_parser = sub.add_parser("import", help="import an immutable HTTPS asset into a Video MCP project")
+    artifact_parser.add_argument("--project-id", required=True)
+    artifact_parser.add_argument("--source-url", required=True)
+    artifact_parser.add_argument("--filename", required=True)
+    artifact_parser.add_argument("--sha256", required=True)
     generate_parser = sub.add_parser("generate")
+    generate_parser.add_argument(
+        "--model",
+        default="verdantflare-sd2",
+        choices=("verdantflare-sd2", FAL_MODEL),
+        help="public SD2 by default; use minimax-h3-ref2va together with --route fal",
+    )
+    generate_parser.add_argument("--route", choices=(FAL_ROUTE,))
+    generate_parser.add_argument("--project-id")
+    generate_parser.add_argument("--idempotency-key")
     generate_parser.add_argument("--prompt", required=True)
     generate_parser.add_argument("--output")
-    generate_parser.add_argument("--duration", type=int, default=10)
-    generate_parser.add_argument("--ratio", default="16:9", choices=sorted(ALLOWED_RATIOS))
+    generate_parser.add_argument("--duration", type=int)
+    generate_parser.add_argument("--ratio", choices=sorted(FAL_ALLOWED_RATIOS))
     generate_parser.add_argument("--image", action="append", default=[])
     generate_parser.add_argument("--image-url", action="append", default=[])
     generate_parser.add_argument("--audio", action="append", default=[])
     generate_parser.add_argument("--audio-url", action="append", default=[])
     generate_parser.add_argument("--video", action="append", default=[])
     generate_parser.add_argument("--video-url", action="append", default=[])
+    generate_parser.add_argument("--image-ref", action="append", default=[], metavar="ARTIFACT_ID=PURPOSE")
+    generate_parser.add_argument("--video-ref", action="append", default=[], metavar="ARTIFACT_ID=PURPOSE")
+    generate_parser.add_argument("--audio-ref", action="append", default=[], metavar="ARTIFACT_ID=PURPOSE")
     generate_parser.add_argument("--generate-audio", dest="generate_audio", action="store_true", default=True)
     generate_parser.add_argument("--no-generate-audio", dest="generate_audio", action="store_false")
     generate_parser.add_argument("--watermark", action="store_true", default=False)
     sub.add_parser("list")
     resume_parser = sub.add_parser("resume")
     resume_parser.add_argument("task_id")
+    resume_parser.add_argument("--route", choices=(FAL_ROUTE,))
+    resume_parser.add_argument("--poll-interval", type=float, default=8)
+    resume_parser.add_argument("--timeout", type=float, default=900)
+    for command in ("status", "result"):
+        command_parser = sub.add_parser(command, help=f"read a Video MCP task {command}")
+        command_parser.add_argument("video_task_id")
     recover_parser = sub.add_parser("recover")
     recover_parser.add_argument("client_request_id")
     return parser
@@ -1288,6 +1628,28 @@ def main() -> int:
     parser = make_parser()
     args = parser.parse_args()
     try:
+        if args.command in {"check", "import", "status", "result"}:
+            mcp_config = load_mcp_config()
+            if args.command == "check":
+                value = check_mcp_tools(mcp_config)
+            elif args.command == "import":
+                value = import_mcp_artifact(mcp_config, args)
+            elif args.command == "status":
+                value = mcp_status(mcp_config, args.video_task_id)
+            else:
+                value = mcp_result(mcp_config, args.video_task_id)
+            print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+        if args.command == "generate" and (args.route == FAL_ROUTE) != (args.model == FAL_MODEL):
+            raise ClientError(f"fal generation requires --model {FAL_MODEL} --route {FAL_ROUTE}")
+        if args.command == "generate" and args.route == FAL_ROUTE:
+            value = generate_mcp(load_mcp_config(), args)
+            print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+        if args.command == "resume" and (args.route == FAL_ROUTE or MCP_TASK_ID_PATTERN.fullmatch(args.task_id)):
+            value = resume_mcp(load_mcp_config(), args.task_id, args.poll_interval, args.timeout)
+            print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
         config = load_config()
         config.ensure_dirs()
         cleanup_expired_uploads(config)
