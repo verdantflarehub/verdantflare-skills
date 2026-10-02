@@ -135,13 +135,13 @@ def _validate_mcp_url(value: str) -> str:
         or parsed.query
         or parsed.fragment
     ):
-        raise ClientError("VIDEO_MCP_URL must be an absolute trusted HTTPS endpoint")
+        raise ClientError("MCP endpoint (STUDIO_MCP_URL / VIDEO_MCP_URL) must be an absolute trusted HTTPS endpoint")
     try:
         port = parsed.port
     except ValueError as exc:
-        raise ClientError("VIDEO_MCP_URL has an invalid port") from exc
+        raise ClientError("MCP endpoint has an invalid port") from exc
     if not local_test and port not in {None, 443}:
-        raise ClientError("VIDEO_MCP_URL must use HTTPS port 443")
+        raise ClientError("MCP endpoint must use HTTPS port 443")
     return value.strip().rstrip("/")
 
 

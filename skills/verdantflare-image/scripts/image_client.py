@@ -59,22 +59,22 @@ def parse_env_file(path: Path) -> dict[str, str]:
 
 
 def load_config() -> tuple[str, str]:
-    """读取 Image MCP 基础地址与 Bearer Token。"""
-    base_url = os.environ.get("IMAGE_MCP_URL", "").strip()
-    token = os.environ.get("IMAGE_MCP_BEARER_TOKEN", "").strip()
+    """读取 Studio / Image MCP 基础地址与 Bearer Token。"""
+    base_url = (os.environ.get("STUDIO_MCP_URL", "") or os.environ.get("IMAGE_MCP_URL", "")).strip()
+    token = (os.environ.get("STUDIO_MCP_BEARER_TOKEN", "") or os.environ.get("IMAGE_MCP_BEARER_TOKEN", "")).strip()
 
     if not (base_url and token):
         env_file = find_env_file()
         if env_file:
             env_vars = parse_env_file(env_file)
             if not base_url:
-                base_url = env_vars.get("IMAGE_MCP_URL", "").strip()
+                base_url = (env_vars.get("STUDIO_MCP_URL", "") or env_vars.get("IMAGE_MCP_URL", "")).strip()
             if not token:
-                token = env_vars.get("IMAGE_MCP_BEARER_TOKEN", "").strip()
+                token = (env_vars.get("STUDIO_MCP_BEARER_TOKEN", "") or env_vars.get("IMAGE_MCP_BEARER_TOKEN", "")).strip()
 
     if not base_url:
         raise ImageClientError(
-            "未检测到 IMAGE_MCP_URL 配置。请在 .env 文件或环境变量中配置 IMAGE_MCP_URL。"
+            "未检测到 STUDIO_MCP_URL 或 IMAGE_MCP_URL 配置。请在 .env 文件或环境变量中配置 STUDIO_MCP_URL。"
         )
 
     # 去除末尾斜杠

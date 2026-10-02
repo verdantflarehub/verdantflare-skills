@@ -66,11 +66,12 @@ VERDANTFLARE_VIDEO_S3_ACCESS_KEY=<required>
 VERDANTFLARE_VIDEO_S3_SECRET_KEY=<required>
 ```
 
-显式使用 fal 渠道时，命令行脚本通过统一 Video MCP 调用，还需要：
+显式使用 fal 渠道时，命令行脚本通过统一 MCP 网关调用，还需要：
 
 ```dotenv
-VIDEO_MCP_URL=https://mcp.example.com/video
-VIDEO_MCP_BEARER_TOKEN=<required>
+# 统一通过 Studio MCP 网关调用 (5090 集群: https://studio.dev.verdantflarehub.com/mcp)
+STUDIO_MCP_URL=https://studio.dev.verdantflarehub.com/mcp
+STUDIO_MCP_BEARER_TOKEN=<required>
 ```
 
 供应商 `FAL_KEY` 只配置在 Video MCP Server，不能放入 Skill 配置。可用统一客户端
@@ -97,12 +98,12 @@ VIDEO_MCP_BEARER_TOKEN=<required>
 使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/dev/skills/verdantflare-image 安装 Skill。
 ```
 
-同时在本地 Codex 注册 Image MCP 服务：
+同时在本地 Codex 注册 Studio 统一 MCP 服务：
 
 ```bash
-codex mcp add verdantflare-image \
-  --url "${IMAGE_MCP_URL}" \
-  --bearer-token-env-var IMAGE_MCP_BEARER_TOKEN
+codex mcp add verdantflare-studio \
+  --url "${STUDIO_MCP_URL:-https://studio.dev.verdantflarehub.com/mcp}" \
+  --bearer-token-env-var STUDIO_MCP_BEARER_TOKEN
 ```
 
 ### 使用 Skill
