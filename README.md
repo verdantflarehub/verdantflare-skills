@@ -10,12 +10,12 @@
 
 ### 安装命令
 
-当前版本：`verdantflare-music-v0.3.1`
+当前版本：`verdantflare-music-v0.4.0`
 
 在 Codex 中执行：
 
 ```text
-使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-music-v0.3.1/skills/verdantflare-music 安装 Skill。
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-music-v0.4.0/skills/verdantflare-music 安装 Skill。
 ```
 
 ### 使用 Skill
@@ -25,6 +25,8 @@
 ```
 
 Skill 通过 VerdantFlare Station 提供的 Music MCP 工具执行生成、分轨、音色训练与转换、已知歌词强制对齐、混音母带。Music3 候选使用最大生成时长作为上限并保留自然结尾，实际时长在审核点记录。音频、真人录音和人声模型不进入 Git。
+
+男女对唱制作采用逐句声部计划与独立轨校验；已有获认可的自然演唱对唱可按时间轴替换单一歌手，并对照原试听检查伴奏、电平和声部。机器检查通过不代表歌词、音色或最终音质通过。
 
 最终 MP3 使用 `<创作者显示名>-<歌曲名>.mp3` 命名，例如 `Creator-Demo.mp3`。
 
