@@ -26,6 +26,8 @@ description: 使用 VerdantFlare Music 创作、翻唱、换声、母带或局�
 
 当远端 Music MCP 无法稳定提供逐句歌手控制时，先检查是否已有歌词与旋律完整、听感自然的整曲源演唱；可按[多声部制作](references/multi-vocal.md)的自然演唱源路线进行分轨、音色转换和逐句编排。没有合格源演唱时才制作新的短样；OpenUtau 路线仅验证过双轨渲染，旧完整歌曲已被听审否决。不能把单轨提示词生成结果或未经听审的换声预混标为合格对唱。
 
+已有完整对唱混音且只需替换其中一位歌手时，按[多声部制作](references/multi-vocal.md)的“原混音局部换声”分支制作：独唱句取原人声，同唱句先分出目标歌手，再从原混音局部减去旧声、加入换声。原混音未替换区和另一歌手的保真检查见[换声保真与返工](references/vocal-replacement-mix.md)；脚本检查与用户试听分别记录，不能把分轨重建或电平通过当成音质无损。
+
 默认男女对唱采用“女声/男声接力，最后副歌合流”的 `call_response_final_merge` 模板；`both` 不是副歌的默认标签。参考拆解见 [《水晶》对唱参考](references/duet-reference-water-crystal.md)。
 
 曲风只加载当前需要的一组：

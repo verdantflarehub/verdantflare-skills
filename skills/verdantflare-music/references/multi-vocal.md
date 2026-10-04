@@ -33,7 +33,38 @@ python3 verdantflare-skills/skills/verdantflare-music/scripts/prepare_duet_repla
 电平验收覆盖整首歌，使用约 100–200 毫秒窗口比较原候选与预混的响度、关键频带、每次交接和句尾，并单独查看异常处的干声、伴奏与原混音。修正短时波动时优先做受限、平滑的全曲电平自动化和等响度 A/B；单独抬高一个半秒窗口可能让随后几秒主观上变小。机器扫描只能定位，不替代从头到尾的人工听审；技术通过后仍应保留“待听审”状态，不能以某段 RMS 匹配宣称整曲已完成。
 
 以 `duet-performance-v1` JSON 保存源歌曲时长与逐句时间轴，调用 `scripts/validate_performance_duet.py --plan <plan.json> --female <female.wav> --male <male.wav> --backing <backing.wav> --preview <mix.wav> --source <prior-approved-mix.wav> --report <validation.json>`。脚本检查角色轨的独唱静音、同唱平衡、整曲短时电平偏差、交接、峰值及三轨重建误差；`qualified` 只覆盖角色窗口和电平，`stems_reconstruct_preview` 另报三轨能否复现试听，两者都不能判断错词、音准、声纹、转换伪影和曲风。2026-10-04 用 v7 作参照时，Mengsk v15 在 `2.92` 秒出现额外交接跳变；v17 在 `26.3` 秒出现约 100 毫秒的转换人声凸起。只修正这些局部问题后，v18 的角色、电平、交接和持续覆盖机器检查通过，并获用户认可为可用试听，音质仍需优化。这里不凭空为自然演唱源填写音符或和弦来凑 `duet-score-v1`。
-运行该脚本的 Python 环境需已有 `numpy`、`scipy`、`soundfile`；先用同一解释器检查导入，缺失时在项目音频环境中运行，不把依赖错误写成歌曲通过或失败。
+运行这些音频脚本的 Python 环境需已有 `numpy`、`scipy`、`soundfile`；全频掩膜脚本还需 `librosa`。先用同一解释器检查导入，缺失时在项目音频环境中运行，不把依赖错误写成歌曲通过或失败。
+
+### 原混音局部换声：已有完整男女对唱
+
+2026-10-04 `videoplayback` 的 Mengsk 男声 v2 获用户试听认可为可用。输入 MP4 实际只有 AAC 音频流；先探测流类型、声道、采样率与时长，再解码为同轴 WAV，不凭扩展名推断有视频。该路线需要原曲已唱全、男女职责可辨，以及获授权的目标音色参考。单曲试听认可不等于其他歌曲也可用，更不等于音质无损。
+
+1. 从原混音提取人声，建立目标歌手逐句时间轴，记录独唱/同唱、歌词和置信度。自动转写、声纹聚类只辅助定位，低置信同唱句需人工核对；另一位歌手的独唱不能进入换声源。
+2. 独唱句直接取目标人声；同唱句先得到两人的低采样率估计，再调用 `scripts/lift_duet_singer_mask.py`，把互补时频掩膜应用到原采样率的人声片段，得到两条全频轨。先用已知两位独唱的合成叠唱测试分离器，再单独试听两轨的身份、串音和字音缺失。两轨能重建原人声只证明掩膜互补，不证明分对歌手；高频掩膜外推仍可能串音。
+3. 将目标片段放回原采样率、原样本位置的整曲时间轴，以已批准音色做 F0 条件换声。逐句核对转换长度、覆盖、歌词、声纹和音准。通用 pYIN 的八度跳变须用歌唱音高提取器复核，不能单凭一次检测就降八度。
+4. 用 `scripts/replace_singer_in_mix.py` 在目标句以短淡化执行 `original_mix - isolated_original_singer + converted_singer`。浮点混音的非目标区与原曲逐样本相同，导出 PCM24 时仅有量化误差；另一歌手、乐器与空间感因此优先保留。同唱分离若误含另一位歌手，减法仍会误伤，必须回到分离环节。可逐句限定补偿增益；湿声轨只接受已检查没有原歌手泄漏的换声效果。
+5. 对照原曲等响度听完整首歌，重点查低置信同唱、每次接唱、漏字、原声泄漏、换声伪影、音准和短时电平。机器报告用于找异常，用户听审确认自然度与音乐性。保留原曲、分轨、换声、报告和试听，不覆盖已认可版本。
+
+同唱区间的两个估计须为同采样率的单声道音频，并与输入人声的指定区间对齐：
+
+```bash
+python3 verdantflare-skills/skills/verdantflare-music/scripts/lift_duet_singer_mask.py \
+  --source-vocals <整曲人声.wav> --target-estimate <目标低采样率.wav> \
+  --other-estimate <另一歌手低采样率.wav> --start-seconds <起点> --end-seconds <终点> \
+  --target-out <目标全频片段.wav> --other-out <另一歌手全频片段.wav> \
+  --report <分离报告.json>
+```
+
+局部换声计划包含 `duration_seconds` 和 `male_phrases` 或 `female_phrases`；每句含秒单位的 `start`、`end`，建议另存 `source`（`solo` / `separated`）、`confidence` 和人工听审备注。可选 `max_gain` 限制该句的补偿，默认 `1.0`，允许 `1.0` 至 `1.5`。原混音、目标原声和换声轨须同采样率、同帧数：
+
+```bash
+python3 verdantflare-skills/skills/verdantflare-music/scripts/replace_singer_in_mix.py \
+  --plan <逐句计划.json> --role male --source-mix <原混音.wav> \
+  --target-singer <全曲同轴原男声.wav> --converted <全曲同轴换声.wav> \
+  --output <新试听.wav> --report <换声报告.json>
+```
+
+可选 `--wet <全曲同轴换声空间轨.wav> --wet-gain <比例>`；不要将原歌手湿声混回。脚本不负责分人声模型、换声模型或听审，也不能从单人歌曲凭空创造第二位独立演唱者。
 
 ### 机器校验契约
 
