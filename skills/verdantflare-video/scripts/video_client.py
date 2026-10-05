@@ -135,22 +135,22 @@ def _validate_mcp_url(value: str) -> str:
         or parsed.query
         or parsed.fragment
     ):
-        raise ClientError("VIDEO_MCP_URL must be an absolute trusted HTTPS endpoint")
+        raise ClientError("MCP endpoint (STUDIO_MCP_URL / VIDEO_MCP_URL) must be an absolute trusted HTTPS endpoint")
     try:
         port = parsed.port
     except ValueError as exc:
-        raise ClientError("VIDEO_MCP_URL has an invalid port") from exc
+        raise ClientError("MCP endpoint has an invalid port") from exc
     if not local_test and port not in {None, 443}:
-        raise ClientError("VIDEO_MCP_URL must use HTTPS port 443")
+        raise ClientError("MCP endpoint must use HTTPS port 443")
     return value.strip().rstrip("/")
 
 
 def load_mcp_config() -> MCPConfig:
     values = load_env()
-    url = _validate_mcp_url(values.get("VIDEO_MCP_URL", ""))
-    token = values.get("VIDEO_MCP_BEARER_TOKEN", "").strip()
+    url = _validate_mcp_url(values.get("STUDIO_MCP_URL", "") or values.get("VIDEO_MCP_URL", ""))
+    token = (values.get("STUDIO_MCP_BEARER_TOKEN", "") or values.get("VIDEO_MCP_BEARER_TOKEN", "")).strip()
     if not token or any(ord(char) < 0x20 or ord(char) == 0x7F for char in token):
-        raise ClientError("VIDEO_MCP_BEARER_TOKEN is missing or invalid")
+        raise ClientError("STUDIO_MCP_BEARER_TOKEN or VIDEO_MCP_BEARER_TOKEN is missing or invalid")
     configured_state = values.get("VERDANTFLARE_VIDEO_STATE_DIR", "").strip()
     state_dir = Path(os.path.expanduser(configured_state or "~/.local/state/verdantflare/video"))
     if not state_dir.is_absolute():
