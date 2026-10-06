@@ -15,6 +15,7 @@ import unittest
 ROOT_DIR = Path(__file__).resolve().parents[1]
 SKILL_DIR = ROOT_DIR / "skills" / "verdantflare-image"
 SCRIPTS_DIR = SKILL_DIR / "scripts"
+TEST_PROJECT_ID = "0199c6d3-6d00-7a21-8b4c-123456789abc"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 import image_client
@@ -54,7 +55,7 @@ class MockImageServerHandler(BaseHTTPRequestHandler):
                 "tasks": [
                     {
                         "task_id": "img-task-mock-01",
-                        "project_id": "test-project",
+                        "project_id": TEST_PROJECT_ID,
                         "status": status,
                         "engine": "gemini",
                         "model": "gemini-3.1-flash-image",
@@ -187,7 +188,7 @@ class TestVerdantflareImage(unittest.TestCase):
                     aspect_ratio="16:9",
                     resolution="2k",
                     quality="auto",
-                    project_id="test-project",
+                    project_id=TEST_PROJECT_ID,
                     idempotency_key="unit-01",
                     wait=True,
                     timeout=10.0,
