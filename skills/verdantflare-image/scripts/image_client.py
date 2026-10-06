@@ -13,6 +13,7 @@ import hashlib
 import json
 import mimetypes
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -22,10 +23,18 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_BASE_URL = ""
+PROJECT_ID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 
 
 class ImageClientError(Exception):
     """客户端执行异常。"""
+
+
+def validate_project_id(value: str) -> str:
+    """只接受 Studio 生成的 UUIDv7 Project ID。"""
+    if not isinstance(value, str) or not PROJECT_ID_PATTERN.fullmatch(value):
+        raise ImageClientError("project_id 必须是当前 Studio Project 生成的小写 UUIDv7，不能使用 default 或路径别名")
+    return value
 
 
 def find_env_file() -> Path | None:
@@ -148,7 +157,7 @@ def cmd_list(args: argparse.Namespace) -> int:
     base_url, token = load_config()
     query = {}
     if args.project_id:
-        query["project_id"] = args.project_id
+        query["project_id"] = validate_project_id(args.project_id)
     if args.engine:
         query["engine"] = args.engine
     if args.status:
@@ -304,7 +313,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
         return 1
 
     engine = (args.engine or "codex").lower()
-    project_id = args.project_id
+    project_id = validate_project_id(args.project_id)
     idempotency_key = args.idempotency_key or f"cli-{int(time.time() * 1000)}"
     resolved_model = args.model or ("gpt-image-2.5-sunburst" if engine == "codex" else "gemini-3.1-flash-image")
 
@@ -511,7 +520,7 @@ def main() -> int:
     sub_gen.add_argument("--resolution", choices=["2k", "4k"], default="2k", help="分辨率 (默认 2k)")
     sub_gen.add_argument("--quality", choices=["auto", "low", "medium", "high", "xhigh", "max", "hd", "standard"], default="high", help="图像质量 (默认 high)")
     sub_gen.add_argument("--background", choices=["auto", "transparent", "opaque"], default="auto", help="背景模式 (transparent 生成纯透明通道 PNG)")
-    sub_gen.add_argument("--project-id", default="default", help="项目标识 (默认 default)")
+    sub_gen.add_argument("--project-id", required=True, help="当前 Studio Project 的小写 UUIDv7 标识")
     sub_gen.add_argument("--idempotency-key", default="", help="客户端幂等业务键")
     sub_gen.add_argument("--wait", action="store_true", help="等待任务生成完成")
     sub_gen.add_argument("--timeout", type=float, default=180.0, help="轮询超时时间 (秒，默认 180)")
