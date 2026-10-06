@@ -12,7 +12,18 @@
 
 ---
 
-## 2. 标准执行步骤
+## 2. Project / World 接入
+
+开始调用前，先从当前 Studio 会话取得已打开的 `project_id`。它是服务生成的小写 UUIDv7；不得从本地目录、人物名称或 Prompt 拼出项目 ID，也不得把 `creator/demo-project` 这类旧示例当成生产值。
+
+- 新生成、外部导入和编辑结果都先写入当前 Project。Artifact 返回的 `artifact_id`、版本、SHA-256 和任务 ID 由 Project 提交登记；本地下载只是工作副本。
+- 输入来自 World 时，先调用 `world.get(asset_id, asset_version_id)`，核对授权并选择该版本中的具体文件。将解析出的 `ContentRef` 导入当前项目或作为 Image MCP 的参考；不传展示名、`latest`、临时 URL 或未解析的资产 ID。
+- 通过 `project.commit` 明确写入文件、`selections`、`asset_refs` 和审核 MD。图像批准后若确实可复用，才由上层调用 `world.register` 创建 `character-image` 固定版本；Image Skill 不自动发布 World。
+- 另一台电脑打开同一项目时从服务端恢复清单和入口文档。不要因为本地图片未下载而重新生成；先按清单读取或下载原 Artifact。
+
+---
+
+## 3. 标准执行步骤
 
 ```mermaid
 sequenceDiagram
@@ -40,7 +51,7 @@ sequenceDiagram
 
 ### 步骤一：参数解析与规格校验
 
-1. 确定项目标识 `project_id`（形如 `<creator>/<project_id>`，例如 `creator/demo-project`），禁止使用 `default`；
+1. 确定项目标识 `project_id`（来自当前 Studio Project 上下文的小写 UUIDv7），禁止使用 `default` 或路径别名；
 2. 构造客户端唯一幂等键 `idempotency_key`（例如 `B01/identity-01-v1`）；
 3. 引擎与模型选择：
    - 默认引擎：权威采用 `engine="codex"`（生图模型 `gpt-image-2.5-sunburst`，亦支持 `gpt-image-2.5-flare`），提供极致商业写真质感、真实毛孔细节与构图控制；
@@ -51,7 +62,7 @@ sequenceDiagram
 
 1. 外部素材必须先通过 HTTPS 可信源获取；
 2. 计算外部文件的 SHA-256；
-3. 调用 `artifact.import(project_id, source_url, filename, expected_sha256)`；
+3. 在当前 Project 上下文中调用 `artifact.import(project_id, source_url, filename, expected_sha256)`；
 4. 获得受控 `artifact_id` 后方可作为后续编辑或局部重绘的底图。
 
 ### 步骤三：发起异步任务
@@ -74,7 +85,7 @@ sequenceDiagram
 
 1. 调用 `image.result(task_id)`，获取 `download_path`（形如 `/image/artifacts/<artifact_id>/content`）、`sha256`、`size_bytes`；
 2. 向 `${IMAGE_MCP_URL}`（或网关端点）+ `download_path` 发送 HTTP GET 请求，携带 `Authorization: Bearer <IMAGE_MCP_BEARER_TOKEN>`；
-3. 将二进制流保存到本地项目指定目录（如 `.output/projects/<project_id>/source/<subpath>`）。
+3. 将二进制流保存到当前项目工作目录的相对路径（如 `source/<subpath>`），由 `project.commit` 登记；不要把本地绝对路径或存储 URL 写入共享清单。
 
 ### 步骤六：本地 SHA-256 完整性检验
 

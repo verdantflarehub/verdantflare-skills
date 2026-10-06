@@ -6,7 +6,7 @@
 
 ## 1. 角色设计四视图（人物圣经 / Visual Bible）
 
-用于建立并永久锁定项目中人物的唯一身份事实（Identity Design）。一经用户批准，后续段落直接复用；用户要求更改身份设计时新建版本，不覆盖旧资产。
+用于建立并永久锁定项目中人物的唯一身份事实（Identity Design）。一经用户批准，后续段落直接复用；用户要求更改身份设计时新建版本，不覆盖旧资产。若该形象需要跨项目复用，先在来源 Project 中保存并审核，再登记为 World `character-image` 固定版本。
 
 ### 1.1 资产清单与构图标准
 
@@ -87,10 +87,10 @@
 
 ## 5. 项目归档与目录规范
 
-所有生产成功的不可变图像统一落盘归档至项目专属原子素材目录：
+所有生产成功的不可变图像先落盘到当前 Project 工作目录的相对路径；服务端由 `project.commit` 保存 Artifact 和文件关系。下面是本地工作副本示意，不是服务端存储路径，也不要求客户端扫描目录自动入库：
 
 ```text
-.output/projects/<project_id>/source/
+<project-root>/source/
 ├── identity/                         # 全局人物设计
 │   ├── 01-front-neutral.png
 │   ├── 02-front-smile.png

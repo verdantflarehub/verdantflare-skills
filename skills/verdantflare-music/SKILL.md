@@ -7,6 +7,8 @@ description: 使用 VerdantFlare Music 创作、翻唱、换声、母带或局�
 
 先确定用户要完成的阶段，从已有项目记录与 Artifact 继续；只做歌词、企划或单项修复时不扩展成整曲制作。对同一请求中无需新艺术决定的准备、技术检查和后续工具调用连续执行。
 
+Project、Artifact 和 World 的归属遵循[共同接入规则](../_shared/project-world.md)。歌曲、分轨和母带默认留在来源 Project；训练完成且明确可复用的人声模型才登记到 [World / Music](../../../docs/design/world/music/voice-model.md)，后续歌曲固定引用 `asset_id + asset_version_id`，不重复训练。
+
 用户要求研发或优化本技能时，处理通用工作流与能力契约，不以某首歌作为默认交付，也不自动运行音乐生成、转换或远端部署。先核对技能说明、本地服务实现、实际部署工具三者的差异；只把真实可用的能力写成可执行步骤。按 [技能研发检查](references/skill-development.md) 维护配置、文档与验证边界。
 
 ## 一键能力路由

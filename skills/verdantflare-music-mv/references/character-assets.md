@@ -61,6 +61,8 @@
 
 ## 三、Character Card 合成规范（Picture 1 Composite）
 
+人物设计可以来自当前 Project 的已批准文件，或来自 World 的固定 `character-image` 版本。使用 World 时先以 `asset_id + asset_version_id` 调用 `world.get`，只选择该版本明确授权的图片和说明，再把实际文件映射到当前 Project 的 `source/` 并在 `project.json`/`input/manifest.json` 中记录用途；不能直接读取来源项目全部候选，也不能使用 `latest`。
+
 通过 `source/build/compose_inputs.go` 脚本，将全局“人物设计”与单元“角色设计”确定性编译为 `input/01-character-card.png`：
 
 ```text

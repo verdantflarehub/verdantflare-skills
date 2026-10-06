@@ -7,7 +7,7 @@
 ```bash
 # 1. 提交生图任务并等待下载完成 (默认 engine=codex, model=gpt-image-2.5-sunburst, 自动校验 SHA-256)
 python3 scripts/image_client.py generate \
-  --project-id "creator/demo-project" \
+  --project-id "0199c0a0-0000-7000-8000-000000000001" \
   --prompt "[Scene] Cyberpunk neon street. [Subject] Woman in rain. [Details] 35mm photo. [Constraints] No plastic skin." \
   --engine codex \
   --model gpt-image-2.5-sunburst \
@@ -17,14 +17,14 @@ python3 scripts/image_client.py generate \
 
 # 2. 极速探索模式 (使用 gpt-image-2.5-flare)
 python3 scripts/image_client.py generate \
-  --project-id "creator/demo-project" \
+  --project-id "0199c0a0-0000-7000-8000-000000000001" \
   --prompt "A fast draft concept of a futuristic rover on Mars" \
   --model gpt-image-2.5-flare \
   --output ./rover-draft.png
 
 # 3. 透明背景生成 (background=transparent)
 python3 scripts/image_client.py generate \
-  --project-id "creator/demo-project" \
+  --project-id "0199c0a0-0000-7000-8000-000000000001" \
   --prompt "Isolated glass perfume bottle, centered, crisp alpha edges" \
   --background transparent \
   --aspect-ratio 1:1 \
@@ -34,7 +34,7 @@ python3 scripts/image_client.py generate \
 python3 scripts/image_client.py stats
 
 # 5. 列出项目历史任务
-python3 scripts/image_client.py list --project-id "creator/demo-project"
+python3 scripts/image_client.py list --project-id "0199c0a0-0000-7000-8000-000000000001"
 
 # 6. 查询特定任务详情
 python3 scripts/image_client.py status <task-id>

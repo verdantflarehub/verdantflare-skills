@@ -7,6 +7,8 @@ description: 通过 VerdantFlare Image MCP 生成或编辑图像候选，包括�
 
 交付具有不可变 Artifact 与 SHA-256 的图像候选；不负责 MV 导演或剪辑。仅解释或修改代码时不启动生图。
 
+Project 归属、换电脑恢复、Artifact 保存及 World 固定资产引用遵循[共同接入规则](../_shared/project-world.md)。生成或导入结果先保存到当前 Project；确认可复用后，按 [World / Character 形象基线](../../../docs/design/world/character/identity.md) 显式登记固定版本。
+
 | 当前操作                               | 按需读取                                            |
 | -------------------------------------- | --------------------------------------------------- |
 | 构造生成、编辑、遮罩或导入请求         | [调用契约](references/contracts.md) 的对应工具章节  |

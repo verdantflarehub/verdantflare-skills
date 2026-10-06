@@ -23,14 +23,14 @@
 - **入参（JSON Schema）**：
   ```json
   {
-    "project_id": "creator/demo-project",
+    "project_id": "0199c0a0-0000-7000-8000-000000000001",
     "source_url": "https://assets.example.com/assets/ref-face.png",
     "filename": "01-front-neutral-ref.png",
     "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   }
   ```
 - **参数说明**：
-  - `project_id` (string, 必填)：所属项目标识，用于目录与数据隔离。
+  - `project_id` (string, 必填)：当前 Studio Project 的服务生成 UUIDv7，用于业务授权和项目归属；不能从目录或文件名推导。
   - `source_url` (string, 必填)：待下载外部资源的 HTTPS 链接，必须在允许来源白名单内。
   - `filename` (string, 必填)：目标产物文件名。
   - `expected_sha256` (string, 必填)：64 位十六进制 SHA-256 哈希值。哈希不匹配时导入中止并报错。
@@ -38,10 +38,10 @@
   ```json
   {
     "status": "completed",
-    "project_id": "creator/demo-project",
+    "project_id": "0199c0a0-0000-7000-8000-000000000001",
     "artifact": {
       "artifact_id": "art-9f82d1c0",
-      "project_id": "creator/demo-project",
+      "project_id": "0199c0a0-0000-7000-8000-000000000001",
       "filename": "01-front-neutral-ref.png",
       "sha256": "e3b0c442...",
       "size_bytes": 1048576,
@@ -61,7 +61,7 @@
 - **入参（JSON Schema）**：
   ```json
   {
-    "project_id": "creator/demo-project",
+    "project_id": "0199c0a0-0000-7000-8000-000000000001",
     "idempotency_key": "B01/wardrobe-v1",
     "prompt": "Cinematic concept artwork, 7.5 heads ratio mannequin wearing futuristic dark-blue mechanic outfit, clean neutral background, no text",
     "engine": "codex",
@@ -73,7 +73,7 @@
   }
   ```
 - **参数说明**：
-  - `project_id` (string, 必填)：项目标识。
+  - `project_id` (string, 必填)：当前 Studio Project 的服务生成 UUIDv7。
   - `idempotency_key` (string, 必填)：客户端幂等性业务键（格式推荐 `<unit_id>/<attempt_id>`）。同一项目下相同键不会重复生成，直接复用既有记录。
   - `prompt` (string, 必填)：生图提示词，建议采用官方四段式结构（`[Scene]`、`[Subject]`、`[Details]`、`[Constraints]`），精准文字须置于英文双引号内。
   - `engine` (string, 可选)：底层 API 引擎驱动。**默认权威指定为 `"codex"`**，亦可选 `"gemini"`。
@@ -105,7 +105,7 @@
 - **入参（JSON Schema）**：
   ```json
   {
-    "project_id": "creator/demo-project",
+    "project_id": "0199c0a0-0000-7000-8000-000000000001",
     "idempotency_key": "B01/wardrobe-v2-edit",
     "source_artifact_id": "art-9f82d1c0",
     "reference_artifact_ids": [
@@ -138,7 +138,7 @@
 - **入参（JSON Schema）**：
   ```json
   {
-    "project_id": "creator/demo-project",
+    "project_id": "0199c0a0-0000-7000-8000-000000000001",
     "idempotency_key": "F02/fix-face-v1",
     "source_artifact_id": "art-9f82d1c0",
     "mask_artifact_id": "art-mask-8b21c4e1",
@@ -188,7 +188,7 @@
   {
     "task_id": "img-task-a72e81fc",
     "artifact_id": "art-3c4d5e6f",
-    "project_id": "creator/demo-project",
+    "project_id": "0199c0a0-0000-7000-8000-000000000001",
     "filename": "wardrobe-v1.png",
     "sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
     "size_bytes": 2621440,
@@ -223,7 +223,7 @@
     "tasks": [
       {
         "task_id": "img-task-a72e81fc",
-        "project_id": "creator/demo-project",
+        "project_id": "0199c0a0-0000-7000-8000-000000000001",
         "status": "completed",
         "engine": "codex",
         "model": "gpt-image-2.5-sunburst",
@@ -243,7 +243,14 @@
 
 ## 3. 产物落盘与文件下载
 
-任务完成后，不可变图片已在服务端落盘（存储于持久卷 `/data/projects/{project_id}/` 下）。
+任务完成后，不可变图片已由 Artifact 服务保存。实际 S3 key、卷路径和下载 URL 都是服务内部细节，客户端只能使用受控的 `ContentRef`/下载路径，不能根据 `project_id` 拼接存储地址。
+
+### 3.1 Project / World 记录规则
+
+- Image MCP 的任务输出先作为当前 Project 的文件候选，由 Studio `project.commit` 登记 `file_id`、`content_ref`、`run_refs` 和 `selections`；`review.md` 记录人工选择理由。
+- 使用 `character-image` World 资产时，先由 Studio `world.get` 解析固定的 `asset_id + asset_version_id`，再把选定文件的具体 `ContentRef` 作为 `source_artifact_id` 或参考文件。资产版本不存在、未授权或文件未就绪时停止。
+- 用户确认某组图像可跨项目复用后，调用 `world.register` 并明确文件 ID、来源修订和 `relation`。World 注册保留来源 Project，不移动或覆盖源文件；Image MCP 不自动发布资产。
+- 新的 Image 结果默认属于来源 Project。不要因为图片看起来像人物资产，就把它直接写进 World，也不要让新结果静默替换其他 Project 已固定的版本。
 
 客户端获取图像内容流程：
 

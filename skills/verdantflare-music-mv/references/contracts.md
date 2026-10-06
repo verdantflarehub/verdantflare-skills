@@ -2,11 +2,11 @@
 
 ## 1. 目录结构契约
 
-项目存储在 `.output/music-mv/<创作者>/<MV项目>/`，分为“项目全局层”与“单元执行层”：
+项目可以沿用工作区的 `.output/music-mv/<创作者>/<MV项目>/`，但目录只是 Project 工作副本；服务端身份由 Studio `project_id` 管理。项目分为“项目全局层”与“单元执行层”：
 
 ```text
 .output/music-mv/<创作者>/<MV项目>/
-├── project.yaml                 # 项目全局时钟与元数据
+├── project.json                 # 领域 JSON：项目全局时钟与元数据
 ├── treatment.md                 # 顶层导演方案与叙事脉络
 ├── visualbible.md              # 视觉圣经与人物原案
 ├── review.md                    # 【项目全局总审核：审核 Block 规划列表、跨段连续性与成片交付】
@@ -32,6 +32,16 @@
             ├── generated/       # 模型生成的原始视频与尝试记录
             └── baseline/        # 上一版本优秀基线对照
 ```
+
+项目根目录另有：
+
+```text
+.vf/
+├── project.json   # 通用 ProjectManifest 投影；由 Studio 生成和提交
+└── local.json     # 仅本机的连接、基础修订和下载状态
+```
+
+根目录 `project.json` 是 Music-MV 的领域文档，必须登记到通用清单的 `domain_documents`；`.vf/project.json` 是通用工程清单。两者不得复制对方的字段。旧工程的 `project.yaml` 只作为一次性导入输入，导入后生成 JSON 并停止维护 YAML；新工程不生成 YAML。
 
 > [!IMPORTANT]
 > **文件命名契约红线（严禁中文文件名）**：
@@ -61,7 +71,7 @@
 
 ## 3. 机器输入契约 (`input/manifest.json`)
 
-`input/manifest.json` 是提交给模型前唯一的机器可读不可变契约，记录输入包的哈希、版式及与审核文档的关联：
+`input/manifest.json` 是提交给模型前的领域机器可读不可变契约，记录输入包的哈希、版式及与审核文档的关联；它是 Project 文件之一，不替代 `.vf/project.json`：
 
 ```json
 {
@@ -141,66 +151,91 @@
 
 所有区间采用左闭右开 `[start_ms, end_ms)`，按 `start_ms` 升序，不允许重叠或空洞；第一镜从 `0` 开始，最后一镜的 `end_ms` 等于 Master 实际时长。
 
-```yaml
-mv_id: mv_20260831_001
-music_asset_version_id: music_version_001
-master_artifact_id: artifact_master_001
-master_duration_ms: 200000
-timeline_version: 1
-status: draft
-shots:
-  - shot_id: shot_010
-    start_ms: 42000
-    end_ms: 47500
-    shot_type: performance
-    lyric_context: "批准歌词及演唱状态"
-    beat_events_ms: [42000, 43500, 45000, 46500]
-    visual_intent: "副歌首次进入，正面近景建立歌手身份"
-    continuity_state_id: continuity_chorus_a
-    source_plan:
-      type: generated_take
-      generation_unit_id: gen_007_v1
-      in_ms: 1000
-      out_ms: 6500
-    review_status: pending
+```json
+{
+  "mv_id": "mv_20260831_001",
+  "music_asset_version_id": "music_version_001",
+  "master_artifact_id": "artifact_master_001",
+  "master_duration_ms": 200000,
+  "timeline_version": 1,
+  "status": "draft",
+  "shots": [
+    {
+      "shot_id": "shot_010",
+      "start_ms": 42000,
+      "end_ms": 47500,
+      "shot_type": "performance",
+      "lyric_context": "批准歌词及演唱状态",
+      "beat_events_ms": [42000, 43500, 45000, 46500],
+      "visual_intent": "副歌首次进入，正面近景建立歌手身份",
+      "continuity_state_id": "continuity_chorus_a",
+      "source_plan": {
+        "type": "generated_take",
+        "generation_unit_id": "gen_007_v1",
+        "in_ms": 1000,
+        "out_ms": 6500
+      },
+      "review_status": "pending"
+    }
+  ]
+}
 ```
 
 允许的 `shot_type` 为 `performance`、`narrative`、`concept`、`insert` 和 `editorial`。`source_plan.type` 必须明确为 `generated_take`、`approved_asset` 或 `storyboard_placeholder`；冻结时间线和最终装配不得包含 `storyboard_placeholder`。
 
-## 5. Generation Unit
+## 6. Generation Unit
 
-```yaml
-generation_unit_id: gen_007_v1
-mv_id: mv_20260831_001
-model: minimax-h3-ref2va
-status: frozen
-duration_ms: 12000
-frame_rate: 24
-aspect_ratio: "9:16"
-unit_form: continuous_single_shot
-prompt: "由批准 Treatment、Visual Bible、单元形态和镜头意图编译的 H3 六段式提示"
-references:
-  images:
-    - asset_version_id: appearance_version_003
-      artifact_id: artifact_portrait_front
-      purpose: identity
-  videos:
-    - artifact_id: artifact_motion_reference_021
-      purpose: performance
-  audios:
-    - artifact_id: artifact_master_excerpt_42000_54000
-      purpose: rhythm_and_performance
-continuity:
-  state_id: continuity_chorus_a
-  previous_tail_frame_artifact_id: artifact_gen_006_tail
-candidate_count: 1
+```json
+{
+  "generation_unit_id": "gen_007_v1",
+  "mv_id": "mv_20260831_001",
+  "model": "minimax-h3-ref2va",
+  "status": "frozen",
+  "duration_ms": 12000,
+  "frame_rate": 24,
+  "aspect_ratio": "9:16",
+  "unit_form": "continuous_single_shot",
+  "prompt": "由批准 Treatment、Visual Bible、单元形态和镜头意图编译的 H3 六段式提示",
+  "references": {
+    "images": [
+      {
+        "asset_version_id": "appearance_version_003",
+        "artifact_id": "artifact_portrait_front",
+        "purpose": "identity"
+      }
+    ],
+    "videos": [
+      {
+        "artifact_id": "artifact_motion_reference_021",
+        "purpose": "performance"
+      }
+    ],
+    "audios": [
+      {
+        "artifact_id": "artifact_master_excerpt_42000_54000",
+        "purpose": "rhythm_and_performance"
+      }
+    ]
+  },
+  "continuity": {
+    "state_id": "continuity_chorus_a",
+    "previous_tail_frame_artifact_id": "artifact_gen_006_tail"
+  },
+  "candidate_count": 1
+}
 ```
 
-`unit_form` 只允许 `continuous_single_shot` 或 `internal_multi_shot`。连续单镜以动作 beat 组织且不得包含 cut；内部多镜最多 2–3 个 Shot，切点严格递增并位于单元时长内。
+`unit_form` 只允许 `continuous_single_shot` 或 `internal_multi_shot`。连续单镜以动作 beat 组织且不得包含 cut；内部多镜最多 2–3 个 Shot，切点严格递增并位于单元时长内。上述 JSON 只是领域文档示例；通用工程文件、Artifact 引用和任务记录仍由 ProjectManifest 管理。
 
 提交前验证：状态为 `frozen`；包含的内部 Shot 严格满足三同定律（同一角色、同一地点、同一时间）；时长严格介于 4000 至 15000 毫秒（<=15s）；模型为 `minimax-h3-ref2va`；单元形态已冻结；引用均为不可变 Artifact；动作参考视频覆盖目标时长；音频片段来自批准 Master；Prompt 使用 H3 Ref2VA 六段式结构且不含基础设施参数。
 
-## 6. Artifact 关系与不可变历史
+### 6.1 World 资产输入解析
+
+- 人物形象、歌曲 Master 或动作参考若来自 World，先通过 `world.get(asset_id, asset_version_id)` 读取固定版本，核对权限和完整文件集合；不能只拿展示名或 `latest`。
+- 将实际使用的文件以 `ContentRef` 登记到当前 MV Project 的 `asset_refs` 或 `selections`，并在 `input/manifest.json` 中记录输入用途和摘要。`asset_version_id` 变化必须产生新的领域文档/Generation Unit 版本并重新过审核门。
+- `world.register` 只在用户确认 MV 产物本身可跨项目复用时由上层显式调用；本 Skill 不把每个视频候选或 `input/manifest.json` 自动发布为 World 资产。
+
+## 7. Artifact 关系与不可变历史
 
 每个 Shot Candidate 至少关联：
 

@@ -6,7 +6,7 @@
 
 ```json
 {
-  "project_id": "project_anxi_mv",
+  "project_id": "0199c0a0-0000-7000-8000-000000000021",
   "idempotency_key": "gen_007_v1/attempt_01",
   "model": "minimax-h3-ref2va",
   "route": "fal",
@@ -25,6 +25,7 @@
 
 - `project_id` 来自当前 Studio/项目上下文。所有引用 Artifact 必须属于同一项目；不得从文件名、Prompt 或其他任务猜测项目，也不得复用其他项目的 Artifact ID。
 - `route` 是本次 Attempt 已解析并冻结的推理渠道。即使采用宿主默认渠道，也必须先解析为明确值再提交；当前规范值包括默认 `h3-vdn` 和显式 `fal`，其他值只在宿主能力声明支持时使用。
+- 若输入来自 World，调用方必须在提交前解析固定的 `asset_id + asset_version_id`，并将选定文件的实际 Artifact 引用编译到 `references`。Video MCP 只接收当前 Project 有权使用的 Artifact，不负责按名称查询 World，也不接受 `latest` 或临时 URL。
 - `route=fal` 只对应 `model=minimax-h3-ref2va` 的 Reference-to-Video。它不开放 fal 的 T2V、I2V、FL2V、Prompt Expansion 或 LoRA，也不允许客户端传入 fal endpoint、供应商 request ID 或 `FAL_KEY`。
 
 成功返回领域 `video_task_id`、接受时间和 `queued` 或 `running`。相同幂等键和相同输入返回原任务；相同幂等键和不同输入返回冲突。
@@ -68,6 +69,8 @@
 ```
 
 领域 MCP 不暴露 Pod、节点、GPU、offload、SGLang 参数、内部文件路径或 Runtime Task ID。
+
+任务完成后，输出候选先登记到当前 Project 的 `files`、`run_refs` 和领域文档；用户明确确认可复用时，才由 Studio `world.register` 创建新的 World 版本。Video Skill 不修改 World head，也不替换其他项目已经固定的 `asset_version_id`。
 
 ## 推理路线选择
 

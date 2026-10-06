@@ -7,6 +7,8 @@ description: 统一通过 Video MCP 选择视频模型与渠道，执行生成�
 
 本 Skill 只有一个 Video MCP 入口。用户未指定模型时使用宿主配置的默认模型与渠道；当前生产默认模型为 H3，默认渠道为 `h3-vdn`。用户可以显式指定已由宿主能力声明支持的模型简称 `model`（如 `h3`、`sd2`）与推理渠道 `route`（如 `h3-vdn`、`fal`），Skill 不把渠道写死，也不静默回退。
 
+Project、Artifact 和 World 的生命周期遵循[共同接入规则](../_shared/project-world.md)。提交前若输入来自 World，先解析并授权固定 `asset_id + asset_version_id`，再使用其中明确的 `ContentRef`；Video 输出先归档到当前 Video Project，Skill 不直接注册或升级 World 资产。
+
 `fal` 已开放为 H3 Ref2VA 的显式渠道，固定使用业务模型 `minimax-h3-ref2va` 和服务端 endpoint `minimax/h3/reference-to-video`。它不是默认渠道；提交前必须确认宿主 MCP 声明 `route=fal` 可用。凭据缺失、渠道拒绝或状态不确定时保留原任务记录并停止，不得回退到 `h3-vdn`、`h3-sol` 或其他渠道，也不得由 Skill 持有或发送 `FAL_KEY`。
 
 命令行统一使用 `scripts/video_client.py`。选择 `model=minimax-h3-ref2va`、`route=fal` 时，该客户端优先读取 `STUDIO_MCP_URL` 和 `STUDIO_MCP_BEARER_TOKEN`（或兼容回退 `VIDEO_MCP_URL` / `VIDEO_MCP_BEARER_TOKEN`），通过 MCP 工具完成 Artifact 导入、生成、查询、结果读取和恢复；不另设 fal 专用客户端，也不把 fal 请求误投到 SD2 公共 API。

@@ -2,7 +2,7 @@
 
 ## 工具契约
 
-调用 `voice.prepare(project_id, audio_asset_ids)`，其中 `audio_asset_ids` 是同一项目内按期望合并顺序排列的 1–20 个唯一音频 Artifact ID。不得传路径、URL、Base64 或未授权录音。
+调用 `voice.prepare(project_id, audio_asset_ids)`，其中 `project_id` 必须来自当前 Studio Project 上下文，`audio_asset_ids` 是同一项目内按期望合并顺序排列的 1–20 个唯一音频 Artifact ID。不得传路径、URL、Base64 或未授权录音。训练原始录音、准备报告和人工审核仍属于来源 Project；训练完成后由明确的项目提交登记模型输出。
 
 服务固定执行以下处理，不接受可调参数：40 kHz、16-bit、mono PCM WAV；样本峰值不高于约 -2 dBFS；以 -50 dBFS 判断静音；连续静音达到 1 秒时切割；连接处合计保留约 0.8 秒；头尾静音不超过 1 秒；小于 0.2 秒的孤立活动毛刺按同一静音区间处理。短停顿和呼吸保留。
 
@@ -28,3 +28,5 @@
 - 报告中的静音上限、峰值、时长、F0 分布和高音覆盖是否与试听一致。
 
 可接受决定只有：批准当前 `voice-training.wav`；剔除明确来源后重新准备；补充授权录音后重新准备；终止训练。未明确批准时保持待审核，不得调用 `voice.train`。
+
+训练完成得到的模型包仍先归来源 Project。若用户确认它是可复用资产，使用 `voice-model.json` 描述实际模型格式、权重/索引/配置用途和验证证据，提交后由上层调用 `world.register(asset_type="voice-model")` 创建 World/music 固定版本。World 版本只选入明确可分享的模型文件和说明；原始录音、训练集合、授权证据和私有审核仍保留在来源 Project。后续歌曲使用该固定版本时不得重新训练。

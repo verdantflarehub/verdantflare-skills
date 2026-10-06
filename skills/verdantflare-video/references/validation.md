@@ -3,6 +3,7 @@
 ## 输入
 
 - `project_id` 必须来自当前项目上下文，且所有引用 Artifact 都属于该项目；
+- 使用 World 输入时，Project 必须同时记录固定的 `asset_id + asset_version_id`；解析出的每个文件必须来自该资产版本的授权集合；
 - `model` 必须为 `minimax-h3-ref2va`；
 - `route` 必须显式传入，并且存在于宿主 MCP 当前能力声明中；
 - `duration_seconds` 和 `aspect_ratio` 必须满足所选渠道的已批准契约；
