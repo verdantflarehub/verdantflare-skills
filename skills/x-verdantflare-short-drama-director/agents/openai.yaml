@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Director"
+  short_description: "Turn scripts and briefs into validated shot plans"
+  default_prompt: "Use $x-verdantflare-short-drama-director to turn this script or brief into a treatment and validated shot plan."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Commercial Production"
+  short_description: "Produce and review brand and product video work"
+  default_prompt: "Use $x-verdantflare-short-drama-commercial-production to develop this brand or product video brief with claim review."

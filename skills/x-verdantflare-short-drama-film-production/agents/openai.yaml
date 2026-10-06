@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Film Production"
+  short_description: "Move film scenes from plan to reviewed candidates"
+  default_prompt: "Use $x-verdantflare-short-drama-film-production to advance this film scene through assets, shots, candidates, and review."

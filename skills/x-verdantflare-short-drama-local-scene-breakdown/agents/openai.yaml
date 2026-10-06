@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Local Scene Breakdown"
+  short_description: "Extract source anchored facts from one local scene"
+  default_prompt: "Use $x-verdantflare-short-drama-local-scene-breakdown to extract source anchored facts and action beats from this local scene."
