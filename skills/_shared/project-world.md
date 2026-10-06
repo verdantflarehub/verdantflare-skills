@@ -2,6 +2,9 @@
 
 四个制作 Skill 都运行在当前 Studio Project 上下文中。Skill 不创建第二套项目数据库，也不从本地目录、文件名或 Prompt 猜项目身份。
 
+执行本地文件保存、按需下载、跨电脑打开或外部 MCP 调用时，读取[统一客户端入口](project-world-client.md)。
+使用 Studio 的 `studio-workspace`，复用服务生成清单和已有恢复日志；四个 Skill 不另写上传恢复程序。
+
 ## 共同规则
 
 1. 新任务使用 Studio 提供的 `project_id`。新建项目时由 `project.create` 生成小写 UUIDv7；Skill 只传递已打开的 ID，不自行生成、拼接或使用 `default`、`creator/name` 这类别名。
