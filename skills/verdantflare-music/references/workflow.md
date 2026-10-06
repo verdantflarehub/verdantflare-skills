@@ -4,6 +4,19 @@
 
 按 `preflight.md` 核对当前阶段的必要条件。原创企划可立即写；首次远端调用前，若 MCP 提供 `workflow.preflight` 则使用，否则按旧版兼容路径执行。已有项目从最后一项未完成且适用的决定继续，不重复已获批或已完成的任务。用户明确选择旧版服务时不转向部署排障。
 
+## 先选一个一键入口
+
+不要从本文件的完整制作链直接猜用户意图，先按 `SKILL.md` 的一键能力路由选择入口：
+
+- 新歌且没有参考音频：读[一键独立生成](one-click-independent-generation.md)。
+- 只需要从音频得到可编辑曲谱：读[一键提取曲谱](one-click-score-extraction.md)。
+- 有参考音频、风格和匹配歌词，但不要求锁定旋律：读[一键无曲谱翻唱](one-click-cover.md)。
+- 需要锁定参考旋律：读[一键曲谱约束翻唱](one-click-score-constrained-cover.md)；只有需要单独查看曲谱时才直接读[一键提取曲谱](one-click-score-extraction.md)。
+- 只替换既有歌曲中的一位歌手：读[一键单歌手换声](one-click-voice-replacement.md)。
+- 需要男女声部：读[一键男女对唱](one-click-duet.md)；三人及以上改读[一键多人合唱](one-click-ensemble.md)。
+
+一键入口只定义用户体验和验证边界；实际调用仍须以当前 MCP 工具签名、本地服务和部署状态为准。
+
 ## 既有歌曲重新演绎
 
 当用户明确指定一首其有权处理的完整歌曲，并选择已批准的人声模型时，采用重新演绎分支：
