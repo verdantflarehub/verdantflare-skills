@@ -15,6 +15,10 @@ loopback HTTP。旧共享媒体 token 不具备 Project/World 管理权限；认
 
 直接可用的 Studio MCP 工具仍优先使用；CLI 是需要本地文件读写或外部进程调用时的入口。
 
+认证排查见 [环境说明](../ENVIRONMENT.md)。媒体工具可见而 `project.*` / `artifact.*` 不可见时，先检查令牌类型；使用已有授权登录信息恢复真实会话，再重新发现工具。不要伪造项目或主体头，也不要把“客户端未适配”报告成“服务不可用”。
+
+当前 `studio-workspace` CLI 接受真实Core主体的Bearer会话，不直接读取浏览器Cookie。宿主的Cookie登录会话与CLI的Bearer输入不能互换；仅有Cookie时使用宿主提供的受控文件传输或会话适配，不能把Cookie值当Bearer传给CLI。
+
 ## 显式工作副本操作
 
 每次显式传入已打开的服务 `project_id`、本地目录和连接别名。目录必须已存在；
@@ -57,5 +61,6 @@ CLI 不从文件名、下载成功或先前使用推断已批准入库。
 
 已有制作结果可作为显式用户导入保存，仍保留原任务 ID 和原始文件。CLI 不伪造
 `task_output` 或 `original_ref`，可信原生产物映射必须由相应服务适配器完成。
+只有原生Artifact结果时，保存到中央Artifact并提交Project后才具备跨电脑恢复的文件引用；`image.result` 或 `video.result` 成功本身不证明这一步已完成。中央 `ContentRef` 也不能直接当作生成服务的原生 `source_artifact_id`。
 导入旧 YAML/音乐/MV 清单时仍按各 Skill 的兼容规则转换为领域 JSON；本入口不扫描
 目录，也不自动替用户选择素材或升级资产版本。

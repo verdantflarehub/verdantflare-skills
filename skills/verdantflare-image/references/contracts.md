@@ -1,260 +1,58 @@
-# VerdantFlare Image MCP 工具与接口契约
+# Image经Studio调用说明
 
-本文档详述 VerdantFlare Image MCP 服务的工具定义、参数结构、数据模型与生命周期状态机。所有智能体与客户端在构造请求或解析响应时均须以此为准。
+本页说明Skill需要的调用语义，不替代宿主实际工具Schema或中央Project/Artifact契约。开始时使用真实Studio会话执行 `tools/list`，再选择已注册工具；认证见 [环境说明](../../ENVIRONMENT.md)。
 
----
+## 工具名与必需上下文
 
-## 1. 认证与端点
+| 操作 | 现有网关注册名 | 说明 |
+| --- | --- | --- |
+| 文生图 | `image.create` | 传Prompt、项目、幂等键及已支持的图像参数 |
+| 编辑 | `image.edit` | 主参考 `source_artifact_id`，可选附加参考列表 |
+| 局部重绘 | `image.inpaint` | 主参考与遮罩引用；形状和尺寸按当前契约核对 |
+| 状态 | `image.status` | 用原始 `task_id` 查询 |
+| 结果 | `image.result` | 完成后取得原生Artifact、摘要及下载信息 |
 
-- **公网基础端点**：`POST ${IMAGE_MCP_URL}`
-- **监控看板**：`GET ${IMAGE_MCP_URL}/dashboard`
-- **REST 任务统计**：`GET ${IMAGE_MCP_URL}/api/tasks/stats`
-- **产物下载接口**：`GET ${IMAGE_MCP_URL}/artifacts/{artifact_id}/content`
-- **HTTP 鉴权**：`Authorization: Bearer <IMAGE_MCP_BEARER_TOKEN>`
+历史 `image.generate`、`image.list` 仅在宿主实际注册并明确语义时使用。当前不假定存在 `artifact.import`，也不向网关发送文档中未注册的别名。
 
----
+即使旧Schema把字段标为可选，制作任务仍显式提供服务生成的 `project_id` 和固定 `idempotency_key`。样例中的标识只解释字段，不能直接提交：
 
-## 2. 工具列表与契约
+```json
+{
+  "project_id": "<当前Studio项目ID>",
+  "idempotency_key": "B01/wardrobe-v1/attempt-01",
+  "prompt": "A single full-body wardrobe reference on a plain neutral background.",
+  "engine": "codex",
+  "model": "gpt-image-2.5-sunburst",
+  "aspect_ratio": "16:9",
+  "resolution": "2k",
+  "quality": "high",
+  "background": "opaque"
+}
+```
 
-### 2.1 `artifact.import`
+这是 `image.create` 的示意参数；可选字段只在当前实现支持时传入。`resolution` 是请求规格，不能证明返回图片已经达到该尺寸；下载后解码核验。`quality` 使用宿主支持的枚举，不把历史 `hd`、`xhigh`、`max` 宣称为所有模型的通用值。
 
-导入外部已批准的参考素材（如真人正面近照、角色设计图底图），经 SHA-256 完整性校验后转存为受控不可变 Artifact。
+编辑在相同项目、幂等上下文下传入 `source_artifact_id`、可选 `reference_artifact_ids` 和编辑Prompt。说明每张图保留面容、服装、场景中的哪些内容，明确允许修改什么。`image.edit` 与 `image.create` 的尺寸字段可能不同，不能把 `aspect_ratio`、`resolution`、`size` 无条件互换；从当前Schema或匹配部署版本的接口说明确认。
 
-- **入参（JSON Schema）**：
-  ```json
-  {
-    "project_id": "0199c0a0-0000-7000-8000-000000000001",
-    "source_url": "https://assets.example.com/assets/ref-face.png",
-    "filename": "01-front-neutral-ref.png",
-    "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  }
-  ```
-- **参数说明**：
-  - `project_id` (string, 必填)：当前 Studio Project 的服务生成 UUIDv7，用于业务授权和项目归属；不能从目录或文件名推导。
-  - `source_url` (string, 必填)：待下载外部资源的 HTTPS 链接，必须在允许来源白名单内。
-  - `filename` (string, 必填)：目标产物文件名。
-  - `expected_sha256` (string, 必填)：64 位十六进制 SHA-256 哈希值。哈希不匹配时导入中止并报错。
-- **返回结构**：
-  ```json
-  {
-    "status": "completed",
-    "project_id": "0199c0a0-0000-7000-8000-000000000001",
-    "artifact": {
-      "artifact_id": "art-9f82d1c0",
-      "project_id": "0199c0a0-0000-7000-8000-000000000001",
-      "filename": "01-front-neutral-ref.png",
-      "sha256": "e3b0c442...",
-      "size_bytes": 1048576,
-      "media_type": "image/png",
-      "created_at": "2026-09-09T12:00:00Z"
-    },
-    "download_path": "/image/artifacts/art-9f82d1c0/content"
-  }
-  ```
+## 中央素材与Image原生引用
 
----
+中央Artifact以 `ContentRef = store_id + artifact_id + version_id` 固定版本。现存Image服务可能使用自己的原生Artifact ID；两者不是同一引用格式，不能只取中央的 `artifact_id` 填入 `source_artifact_id`。
 
-### 2.2 `image.generate`
+1. 本地原图通过 `studio-workspace import` 保存到当前Project；远端/World文件先核验权限与固定版本。新内容走中央Artifact，不让客户端直接写S3。
+2. 使用宿主提供的素材适配获得Image可读取的项目内引用。当前Studio的受控兼容上传入口为 `POST /apps/image/api/artifacts/upload`，使用宿主要求的真实登录与权限，表单含 `project_id` 和 `file`；它不是中央 `artifact.write` 的替代品。
+3. 兼容导入后记录中央ContentRef、Image原生ID、文件大小和SHA-256映射。若传输限制要求制作压缩副本，保留原图，副本单独命名、校验并登记，不能把副本哈希写成原图哈希。
+4. 只有HTTPS导入时，先确认宿主实际提供该工具及来源许可。受控下载路径不是匿名公网URL；禁止把会话令牌放入URL，或为了导入把私有素材公开上传。
 
-文本提示词驱动的原子图像生成。创建异步任务，返回任务 ID 供轮询。
+## 状态、结果与下载
 
-- **入参（JSON Schema）**：
-  ```json
-  {
-    "project_id": "0199c0a0-0000-7000-8000-000000000001",
-    "idempotency_key": "B01/wardrobe-v1",
-    "prompt": "Cinematic concept artwork, 7.5 heads ratio mannequin wearing futuristic dark-blue mechanic outfit, clean neutral background, no text",
-    "engine": "codex",
-    "model": "gpt-image-2.5-sunburst",
-    "aspect_ratio": "16:9",
-    "resolution": "2k",
-    "quality": "high",
-    "background": "auto"
-  }
-  ```
-- **参数说明**：
-  - `project_id` (string, 必填)：当前 Studio Project 的服务生成 UUIDv7。
-  - `idempotency_key` (string, 必填)：客户端幂等性业务键（格式推荐 `<unit_id>/<attempt_id>`）。同一项目下相同键不会重复生成，直接复用既有记录。
-  - `prompt` (string, 必填)：生图提示词，建议采用官方四段式结构（`[Scene]`、`[Subject]`、`[Details]`、`[Constraints]`），精准文字须置于英文双引号内。
-  - `engine` (string, 可选)：底层 API 引擎驱动。**默认权威指定为 `"codex"`**，亦可选 `"gemini"`。
-  - `model` (string, 可选)：覆盖具体模型名。
-    - `engine="codex"`（默认）时推荐：
-      - **`gpt-image-2.5-sunburst`**（默认，画质基准主力，微观毛孔、发丝质感与复杂光影全面领先，杜绝塑料涂抹感）；
-      - **`gpt-image-2.5-flare`**（极速响应小模型，适合多方案快速探索或延迟敏感流程）；
-      - `gpt-image-2`（向下兼容）；
-    - `engine="gemini"` 时默认 `gemini-3.1-flash-image`。
-  - `aspect_ratio` (string, 可选)：画幅宽高比。支持 `"16:9"`（默认）、`"9:16"`、`"1:1"`、`"4:3"`、`"3:4"`。
-  - `resolution` (string, 可选)：图像分辨率级别。支持 `"2k"`（默认）与 `"4k"`（4K 严格遵循官方上限：单边 <= 3840 像素且为 16 整倍数，如 16:9 为 `3840x2160`，9:16 为 `2160x3840`，1:1 为 `2048x2048`）。
-  - `quality` (string, 可选)：生成质量偏好。官方支持：`"auto"`、`"low"`、`"medium"`、`"high"`（默认，极致保留微观细节）、`"xhigh"`、`"max"`（历史 `"hd"` 自动平滑兼容映射为 `"high"`）。
-  - `background` (string, 可选)：背景模式。支持 `"auto"`（默认）、`"transparent"`（生成纯透明背景，输出含 Alpha 通道之 PNG/WebP）、`"opaque"`（纯色/实体景深背景）。
-- **返回结构**：
-  ```json
-  {
-    "task_id": "img-task-a72e81fc",
-    "status": "queued",
-    "created_at": "2026-09-09T12:00:01Z"
-  }
-  ```
+创建成功后先保存 `task_id` 再轮询。Image原生状态通常为 `queued`、`running`、`completed`、`failed`、`canceled`；未知状态按协议差异处理，不猜成失败。
 
----
+`image.result` 可返回 `artifact_id`、`project_id`、`filename`、`sha256`、`size_bytes`、`metadata`、`download_path`。这些属于原生结果，不代表中央Project已经提交。SHA-256、字节数和实际尺寸都需核验，Prompt和模型返回的元数据不能代替文件检查。
 
-### 2.3 `image.edit`
+下载通过Studio受控内容路由。现有Image宿主适配为 `/apps/image/artifacts/{artifact_id}/content`；中央文件则使用 `artifact.read(mode=download)` 返回的内容路径或工作副本 `fetch`。按当前宿主声明解析原生路径，不能把 `/image/...` 随意拼到 `/mcp` 后，也不能把Studio凭据转发给任意外域。
 
-以既有受控 Artifact 为底图进行多模态指令编辑、骨相锁定换装或多图融合合成。
+## Project归档
 
-- **入参（JSON Schema）**：
-  ```json
-  {
-    "project_id": "0199c0a0-0000-7000-8000-000000000001",
-    "idempotency_key": "B01/wardrobe-v2-edit",
-    "source_artifact_id": "art-9f82d1c0",
-    "reference_artifact_ids": [
-      "art-jacket-01",
-      "art-boots-02"
-    ],
-    "prompt": "Change ONLY the clothing using the provided reference items. Preserve her exact face, facial features, skin tone, body shape, and pose in every way. Do not change the background or lighting.",
-    "engine": "codex",
-    "model": "gpt-image-2.5-sunburst",
-    "quality": "high",
-    "background": "auto"
-  }
-  ```
-- **参数说明**：
-  - `source_artifact_id` (string, 必填)：主参考图 Artifact ID（通常为主体肖像或主场景底图）。
-  - `reference_artifact_ids` (array[string], 可选)：附加参考图 Artifact ID 列表（例如服饰单品图、参考道具图或第二角色图，支持多图融合）。
-  - `prompt` (string, 必填)：编辑指令。务必遵循官方“严密隔离变更项与保留项”原则，使用“Change only X”句式并明确指出哪些特征绝对不可变。若输入多张参考图，须在提示词中明确分配各图职责（如“图 1 为面容身份，图 2 为服装款式”）。
-  - `engine` (string, 可选)：默认 `"codex"`。
-  - `model` (string, 可选)：`"gpt-image-2.5-sunburst"` 或 `"gpt-image-2.5-flare"`。
-  - `quality` (string, 可选)：`"auto"`, `"low"`, `"medium"`, `"high"`, `"xhigh"`, `"max"`。
-  - `background` (string, 可选)：`"auto"`, `"transparent"`, `"opaque"`。
-- **返回结构**：同 `image.generate`，返回 `task_id`、`status`、`created_at`。
+有中央原生输出适配时，使用其可信来源映射提交文件。没有该适配时，授权范围内可将已下载、校验的结果通过现有工作副本客户端显式导入，来源为 `user_import`，保留原任务ID与原生Artifact映射；不伪造 `task_output`。
 
----
-
-### 2.4 `image.inpaint`
-
-基于遮罩（Mask）的精准局部重绘与无痕物体抹除。
-
-- **入参（JSON Schema）**：
-  ```json
-  {
-    "project_id": "0199c0a0-0000-7000-8000-000000000001",
-    "idempotency_key": "F02/fix-face-v1",
-    "source_artifact_id": "art-9f82d1c0",
-    "mask_artifact_id": "art-mask-8b21c4e1",
-    "prompt": "Fix facial lighting to match warm sunset reflection, blend edges smoothly",
-    "engine": "codex",
-    "model": "gpt-image-2.5-sunburst",
-    "background": "auto"
-  }
-  ```
-- **返回结构**：返回 `task_id`、`status`、`created_at`。
-
----
-
-### 2.5 `image.status`
-
-查询异步生图任务的当前进度与状态。
-
-- **入参**：`task_id` (string, 必填)
-- **返回结构**：
-  ```json
-  {
-    "task_id": "img-task-a72e81fc",
-    "status": "completed",
-    "created_at": "2026-09-09T12:00:01Z",
-    "updated_at": "2026-09-09T12:00:15Z",
-    "duration_seconds": 14.2,
-    "artifact_id": "art-3c4d5e6f",
-    "error": null
-  }
-  ```
-- **状态枚举（Status）**：
-  - `queued`：排队等待 Worker 协程消费。
-  - `running`：正在向模型 API 发起请求与流式出图。
-  - `completed`：出图成功并已受控落盘，已生成 Artifact 记录。
-  - `failed`：生成失败，`error` 字段包含具体原因。
-  - `canceled`：任务被取消。
-
----
-
-### 2.6 `image.result`
-
-在任务状态为 `completed` 后获取最终产物元数据与下载路径。
-
-- **入参**：`task_id` (string, 必填)
-- **返回结构**：
-  ```json
-  {
-    "task_id": "img-task-a72e81fc",
-    "artifact_id": "art-3c4d5e6f",
-    "project_id": "0199c0a0-0000-7000-8000-000000000001",
-    "filename": "wardrobe-v1.png",
-    "sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
-    "size_bytes": 2621440,
-    "metadata": {
-      "prompt": "...",
-      "engine": "codex",
-      "model": "gpt-image-2.5-sunburst",
-      "aspect_ratio": "16:9",
-      "resolution": "2k",
-      "quality": "hd"
-    },
-    "duration_seconds": 14.2,
-    "download_path": "/image/artifacts/art-3c4d5e6f/content"
-  }
-  ```
-
----
-
-### 2.7 `image.list`
-
-分页与状态条件检索任务列表，供看板审计或历史恢复。
-
-- **入参**：
-  - `project_id` (string, 可选)
-  - `engine` (string, 可选)
-  - `status` (string, 可选)
-  - `limit` (int, 默认 50)
-  - `offset` (int, 默认 0)
-- **返回结构**：
-  ```json
-  {
-    "tasks": [
-      {
-        "task_id": "img-task-a72e81fc",
-        "project_id": "0199c0a0-0000-7000-8000-000000000001",
-        "status": "completed",
-        "engine": "codex",
-        "model": "gpt-image-2.5-sunburst",
-        "prompt_preview": "Cinematic concept artwork...",
-        "duration_seconds": 14.2,
-        "artifact_id": "art-3c4d5e6f",
-        "created_at": "2026-09-09T12:00:01Z"
-      }
-    ],
-    "total": 1,
-    "limit": 50,
-    "offset": 0
-  }
-  ```
-
----
-
-## 3. 产物落盘与文件下载
-
-任务完成后，不可变图片已由 Artifact 服务保存。实际 S3 key、卷路径和下载 URL 都是服务内部细节，客户端只能使用受控的 `ContentRef`/下载路径，不能根据 `project_id` 拼接存储地址。
-
-### 3.1 Project / World 记录规则
-
-- Image MCP 的任务输出先作为当前 Project 的文件候选，由 Studio `project.commit` 登记 `file_id`、`content_ref`、`run_refs` 和 `selections`；`review.md` 记录人工选择理由。
-- 使用 `character-image` World 资产时，先由 Studio `world.get` 解析固定的 `asset_id + asset_version_id`，再把选定文件的具体 `ContentRef` 作为 `source_artifact_id` 或参考文件。资产版本不存在、未授权或文件未就绪时停止。
-- 用户确认某组图像可跨项目复用后，调用 `world.register` 并明确文件 ID、来源修订和 `relation`。World 注册保留来源 Project，不移动或覆盖源文件；Image MCP 不自动发布资产。
-- 新的 Image 结果默认属于来源 Project。不要因为图片看起来像人物资产，就把它直接写进 World，也不要让新结果静默替换其他 Project 已固定的版本。
-
-客户端获取图像内容流程：
-
-1. 拼接绝对 URL：`${IMAGE_MCP_URL}` + `download_path`（或从服务端对应接口下载）；
-2. 携带 HTTP Header `Authorization: Bearer <IMAGE_MCP_BEARER_TOKEN>` 发送 GET 请求；
-3. 下载保存到本地项目 `source/` 目录；
-4. 校验本地文件的 SHA-256 哈希值必须与 `image.result` 返回的 `sha256` 完全一致。
+通过 `project.commit` 保存文件与 `run_refs`，Prompt和审核说明保存为MD/TXT。`domain_documents` 只登记服务支持的领域JSON，审核MD作为普通文件或入口。候选不自动进入 `selections`，更不自动注册World；只有实际选用或授权复用时才登记对应关系。

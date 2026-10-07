@@ -19,6 +19,10 @@ Project 归属、换电脑恢复、Artifact 保存及 World 固定资产引用�
 
 默认 codex / `gpt-image-2.5-sunburst`；用户明确选择优先，模型支持以宿主能力和调用契约为准。不绕过 MCP/受控客户端直连供应商。
 
+使用真实Studio会话发现实际工具；现有网关提供 `image.create/edit/inpaint/status/result`，不假定历史 `image.generate` 或 `image.list` 已注册。旧共享媒体令牌不能访问Project/Artifact，认证恢复见 [环境说明](../ENVIRONMENT.md)。
+
+中央Artifact引用与Image原生Artifact ID需要受控适配，不因同名字段就互换。附带的 `scripts/image_client.py` 仍是REST兼容客户端，不能把Studio `/mcp` 地址当其REST根地址；具体限制见 [CLI](references/cli.md)。
+
 描述目标画面、必要参考职责及编辑保留项即可；四段式提示词只是模板，不要求固定标签、句式或每轮只改一个变量。
 
 本地准备、检查及可恢复技术修复自主执行。已有任务按 ID 查询，不因等待超时重新生成；新收费尝试限定在已授权次数或预算内。下载后验证文件、实际尺寸与服务端 SHA-256；按项目受控路径归档，保留原始产物。完成所请求的技术交付后返回候选及检查结果，艺术批准由用户或上层审核记录决定。

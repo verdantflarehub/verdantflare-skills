@@ -1,44 +1,25 @@
-# Image CLI
+# Image CLI兼容说明
 
-命令从技能根目录运行；仅使用 CLI 时读取。本地参数见 `python3 scripts/image_client.py --help`。
+附带 `scripts/image_client.py` 是现存REST客户端，不是Studio JSON-RPC客户端。它读取Studio配置变量后仍拼接 `/api/tasks`、`/api/tasks/stats` 和Artifact下载路径；把 `https://studio.example.com/mcp` 传给它会形成错误REST路径。
 
-技能内置纯 Python 标准库命令行客户端，可用于独立调试、批量批处理或 CI 自动化：
+当前Studio流程优先使用宿主实际注册的 `image.create/edit/inpaint/status/result`。Project/Artifact文件操作使用 [统一客户端](../../_shared/project-world-client.md)，连接与身份问题见 [环境说明](../../ENVIRONMENT.md)。不能以恢复旧CLI为由直连下游服务或供应商。
 
-```bash
-# 1. 提交生图任务并等待下载完成 (默认 engine=codex, model=gpt-image-2.5-sunburst, 自动校验 SHA-256)
-python3 scripts/image_client.py generate \
-  --project-id "0199c0a0-0000-7000-8000-000000000001" \
-  --prompt "[Scene] Cyberpunk neon street. [Subject] Woman in rain. [Details] 35mm photo. [Constraints] No plastic skin." \
-  --engine codex \
-  --model gpt-image-2.5-sunburst \
-  --quality high \
-  --aspect-ratio 16:9 \
-  --output ./cyberpunk-street.png
+## 现有命令与限制
 
-# 2. 极速探索模式 (使用 gpt-image-2.5-flare)
-python3 scripts/image_client.py generate \
-  --project-id "0199c0a0-0000-7000-8000-000000000001" \
-  --prompt "A fast draft concept of a futuristic rover on Mars" \
-  --model gpt-image-2.5-flare \
-  --output ./rover-draft.png
-
-# 3. 透明背景生成 (background=transparent)
-python3 scripts/image_client.py generate \
-  --project-id "0199c0a0-0000-7000-8000-000000000001" \
-  --prompt "Isolated glass perfume bottle, centered, crisp alpha edges" \
-  --background transparent \
-  --aspect-ratio 1:1 \
-  --output ./perfume-cutout.png
-
-# 4. 查询当前任务排队与指标
-python3 scripts/image_client.py stats
-
-# 5. 列出项目历史任务
-python3 scripts/image_client.py list --project-id "0199c0a0-0000-7000-8000-000000000001"
-
-# 6. 查询特定任务详情
-python3 scripts/image_client.py status <task-id>
+```text
+python3 scripts/image_client.py --help
+python3 scripts/image_client.py generate --help
 ```
 
+这些帮助命令仅用于核对本地实现，不创建任务。
 
-配置行为见 [环境说明](../../ENVIRONMENT.md)。
+| 命令 | 当前实现 | 使用边界 |
+| --- | --- | --- |
+| `generate` | REST提交、轮询、下载 | 需要 `--project-id`；尚未完成Studio网关适配，不作为本页的新任务示例 |
+| `stats` / `list` | REST统计与列表 | 不是对同名MCP工具存在性的证明 |
+| `status` | REST任务查询 | 使用原任务ID；失败不能触发重新生成 |
+| `download` | REST Artifact下载及哈希校验 | 需要正确的宿主传输与鉴权适配，不能拼接到 `/mcp` 后 |
+
+调用失败应分别记录客户端地址构造、认证和服务响应。没有收到任务ID时核查同一幂等键的状态，不自行换键重放；已取得ID则用宿主 `image.status/result` 恢复。
+
+后续CLI适配应复用Studio工具发现、真实会话和受控传输，并验证提交幂等、任务恢复、项目归属与内容哈希；在实现及检查完成前，不把文档修正标为客户端已修复。

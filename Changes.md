@@ -1,5 +1,12 @@
 # Changes
 
+## 未发布
+
+- 修正 Image / Video Skill、README 与环境说明中的旧工具名、固定渠道默认值和认证前提，以当前 Studio 工具发现和真实主体会话为入口。
+- 明确中央 ContentRef 与媒体服务原生 Artifact 的适配边界、Project 归档及 Markdown Preview 展示方式；按实际输出核验图像尺寸。
+- 标注 Image REST 客户端、Video 旧 SD2 / fal 分支与当前 Studio 的兼容限制，保留历史 API 契约供旧任务识别和恢复。
+- 本项仅更新文档与技能元数据，未迁移 CLI 实现、发布安装包或部署服务。
+
 ## verdantflare-image-v0.1.0
 
 - 新增规范的 `verdantflare-image` Skill，全面废除旧 `verdantflare-image-codex`。

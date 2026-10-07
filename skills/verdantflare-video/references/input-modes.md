@@ -8,6 +8,8 @@ MiniMax 官方 Prompt Skill 定义五种模式：T2VA 文本生成；I2VA 首帧
 
 ## fal MiniMax H3 公开契约
 
+以下用于理解 Provider 模式，不代表当前 Studio 已开放全部能力；提交前核对宿主所部署适配器的版本和能力声明。
+
 fal 的主入口分为：
 
 - `text-to-video`：Prompt、5–15 秒、480P/768P、六种画幅、seed 和 Prompt Expansion；
@@ -16,11 +18,11 @@ fal 的主入口分为：
 
 fal 还公开独立 T2V/I2V LoRA 入口，最多 3 个 LoRA，scale 0–4。这些是 fal Provider 能力，不是 MiniMax 基础请求或当前领域 MCP 的通用字段。
 
-fal 的 `prompt_expansion_mode` 会产生可能不同于用户原文的 `expanded_prompt`。当前 `route=fal` 固定关闭 Prompt Expansion；若将来开放，必须同时保存原始 Prompt 和实际提交 Prompt，不允许只保存扩写前文本。
+fal 的 `prompt_expansion_mode` 会产生可能不同于用户原文的 `expanded_prompt`。现有 Ref2VA 适配器关闭 Prompt Expansion；宿主若开放该能力，应同时保存原始 Prompt 和实际提交 Prompt。
 
 ## 当前 VerdantFlare 契约
 
-当前 `video.generate` 只批准业务模型 `minimax-h3-ref2va`。宿主默认渠道为 `h3-vdn`；`fal` 已开放为显式 Ref2VA 渠道，但必须由宿主 MCP 声明可用。本 Skill 不因 fal Provider 支持其他模式而改道：
+现有 Studio 网关通过 `video.create` 创建任务，H3 Ref2VA 使用业务模型 `minimax-h3-ref2va`。模型与渠道按真实会话发现，未指定时解析宿主配置并核实可用性；`h3-vdn` 或 Schema 中的 `fal` 不是跨环境默认。以下约束描述现有 fal Ref2VA 适配器，仅在该渠道已配置且就绪时适用：
 
 - 不把 Ref2VA 图片冒充首帧或尾帧；
 - `route=fal` 只调用服务端锁定的 `minimax/h3/reference-to-video`，不调用 fal 的 T2V、I2V、FL2V、Prompt Expansion 或 LoRA；

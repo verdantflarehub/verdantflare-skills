@@ -52,106 +52,82 @@
 使用 $verdantflare-music，创作一首 最长 200 秒、黑暗电影感的中文叙事歌曲，并在每个审核点等我确认。
 ```
 
-Skill 通过 VerdantFlare Station 提供的 Music MCP 工具执行生成、分轨、音色训练与转换、已知歌词强制对齐、混音母带。Music3 候选使用最大生成时长作为上限并保留自然结尾，实际时长在审核点记录。音频、真人录音和人声模型不进入 Git。
+Skill 通过 Studio 统一网关提供的 Music MCP 工具执行生成、分轨、音色训练与转换、已知歌词强制对齐、混音母带。Music3 候选使用最大生成时长作为上限并保留自然结尾，实际时长在审核点记录。音频、真人录音和人声模型不进入 Git。
 
 男女对唱制作采用逐句声部计划与独立轨校验；已有获认可的自然演唱对唱可按时间轴替换单一歌手，并对照原试听检查伴奏、电平和声部。机器检查通过不代表歌词、音色或最终音质通过。
 
 最终 MP3 使用 `<创作者显示名>-<歌曲名>.mp3` 命名，例如 `Creator-Demo.mp3`。
 
+## 媒体技能的共同接入方式
+
+Image、Video等业务MCP统一经Studio进入。先使用真实用户会话发现工具，再创建或打开Project、保存素材并执行生成。`project_id` 必须来自服务，不使用 `default` 或目录式别名。
+
+```dotenv
+STUDIO_MCP_URL=https://studio.example.com/mcp
+STUDIO_MCP_BEARER_TOKEN=<绑定真实Core主体的会话令牌>
+```
+
+旧共享媒体令牌可能仍能列出或调用生成工具，但不能访问Project/Artifact。遇到管理工具缺失或403，先使用已有授权登录信息恢复真实会话，再重新查询能力。浏览器Cookie会话和CLI Bearer会话各走对应认证方式，不能互换令牌值。
+
+素材通过Project/Artifact受控保存。生成服务的原生Artifact与中央 `ContentRef` 按宿主适配流程转换；上传成功不等于任意生成服务已经能消费该引用。当前流程不要求客户端持有S3密钥或供应商密钥。
+
+配置与兼容边界见 [环境说明](skills/ENVIRONMENT.md)，工作副本与恢复见 [Project/World客户端](skills/_shared/project-world-client.md)。发布标签表示既有版本，本地文档修改不代表安装包或服务已经更新。
+
 ## verdantflare-video
 
-`verdantflare-video` 是兼容 macOS 和 Windows 的 Codex Skill，通过一个 Video MCP 统一支持模型与渠道选择，未指定时使用宿主默认模型与渠道（当前模型为 H3、渠道为 H3-VDN），也支持明确指定模型简称（H3、SD2）及已声明的推理渠道。fal 已作为 H3 Reference-to-Video 的显式渠道开放；调用固定传入当前 `project_id` 与 `route=fal`，是否可用以宿主 MCP 能力声明为准，且不会失败回退。
+[`verdantflare-video`](skills/verdantflare-video/SKILL.md) 通过Studio选择宿主已接入的视频模型和渠道，执行生成、查询、恢复与下载。用户未指定时解析当前宿主默认值并确认可用性；不把H3-VDN、Sol或fal写成跨环境固定默认，也不静默换渠道。
 
-### 安装命令
+H3 Ref2VA业务模型为 `minimax-h3-ref2va`。现有网关创建工具为 `video.create`，配套 `video.status`、`video.result`；以本次真实会话发现的注册名和参数为准。fal是否配置、时长和画幅是否支持，需要分别核实，不能只看工具Schema的默认值。
 
-当前版本：`verdantflare-video-v0.3.1`
+### 安装与使用
 
-在 Codex 中执行：
+已发布版本：`verdantflare-video-v0.3.1`。固定标签不包含本地未发布更新。
 
 ```text
 使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.3.1/skills/verdantflare-video 安装 Skill。
 ```
 
-### 配置命令
-
-macOS：
-
-```bash
-bash "$HOME/.codex/skills/verdantflare-video/scripts/install-config-macos.sh"
-```
-
-Windows PowerShell：
-
-```powershell
-& "$HOME\.codex\skills\verdantflare-video\scripts\install-config-windows.ps1"
-```
-
-本机需要 Python `3.10` 或更高版本。配置脚本会从内置的 VerdantFlare 引导地址自动下载配置。
-
-配置必须包含以下三项：
-
-```dotenv
-VERDANTFLARE_VIDEO_API_KEY=<required>
-VERDANTFLARE_VIDEO_S3_ACCESS_KEY=<required>
-VERDANTFLARE_VIDEO_S3_SECRET_KEY=<required>
-```
-
-显式使用 fal 渠道时，命令行脚本通过统一 MCP 网关调用，还需要：
-
-```dotenv
-# 统一通过 Studio MCP 网关调用 (5090 集群: https://studio.dev.verdantflarehub.com/mcp)
-STUDIO_MCP_URL=https://studio.dev.verdantflarehub.com/mcp
-STUDIO_MCP_BEARER_TOKEN=<required>
-```
-
-供应商 `FAL_KEY` 只配置在 Video MCP Server，不能放入 Skill 配置。可用统一客户端
-`python3 scripts/video_client.py check` 检查 MCP 工具，再通过 `generate`、
-`status`、`result` 或 `resume` 执行和恢复 fal Ref2VA 任务。
-
-### 使用 Skill
-
 ```text
-使用 $verdantflare-video，明确采用 SD2，根据 ~/Desktop/product.png 生成一个 9:16、10 秒的产品广告视频。
+使用 $verdantflare-video，在当前Studio项目中制作一个16:9、15秒的H3视频。先检查宿主渠道与参考素材是否可用，再按确认的输入提交；已有任务按原ID恢复。
 ```
+
+### 客户端兼容状态
+
+`scripts/video_client.py` 尚有两条旧路径：仅显式 `--model minimax-h3-ref2va --route fal` 进入MCP生成分支，且要求 `video.generate` / `artifact.import`；省略这些参数可能进入旧SD2公共API及S3上传分支。它目前不是所有Studio部署的通用生成入口。其 `check` 失败应结合实际工具列表判断，不能直接认定Video服务不可用。
+
+新任务优先使用宿主实际注册的Video工具。历史SD2安装脚本、API Key和S3配置仅用于识别旧安装，不再列为Studio流程的必填条件；不要为了修复Studio认证运行旧配置安装器。已有SD2任务的恢复边界见 [SD2说明](skills/verdantflare-video/references/sd2-workflow.md)。
 
 ## verdantflare-image
 
-`verdantflare-image` 是专注于原子图像资产生成、以图生图与局部重绘的领域级 Skill。它负责将上层视觉意图（如 MV 人物设计胸部四视图、服装无脸人台三视图、分镜单格图 F01~F08、纯场景设计图）转化为技术受控的生图请求，默认采用 `codex`（`gpt-image-2.5-sunburst`，亦支持 `gpt-image-2.5-flare`）引擎驱动，亦支持 `gemini`（`gemini-3.1-flash-image`），通过 `image.*` MCP 工具与 REST 接口调度执行，最终将技术合格且校验 SHA-256 的不可变 `ImageCandidate` 资产受控归档到指定 `source/` 目录。
+[`verdantflare-image`](skills/verdantflare-image/SKILL.md) 生成、编辑与局部重绘图像候选。默认采用 `codex` / `gpt-image-2.5-sunburst`，也可按用户选择和宿主能力使用其他已接入模型。输出须验证实际尺寸、字节数及SHA-256，再归档到当前Project；技术成功不代替创作审核。
 
-### 安装命令
+### 安装与使用
 
-当前版本：`verdantflare-image-v0.1.0`
-
-在 Codex 中执行：
+既有版本记录：`verdantflare-image-v0.1.0`。以下 `dev` 入口用于获取当前开发版，不是不可变发布标签。
 
 ```text
 使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/dev/skills/verdantflare-image 安装 Skill。
 ```
 
-同时在本地 Codex 注册 Studio 统一 MCP 服务：
+注册Studio统一网关时，从环境读取已绑定真实主体的会话令牌：
 
 ```bash
 codex mcp add verdantflare-studio \
-  --url "${STUDIO_MCP_URL:-https://studio.dev.verdantflarehub.com/mcp}" \
+  --url "$STUDIO_MCP_URL" \
   --bearer-token-env-var STUDIO_MCP_BEARER_TOKEN
 ```
 
-### 使用 Skill
-
 ```text
-使用 $verdantflare-image，为项目 creator/project-demo 生成 B01 单元的角色服装无脸人台三视图，采用 codex 引擎，画幅 16:9。
+使用 $verdantflare-image，在当前已打开的Studio项目中，依据已导入的身份照片制作角色三视图候选；保留原图，生成后在Markdown Preview内嵌展示实际图片。
 ```
 
-### 命令行客户端 (CLI)
+没有打开项目时，通过 `project.create/open` 获取服务ID。现有网关提供 `image.create/edit/inpaint/status/result`；历史 `image.generate`、`image.list` 仅在实际注册时使用。
 
-技能随附纯 Python 标准库驱动工具 `scripts/image_client.py`，支持独立在终端执行生图、轮询与哈希校验下载（默认使用 `codex` 引擎）：
+### 客户端兼容状态
 
-```bash
-python3 skills/verdantflare-image/scripts/image_client.py generate \
-  --prompt "科技风极简标志设计，绿色与深色背景" \
-  --engine codex \
-  --output /tmp/test-image.png
-```
+`scripts/image_client.py` 仍按REST根地址拼接 `/api/tasks` 等路径。虽然它读取 `STUDIO_MCP_URL`，但这不表示已经适配Studio `/mcp` JSON-RPC、Cookie登录或中央Artifact传输。当前优先使用宿主Image工具；不要把 `/mcp` 地址直接代入旧CLI，也不要改成下游独立公网地址。
+
+CLI现状见 [Image CLI](skills/verdantflare-image/references/cli.md)，实际调用与原生Artifact转换见 [Image调用说明](skills/verdantflare-image/references/contracts.md)。
 
 ## 变更记录
 

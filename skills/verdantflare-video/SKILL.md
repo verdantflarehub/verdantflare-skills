@@ -5,21 +5,19 @@ description: 统一通过 Video MCP 选择视频模型与渠道，执行生成�
 
 # VerdantFlare Video
 
-本 Skill 只有一个 Video MCP 入口。用户未指定模型时使用宿主配置的默认模型与渠道；当前生产默认模型为 H3，默认渠道为 `h3-vdn`。用户可以显式指定已由宿主能力声明支持的模型简称 `model`（如 `h3`、`sd2`）与推理渠道 `route`（如 `h3-vdn`、`fal`），Skill 不把渠道写死，也不静默回退。
+本 Skill 通过 Studio MCP 统一网关调用 Video 能力。用户未指定模型或渠道时，解析当前宿主配置并核实可用性；不把历史环境的 `h3-vdn`、`h3-sol` 或工具 Schema 中的 `fal` 默认值当成全局生产默认。用户可指定模型简称（如 H3、SD2）与渠道；只有宿主已接入的组合才能提交，失败不静默换渠道。
 
 Project、Artifact 和 World 的生命周期遵循[共同接入规则](../_shared/project-world.md)。提交前若输入来自 World，先解析并授权固定 `asset_id + asset_version_id`，再使用其中明确的 `ContentRef`；Video 输出先归档到当前 Video Project，Skill 不直接注册或升级 World 资产。
 
-`fal` 已开放为 H3 Ref2VA 的显式渠道，固定使用业务模型 `minimax-h3-ref2va` 和服务端 endpoint `minimax/h3/reference-to-video`。它不是默认渠道；提交前必须确认宿主 MCP 声明 `route=fal` 可用。凭据缺失、渠道拒绝或状态不确定时保留原任务记录并停止，不得回退到 `h3-vdn`、`h3-sol` 或其他渠道，也不得由 Skill 持有或发送 `FAL_KEY`。
+H3 Ref2VA 使用业务模型 `minimax-h3-ref2va`；`route` 单独指定推理渠道。fal 适配器使用服务端锁定的 Reference-to-Video endpoint，但注册了工具不代表fal已配置或就绪。供应商凭据留在服务端，Skill 不持有或发送 `FAL_KEY`。
 
-命令行统一使用 `scripts/video_client.py`。选择 `model=minimax-h3-ref2va`、`route=fal` 时，该客户端优先读取 `STUDIO_MCP_URL` 和 `STUDIO_MCP_BEARER_TOKEN`（或兼容回退 `VIDEO_MCP_URL` / `VIDEO_MCP_BEARER_TOKEN`），通过 MCP 工具完成 Artifact 导入、生成、查询、结果读取和恢复；不另设 fal 专用客户端，也不把 fal 请求误投到 SD2 公共 API。
+先用真实Studio会话发现工具，按 [MCP调用说明](references/video-mcp.md) 解析当前注册名（现有网关为 `video.create/status/result`）与参数。遇到403或管理工具不可见，按 [环境说明](../ENVIRONMENT.md) 检查是否误用了旧共享媒体令牌；不立即推断Video服务不可用。
 
-- H3 生成单元：
-  -- 读取 [H3 输入模式](references/input-modes.md)
-  -- [提示词](references/prompting.md)、
-  -- [MCP 契约](references/video-mcp.md)、
-  -- [执行流程](references/workflow.md)
-  -- [校验](references/validation.md)。
+`scripts/video_client.py` 仍有旧SD2直连分支和要求 `video.generate` / `artifact.import` 的fal分支，尚不能作为所有Studio部署的通用客户端。调用前核对 [执行流程](references/workflow.md) 的兼容边界；不要用省略参数的 `generate` 命令误入旧API/S3路径。
+
+- H3 生成单元：按当前阶段读取 [输入模式](references/input-modes.md)、[提示词](references/prompting.md)、[MCP 契约](references/video-mcp.md)、[执行流程](references/workflow.md) 或 [校验](references/validation.md)。
 - SD2：读取 [SD2 工作流](references/sd2-workflow.md)。
 - 已有任务沿原任务记录的模型与渠道恢复，不按当前默认值重新生成。
-- 每次 `video.generate` 都显式传入当前项目的 `project_id` 和已解析的 `route`；不能依赖服务端猜测项目或渠道。
+- 每次创建任务都显式传入当前项目的 `project_id`、已解析的 `route` 和固定幂等键；不能依赖服务端猜测项目或渠道。
+- 中央Artifact的 `ContentRef` 与Video原生引用按宿主适配流程转换；不直接替换ID，不把受控下载路径当成匿名公网素材URL。
 - 所有模型和渠道都通过 Studio MCP 统一网关进入，不直接调用 Runtime。

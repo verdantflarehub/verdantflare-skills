@@ -1,8 +1,10 @@
-# VerdantFlare Video API
+# Historical VerdantFlare SD2 API
+
+This page preserves the legacy SD2 client's request and recovery contract. It is not the current Studio execution entry and does not authorize direct API creation or S3 uploads. For new work and existing task routing, start with [SD2 workflow](sd2-workflow.md) and the tools registered by the current Studio session. Retain original task IDs and idempotency records when inspecting old submissions.
 
 ## Endpoint
 
-Use the configured API base URL, normally `https://api.verdantflarehub.com/v1`.
+The legacy client used its configured API base URL, for example `https://api.example.com/v1`.
 
 - `POST /videos`
 - `GET /videos/{task_id}`
