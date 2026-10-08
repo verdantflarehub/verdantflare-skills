@@ -13,7 +13,9 @@ H3 Ref2VA 使用业务模型 `minimax-h3-ref2va`；`route` 单独指定推理渠
 
 先用真实Studio会话发现工具，按 [MCP调用说明](references/video-mcp.md) 解析当前注册名（现有网关为 `video.create/status/result`）与参数。遇到403或管理工具不可见，按 [环境说明](../ENVIRONMENT.md) 检查是否误用了旧共享媒体令牌；不立即推断Video服务不可用。
 
-`scripts/video_client.py` 仍有旧SD2直连分支和要求 `video.generate` / `artifact.import` 的fal分支，尚不能作为所有Studio部署的通用客户端。调用前核对 [执行流程](references/workflow.md) 的兼容边界；不要用省略参数的 `generate` 命令误入旧API/S3路径。
+`scripts/video_client.py` 的新生成统一走 Studio：发现 `video.create`（兼容已注册的 `video.generate`），通过 `video.capabilities` 解析默认渠道和适配器限制。素材优先通过 `video.import_prepare/import_chunk/import_status/import_commit` 可恢复导入，兼容旧 `video.import` 小图片入口。Singularity 用 `video.preflight` 返回实际画布、时长和参考编号；预检通过不代表 GPU 实测通过。没有能力工具的旧宿主须显式指定已核实的渠道。历史 SD2 仅保留恢复兼容，新 SD2 使用宿主 MCP 工具。具体命令见 [执行流程](references/workflow.md)。
+
+H3 模型支持六种画幅，Omni Reference 还有 Auto；渠道适配器里的竖屏硬编码是接入缺口，不能据此宣称模型只支持9:16。模型规格、当前代码接入范围、实时配置和GPU实测必须分别说明。
 
 - H3 生成单元：按当前阶段读取 [输入模式](references/input-modes.md)、[提示词](references/prompting.md)、[MCP 契约](references/video-mcp.md)、[执行流程](references/workflow.md) 或 [校验](references/validation.md)。
 - SD2：读取 [SD2 工作流](references/sd2-workflow.md)。

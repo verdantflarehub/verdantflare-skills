@@ -14,7 +14,7 @@
 
 旧 `install-config-macos.sh` / `install-config-windows.ps1` 会获取历史配置，部分流程还下载 `mc`；它们不是Studio认证修复入口，不因缺少旧API/S3变量而自动运行。历史参数与字段留在 [旧API说明](api.md)，只用于识别已有记录、迁移和维护旧客户端。
 
-在当前Studio流程中，不执行省略模型/渠道的旧CLI `generate` 来“自动选择SD2”，也不把原公共API的720P、时长和文件数量限制宣称为所有部署的现行能力。
+CLI `generate` 已默认使用H3的Studio MCP分支；指定SD2时提示使用宿主MCP工具，不会进入历史公共API/S3生成。也不把原公共API的720P、时长和文件数量限制宣称为所有部署的现行能力。
 
 ## 历史状态的解释与恢复
 

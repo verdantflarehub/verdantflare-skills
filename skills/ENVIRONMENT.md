@@ -22,7 +22,7 @@
 | 宿主MCP工具 | 宿主连接与鉴权 | 首选；使用实际发现的工具和当前Project上下文 |
 | `studio-workspace` | 进程 `STUDIO_MCP_URL` / `STUDIO_MCP_BEARER_TOKEN` | 只接受HTTPS或本机loopback HTTP；负责中央Project/Artifact工作副本、上传与恢复 |
 | Image `scripts/image_client.py` | 优先Studio变量，兼容Image变量；缺项从 `IMAGE_MCP_ENV_FILE` 或向上首个 `.env` 补齐 | 仍拼接REST `/api/tasks`，未适配Studio `/mcp`；读取Studio变量不代表可直接连接网关 |
-| Video `scripts/video_client.py` 的MCP分支 | 优先Studio变量，兼容Video变量 | 生成仅适配显式fal，仍要求 `video.generate` / `artifact.import`；须与实际注册工具匹配 |
+| Video `scripts/video_client.py` 的MCP分支 | 优先Studio变量，兼容Video变量 | 新H3生成发现 `video.create`，按 `video.capabilities` 解析渠道；`video.import` 接入授权图片；旧宿主须显式渠道，缺少导入工具不代表生成工具不可用 |
 | Video旧SD2分支 | `VERDANTFLARE_VIDEO_ENV_FILE` 或平台历史配置 | 旧公共API/S3客户端，不作为新Studio任务的默认入口 |
 | 显式调用 `scripts/load_env.py` 的集成 | 进程 > 技能目录 `.env` > 当前目录向上首个 `.env` | helper不是所有CLI的自动加载器，子进程不会修改父进程环境 |
 

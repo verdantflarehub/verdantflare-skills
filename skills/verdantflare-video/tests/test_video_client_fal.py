@@ -43,6 +43,12 @@ class FakeResponse:
 
 
 class VideoClientFalTests(unittest.TestCase):
+    def setUp(self):
+        self.discovery = mock.patch("video_client._mcp_json_request", return_value={"tools": [
+            {"name": name} for name in ("video.generate", "video.status", "video.result")]})
+        self.discovery.start()
+        self.addCleanup(self.discovery.stop)
+
     def config(self, root: str) -> MCPConfig:
         return MCPConfig("http://127.0.0.1:8000/mcp", "test-token", Path(root))
 
@@ -101,8 +107,8 @@ class VideoClientFalTests(unittest.TestCase):
         }
         with mock.patch("video_client._mcp_json_request", return_value=inventory):
             result = check_mcp_tools(self.config("/tmp/state"))
-        self.assertEqual(result["route"], "fal")
-        self.assertEqual(result["model"], "minimax-h3-ref2va")
+        self.assertEqual(result["create_tool"], "video.generate")
+        self.assertIsNone(result["capabilities"])
 
     def test_generate_locks_model_route_and_persists_attempt(self):
         with tempfile.TemporaryDirectory() as root:
@@ -156,9 +162,9 @@ class VideoClientFalTests(unittest.TestCase):
         self.assertEqual(request["aspect_ratio"], "adaptive")
         self.assertEqual(request["route"], "fal")
 
-    def test_fal_requires_exact_model_route_pair(self):
+    def test_old_host_requires_explicit_route_without_capabilities(self):
         with tempfile.TemporaryDirectory() as root, mock.patch("video_client.call_mcp_tool") as call:
-            with self.assertRaisesRegex(ClientError, "requires --model"):
+            with self.assertRaisesRegex(ClientError, "Host default route is unavailable"):
                 generate_mcp(self.config(root), self.args(route=None))
         call.assert_not_called()
 

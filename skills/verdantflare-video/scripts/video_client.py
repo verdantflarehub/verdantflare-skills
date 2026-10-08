@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import datetime as dt
 import email.utils
 import hashlib
@@ -228,16 +229,31 @@ def call_mcp_tool(config: MCPConfig, name: str, arguments: dict[str, Any]) -> di
 
 
 def check_mcp_tools(config: MCPConfig) -> dict[str, Any]:
-    result = _mcp_json_request(config, "tools/list", {})
-    tools = result.get("tools")
-    if not isinstance(tools, list):
-        raise ClientError("Video MCP tool inventory is invalid")
-    names = {tool.get("name") for tool in tools if isinstance(tool, dict)}
-    required = {"artifact.import", "video.generate", "video.status", "video.result"}
+    names = set()
+    params = {}
+    cursors = set()
+    while True:
+        result = _mcp_json_request(config, "tools/list", params)
+        tools = result.get("tools")
+        if not isinstance(tools, list):
+            raise ClientError("Video MCP tool inventory is invalid")
+        names.update(tool["name"] for tool in tools if isinstance(tool, dict) and isinstance(tool.get("name"), str))
+        cursor = result.get("nextCursor")
+        if not cursor:
+            break
+        if not isinstance(cursor, str) or cursor in cursors or len(cursors) >= 100:
+            raise ClientError("Video MCP tool pagination is invalid")
+        cursors.add(cursor)
+        params = {"cursor": cursor}
+    required = {"video.status", "video.result"}
     missing = sorted(required - names)
+    create_tool = "video.create" if "video.create" in names else "video.generate" if "video.generate" in names else None
+    if not create_tool:
+        missing.append("video.create (or registered video.generate)")
     if missing:
         raise ClientError("Video MCP is missing required tools: " + ", ".join(missing))
-    return {"status": "ok", "model": FAL_MODEL, "route": FAL_ROUTE, "tools": sorted(required)}
+    capabilities = call_mcp_tool(config, "video.capabilities", {}) if "video.capabilities" in names else None
+    return {"status": "ok", "create_tool": create_tool, "tools": sorted(names), "capabilities": capabilities}
 
 
 def _mcp_reference(value: str) -> dict[str, str]:
@@ -258,9 +274,9 @@ def _mcp_references(args: argparse.Namespace) -> dict[str, list[dict[str, str]]]
         "audios": [_mcp_reference(value) for value in args.audio_ref],
     }
     if len(references["images"]) > 9 or len(references["videos"]) > 3 or len(references["audios"]) > 3:
-        raise ClientError("fal supports at most 9 images, 3 videos, and 3 audio references")
-    if not 1 <= sum(map(len, references.values())) <= 12:
-        raise ClientError("fal requires 1 to 12 references")
+        raise ClientError("H3 supports at most 9 images, 3 videos, and 3 audio references")
+    if not any(references.values()):
+        raise ClientError("H3 requires at least one reference")
     return references
 
 
@@ -299,13 +315,13 @@ def _save_mcp_attempt(path: Path, value: dict[str, Any]) -> None:
 
 
 def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
-    if args.model != FAL_MODEL or args.route != FAL_ROUTE:
-        raise ClientError(f"fal generation requires --model {FAL_MODEL} --route {FAL_ROUTE}")
+    if args.model != FAL_MODEL:
+        raise ClientError("This CLI supports H3 generation; use the host MCP tools for other models")
     if any((args.image, args.image_url, args.video, args.video_url, args.audio, args.audio_url)):
-        raise ClientError("fal generation accepts project Artifacts only; import inputs first and use --*-ref")
+        raise ClientError("MCP generation accepts Video project Artifacts only; import inputs first and use --*-ref")
     if args.output or args.watermark or not args.generate_audio:
         raise ClientError(
-            "fal generation returns a project Artifact; --output, --watermark, and --no-generate-audio are not supported"
+            "MCP generation returns a project Artifact; --output, --watermark, and --no-generate-audio are not supported"
         )
     project_id = _validate_project_id(args.project_id)
     idempotency_key = (args.idempotency_key or "").strip()
@@ -318,21 +334,38 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
     prompt = args.prompt.strip()
     if not prompt:
         raise ClientError("prompt must not be empty")
+    references = _mcp_references(args)
     duration = 5 if args.duration is None else args.duration
-    ratio = args.ratio or "adaptive"
-    if not 5 <= duration <= 15:
-        raise ClientError("fal duration must be between 5 and 15 seconds")
+    inventory = check_mcp_tools(config)
+    capabilities = inventory["capabilities"] or {}
+    route = args.route or capabilities.get("default_route")
+    if not isinstance(route, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", route):
+        raise ClientError("Host default route is unavailable; explicitly select a verified --route")
+    ratio = args.ratio or ("adaptive" if route == "fal" else "16:9")
+    if not 4 <= duration <= 15:
+        raise ClientError("H3 duration must be between 4 and 15 seconds")
     if ratio not in FAL_ALLOWED_RATIOS:
-        raise ClientError(f"unsupported fal ratio: {ratio}")
+        raise ClientError(f"unsupported H3 ratio: {ratio}")
+    if route not in {"fal", "h3-singularity"} and not references["images"] and not references["videos"]:
+        raise ClientError("Local H3 routes require an image or video reference")
+    if route in {"fal", "h3-vdn", "h3-singularity"} and sum(map(len, references.values())) > 12:
+        raise ClientError("Selected route accepts at most 12 references")
+    if capabilities:
+        selected = next((r for r in capabilities.get("routes", []) if r.get("route") == route), None)
+        if not selected or not selected.get("configured"):
+            raise ClientError(f"Selected route {route} is not configured; no generation submitted")
+        limits = selected["duration_seconds"]
+        if ratio not in selected["aspect_ratios"] or not limits["minimum"] <= duration <= limits["maximum"]:
+            raise ClientError(f"Selected route {route} adapter does not accept {duration}s {ratio}; this is an adapter limit, not a model limit; no generation submitted")
     request = {
         "project_id": project_id,
         "idempotency_key": idempotency_key,
         "model": FAL_MODEL,
-        "route": FAL_ROUTE,
+        "route": route,
         "prompt": prompt,
         "duration_seconds": duration,
         "aspect_ratio": ratio,
-        "references": _mcp_references(args),
+        "references": references,
     }
     attempt = {
         "schema_version": 1,
@@ -341,20 +374,31 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
         "request": request,
     }
     path = _mcp_attempt_path(config, project_id, idempotency_key)
+    if path.exists():
+        previous = json.loads(path.read_text(encoding="utf-8"))
+        if previous.get("request") != request:
+            raise ClientError("idempotency key already belongs to different inputs")
+        if previous.get("video_task_id"):
+            return {**previous["response"], "attempt_path": str(path)}
+        raise ClientError("Submission is unresolved; retain the original attempt and reconcile it before retrying")
+    if route == "h3-singularity":
+        if "video.preflight" not in inventory["tools"]:
+            raise ClientError("Singularity requires the deployed video.preflight adapter")
+        attempt["preflight"] = call_mcp_tool(config, "video.preflight", {k: v for k, v in request.items() if k != "idempotency_key"})
     _save_mcp_attempt(path, attempt)
     try:
-        result = call_mcp_tool(config, "video.generate", request)
+        result = call_mcp_tool(config, inventory["create_tool"], request)
     except Exception:
         attempt["state"] = "submission_unknown"
         attempt["updated_at"] = utc_now()
         _save_mcp_attempt(path, attempt)
         raise
-    task_id = result.get("video_task_id")
+    task_id = result.get("video_task_id") or result.get("task_id")
     if not isinstance(task_id, str) or not MCP_TASK_ID_PATTERN.fullmatch(task_id):
         attempt["state"] = "submission_unknown"
         attempt["updated_at"] = utc_now()
         _save_mcp_attempt(path, attempt)
-        raise ClientError("video.generate returned an invalid task id")
+        raise ClientError("Video creation returned an invalid task id")
     attempt.update(state="confirmed", updated_at=utc_now(), video_task_id=task_id, response=result)
     _save_mcp_attempt(path, attempt)
     return {**result, "attempt_path": str(path)}
@@ -387,24 +431,178 @@ def resume_mcp(config: MCPConfig, task_id: str, poll_interval: float, timeout: f
         time.sleep(poll_interval)
 
 
+def _download_content_ref(config: MCPConfig, document: dict[str, Any], destination: Path | None = None) -> tuple[bytes, dict[str, str]]:
+    """Read a fixed version through Studio; larger media streams to a private file."""
+    ref = document.get("content_ref")
+    uuid7 = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
+    if not isinstance(ref, dict) or set(ref) != {"store_id", "artifact_id", "version_id"} or any(
+        not isinstance(v, str) or not uuid7.fullmatch(v) for v in ref.values()
+    ):
+        raise ClientError("content_ref must contain fixed store_id, artifact_id and version_id UUIDv7 values")
+    request = {"mode": "download", "content_ref": ref}
+    access = document.get("access")
+    if access is not None:
+        if not isinstance(access, dict) or set(access) not in (
+            {"project_id", "project_revision_id"}, {"asset_id", "asset_version_id"}
+        ) or any(not isinstance(v, str) or not uuid7.fullmatch(v) for v in access.values()):
+            raise ClientError("access must identify a fixed project revision or asset version")
+        request["access"] = access
+    result = call_mcp_tool(config, "artifact.read", request)
+    version = result.get("version", {})
+    if not isinstance(version, dict) or any(version.get(k) != v for k, v in ref.items()):
+        raise ClientError("Artifact returned a different fixed version")
+    size, digest = version.get("size"), version.get("sha256")
+    limit = MAX_DOWNLOAD_BYTES if destination is not None else MAX_IMAGE_BYTES
+    allowed_mimes = {"image/png", "image/jpeg", "image/webp", "video/mp4", "audio/wav", "audio/x-wav", "audio/mpeg"} if destination else MIME_TYPES["image"]
+    if (type(size) is not int or not 0 < size <= limit or
+        not isinstance(digest, str) or not SHA256_PATTERN.fullmatch(digest) or
+        version.get("mime") not in allowed_mimes):
+        raise ClientError("Controlled media format or size exceeds the selected import adapter")
+    path = result.get("content_path")
+    if not isinstance(path, str):
+        raise ClientError("Artifact returned no controlled content path")
+    parsed = urllib.parse.urlsplit(path)
+    expected_query = {"store_id": [ref["store_id"]], "artifact_id": [ref["artifact_id"]]}
+    expected_query.update({k: [v] for k, v in (access or {}).items()})
+    if (parsed.scheme or parsed.netloc or parsed.fragment or
+        parsed.path != f"/v2/artifacts/{ref['version_id']}/content" or
+        urllib.parse.parse_qs(parsed.query, keep_blank_values=True) != expected_query):
+        raise ClientError("Artifact returned an unexpected controlled content path")
+    origin = urllib.parse.urlsplit(config.url)
+    url = urllib.parse.urlunsplit((origin.scheme, origin.netloc, parsed.path, parsed.query, ""))
+    download = urllib.request.Request(url, headers={"Authorization": f"Bearer {config.token}", "Accept": "application/octet-stream"})
+    try:
+        with _mcp_opener().open(download, timeout=60) as response:
+            if response.status != 200:
+                raise ClientError("Controlled image download failed")
+            if destination is None:
+                content = response.read(limit + 1)
+                downloaded, actual_digest = len(content), hashlib.sha256(content).hexdigest()
+            else:
+                content, downloaded, checksum = b"", 0, hashlib.sha256()
+                with destination.open("xb") as target:
+                    os.chmod(destination, 0o600)
+                    while block := response.read(512 * 1024):
+                        downloaded += len(block)
+                        if downloaded > size:
+                            raise ClientError("Controlled media exceeds its declared size")
+                        checksum.update(block)
+                        target.write(block)
+                actual_digest = checksum.hexdigest()
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise ClientError("Controlled image download failed; retain the fixed ContentRef") from exc
+    if downloaded != size or actual_digest != digest:
+        raise ClientError("Controlled image download size or SHA-256 mismatch")
+    return content, ref
+
+
+def _chunk_import(config: MCPConfig, *, project_id: str, filename: str, digest: str,
+                  path: Path, purpose: str, source_ref=None) -> dict[str, Any]:
+    size = path.stat().st_size
+    if not 0 < size <= MAX_DOWNLOAD_BYTES:
+        raise ClientError("Chunk import requires 1 byte to 1 GiB")
+    with path.open("rb") as stream:
+        checksum = hashlib.file_digest(stream, "sha256").hexdigest()
+    if checksum != digest:
+        raise ClientError("Local media does not match expected sha256")
+    metadata = dict(project_id=project_id, filename=filename, size=size, sha256=digest,
+                    purpose=purpose, source_content_ref=source_ref)
+    key = hashlib.sha256(json.dumps(metadata, sort_keys=True).encode()).hexdigest()
+    state_path = config.state_dir / "mcp-imports" / ("upload-" + key + ".json")
+    # prepare reuses its durable identity and offset, including a lost response.
+    status = call_mcp_tool(config, "video.import_prepare", {**metadata, "idempotency_key": "import-" + key})
+    identity = status.get("import_id")
+    if not isinstance(identity, str) or not re.fullmatch(r"imp_[0-9a-f]{32}", identity):
+        raise ClientError("Import returned an invalid identity")
+    args = {"project_id": project_id, "import_id": identity}
+    _save_mcp_attempt(state_path, {**metadata, **args, "status": status.get("status"), "project_archive_status": "not_archived"})
+    with path.open("rb") as stream:
+        while status.get("status") != "committed":
+            offset, block_size = status.get("offset"), status.get("chunk_max_bytes")
+            if type(offset) is not int or not 0 <= offset <= size or type(block_size) is not int or not 0 < block_size <= 512 * 1024:
+                raise ClientError("Import returned invalid upload bounds")
+            if offset == size:
+                break
+            stream.seek(offset)
+            content = stream.read(min(block_size, size - offset))
+            if not content:
+                raise ClientError("Import source changed during upload")
+            status = call_mcp_tool(config, "video.import_chunk", {**args, "offset": offset,
+                "content_base64": base64.b64encode(content).decode(), "sha256": hashlib.sha256(content).hexdigest()})
+            if status.get("offset") != offset + len(content):
+                raise ClientError("Import returned an unexpected offset; resume using the same source")
+    result = call_mcp_tool(config, "video.import_commit", args)
+    artifact = result.get("artifact", {})
+    if (result.get("status") != "committed" or artifact.get("size") != size
+        or artifact.get("sha256") != digest or artifact.get("project_id") != project_id):
+        raise ClientError("Committed import does not match the fixed source")
+    _save_mcp_attempt(state_path, {**metadata, **args, "status": "committed", "artifact": artifact,
+                                   "project_archive_status": "not_archived"})
+    return result
+
+
 def import_mcp_artifact(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
     project_id = _validate_project_id(args.project_id)
     digest = args.sha256.strip().lower()
     if not SHA256_PATTERN.fullmatch(digest):
         raise ClientError("sha256 must contain exactly 64 hexadecimal characters")
-    source = urllib.parse.urlsplit(args.source_url)
-    if source.scheme != "https" or not source.hostname or source.username or source.password or source.fragment:
-        raise ClientError("source_url must be an absolute HTTPS URL")
-    return call_mcp_tool(
-        config,
-        "artifact.import",
-        {
-            "project_id": project_id,
-            "source_url": args.source_url,
-            "filename": args.filename,
-            "expected_sha256": digest,
-        },
-    )
+    inventory = check_mcp_tools(config)
+    chunked = {"video.import_prepare", "video.import_chunk", "video.import_status", "video.import_commit"} <= set(inventory["tools"])
+    if not chunked and "video.import" not in inventory["tools"]:
+        raise ClientError("Host has no video.import adapter; artifact.import is not a central ContentRef adapter")
+    request = {"project_id": project_id, "filename": args.filename, "expected_sha256": digest}
+    ref = None
+    result = None
+    document = {}
+    if args.content_ref_file:
+        try:
+            document = json.loads(Path(args.content_ref_file).read_text(encoding="utf-8"))
+        except (ValueError, OSError) as error:
+            raise ClientError("Cannot read ContentRef JSON file") from error
+        if not isinstance(document, dict):
+            raise ClientError("ContentRef document must be an object")
+        if chunked:
+            with tempfile.TemporaryDirectory() as directory:
+                local = Path(directory) / "source.bin"
+                _, ref = _download_content_ref(config, document, local)
+                result = _chunk_import(config, project_id=project_id, filename=args.filename, digest=digest,
+                    path=local, purpose=getattr(args, "purpose", "reference"), source_ref=ref)
+        else:
+            content, ref = _download_content_ref(config, document)
+            if hashlib.sha256(content).hexdigest() != digest:
+                raise ClientError("ContentRef does not match expected sha256")
+            request["content_base64"] = base64.b64encode(content).decode("ascii")
+    elif args.file:
+        if chunked:
+            result = _chunk_import(config, project_id=project_id, filename=args.filename, digest=digest,
+                path=Path(args.file), purpose=getattr(args, "purpose", "reference"))
+        else:
+            with Path(args.file).open("rb") as source:
+                content = source.read(MAX_IMAGE_BYTES + 1)
+            if not 0 < len(content) <= MAX_IMAGE_BYTES or not _media_magic("image", content[:16]):
+                raise ClientError("Inline Video import requires an image of at most 3 MiB")
+            if hashlib.sha256(content).hexdigest() != digest:
+                raise ClientError("Local image does not match expected sha256")
+            request["content_base64"] = base64.b64encode(content).decode("ascii")
+    else:
+        source = urllib.parse.urlsplit(args.source_url)
+        if source.scheme != "https" or not source.hostname or source.username or source.password or source.fragment:
+            raise ClientError("source_url must be an absolute HTTPS URL")
+        request["source_url"] = args.source_url
+    if result is None:
+        result = call_mcp_tool(config, "video.import", request)
+    artifact = result.get("artifact", {})
+    if (not isinstance(artifact, dict) or artifact.get("sha256") != digest or
+        artifact.get("project_id") != project_id or
+        not re.fullmatch(r"art_[0-9a-f]{32}", str(artifact.get("artifact_id", "")))):
+        raise ClientError("Video import returned an invalid artifact mapping")
+    mapping = {"project_id": project_id, "source_content_ref": ref,
+               "source_access": document.get("access") if ref else None,
+               "video_artifact_id": artifact["artifact_id"], "sha256": digest, "size": artifact.get("size"),
+               "import_id": result.get("import_id"), "media": result.get("media"), "project_archive_status": "not_archived"}
+    path = config.state_dir / "mcp-imports" / f"{artifact['artifact_id']}.json"
+    _save_mcp_attempt(path, mapping)
+    return {**result, "mapping": mapping, "mapping_path": str(path)}
 
 
 def _utc_after(seconds: int) -> str:
@@ -1578,20 +1776,24 @@ def resume(config: Config, task_id: str) -> int:
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("check", help="verify the unified Video MCP tools required by route=fal")
-    artifact_parser = sub.add_parser("import", help="import an immutable HTTPS asset into a Video MCP project")
+    sub.add_parser("check", help="discover Video tools, host defaults and route limits without generation")
+    artifact_parser = sub.add_parser("import", help="import authorized image/video/audio into Video with resumable chunks")
     artifact_parser.add_argument("--project-id", required=True)
-    artifact_parser.add_argument("--source-url", required=True)
+    source = artifact_parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--source-url")
+    source.add_argument("--file", help="local PNG/JPEG/WebP, MP4, WAV or MP3; query host import limits")
+    source.add_argument("--content-ref-file", help="JSON with content_ref and optional fixed access")
     artifact_parser.add_argument("--filename", required=True)
     artifact_parser.add_argument("--sha256", required=True)
+    artifact_parser.add_argument("--purpose", default="reference")
     generate_parser = sub.add_parser("generate")
     generate_parser.add_argument(
         "--model",
-        default="verdantflare-sd2",
+        default=FAL_MODEL,
         choices=("verdantflare-sd2", FAL_MODEL),
-        help="public SD2 by default; use minimax-h3-ref2va together with --route fal",
+        help="H3 via Studio MCP; other models require the host's MCP tools",
     )
-    generate_parser.add_argument("--route", choices=(FAL_ROUTE,))
+    generate_parser.add_argument("--route", help="explicit configured route, otherwise use the host default")
     generate_parser.add_argument("--project-id")
     generate_parser.add_argument("--idempotency-key")
     generate_parser.add_argument("--prompt", required=True)
@@ -1613,7 +1815,7 @@ def make_parser() -> argparse.ArgumentParser:
     sub.add_parser("list")
     resume_parser = sub.add_parser("resume")
     resume_parser.add_argument("task_id")
-    resume_parser.add_argument("--route", choices=(FAL_ROUTE,))
+    resume_parser.add_argument("--route", help="original MCP task route; never changes the task")
     resume_parser.add_argument("--poll-interval", type=float, default=8)
     resume_parser.add_argument("--timeout", type=float, default=900)
     for command in ("status", "result"):
@@ -1640,13 +1842,13 @@ def main() -> int:
                 value = mcp_result(mcp_config, args.video_task_id)
             print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
-        if args.command == "generate" and (args.route == FAL_ROUTE) != (args.model == FAL_MODEL):
-            raise ClientError(f"fal generation requires --model {FAL_MODEL} --route {FAL_ROUTE}")
-        if args.command == "generate" and args.route == FAL_ROUTE:
+        if args.command == "generate":
+            if args.model != FAL_MODEL:
+                raise ClientError("New SD2 generation must use the host MCP tools; legacy direct generation is disabled")
             value = generate_mcp(load_mcp_config(), args)
             print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
-        if args.command == "resume" and (args.route == FAL_ROUTE or MCP_TASK_ID_PATTERN.fullmatch(args.task_id)):
+        if args.command == "resume" and (args.route or MCP_TASK_ID_PATTERN.fullmatch(args.task_id)):
             value = resume_mcp(load_mcp_config(), args.task_id, args.poll_interval, args.timeout)
             print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
             return 0

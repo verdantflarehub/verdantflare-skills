@@ -5,7 +5,7 @@
 1. 确认真实Studio会话，发现当前创建、状态、结果工具。现有网关为 `video.create/status/result`；管理工具缺失或403先按 [环境说明](../../ENVIRONMENT.md) 排查旧共享令牌。
 2. 创建或打开当前Project，读取已保存的Generation Unit。核实模型、当前渠道配置与就绪状态、时长、画幅和输入模式；不从旧文档猜默认渠道。
 3. 按 [调用说明](video-mcp.md) 将授权的本地/World输入归档，并适配为Video可读取的同项目引用。只拿到中央ContentRef或Image原生ID时，不能声称Video输入已经齐备。
-4. 固定Prompt和引用顺序，计算规范化输入摘要。相同单元版本的不同输入应新建版本，不能覆盖旧摘要。
+4. Singularity 调用 `video.preflight` 确认实际输出网格与参考编号，再固定 Prompt、引用顺序和输入摘要。相同单元版本的不同输入应新建版本，不能覆盖旧摘要。
 5. 保存不可变 `attempt_id`、幂等键及请求；准备完成后才进入提交阶段。工具或引用适配缺失时不直连Runtime，独立本地工作继续。
 
 ## 提交与恢复
@@ -21,18 +21,26 @@
 
 ## 现有Video CLI边界
 
-`scripts/video_client.py` 的命令名与实际分支不同：
+`scripts/video_client.py` 的调用边界：
 
-| 命令 / 选择 | 当前行为 |
-| --- | --- |
-| `check` | 检查旧工具集合 `artifact.import`、`video.generate/status/result`；对只注册 `video.create` 的网关可能误报不兼容 |
-| `generate --model minimax-h3-ref2va --route fal` | 旧MCP fal分支，调用 `video.generate`；只有与实际工具匹配时才可用 |
-| `import` | 调用旧 `artifact.import`；不是中央 `artifact.write` 或引用适配的替代品 |
-| `status` / `result` | 查询原Video任务，仍需确认认证、任务参数与返回格式兼容 |
-| `resume` | 按路由或任务ID识别MCP/旧SD2记录；不能用它改变原任务渠道 |
-| 其他生成、`list` / `recover` | 仍有旧SD2公共API、本地记录和S3流程，不是通用H3入口 |
+- `check`：分页发现工具，优先 `video.create`；读取 capabilities 的宿主默认渠道和适配器限制，不提交生成，不把 configured 当就绪。
+- `generate`：默认 H3，经 Studio 创建；显式 route 优先，否则解析宿主默认。Singularity 自动预检并把结果保存在 Attempt，不静默改画幅或换渠道。
+- `import`：本地 `--file` 或中央 `--content-ref-file` 优先走分块协议，支持图像、视频和音频；相同来源、文件名、用途、摘要生成固定导入键。中断后重跑同一命令查询并续传，commit 丢失响应时复用同一导入身份。`--purpose` 记录用途，允许来源 `--source-url` 仍走兼容入口。
+- `status` / `result`：查询原 Video 任务，确认返回格式兼容。
+- `resume`：按路由或任务 ID 识别 MCP／旧 SD2 记录，不能改变原渠道。
+- `list` / `recover`：历史 SD2 查询恢复入口。
 
-当前新Studio任务优先使用宿主MCP工具，不能只因CLI `check` 失败就报告服务不可用。没有选择fal的 `generate` 命令不能当作默认H3调用；也不为连接Studio运行旧SD2安装器。
+旧宿主没有 `video.capabilities` 时须显式指定已核实渠道；没有分块工具时只保留原 3 MiB 图片兼容入口，大图和音视频报告接入版本缺口。新 SD2 由宿主工具处理，不进入历史直连分支。
+
+中央引用文件保存 `{"content_ref":{"store_id":"<固定ID>","artifact_id":"<固定ID>","version_id":"<固定ID>"}}`；经Project/World读取时另附完整 `access`（项目ID+修订ID或资产ID+版本ID）。所有ID使用服务返回的UUIDv7。示例：
+
+```sh
+python scripts/video_client.py check
+python scripts/video_client.py import --project-id <项目ID> --content-ref-file reference.json --filename reference.png --sha256 <固定摘要>
+python scripts/video_client.py generate --project-id <项目ID> --idempotency-key unit_v1/attempt_01 --route <已核实渠道> --prompt "<已保存提示词>" --duration 15 --ratio 16:9 --image-ref <返回的Video原生ID>=identity
+```
+
+最后一条仅在所选适配器实际接受15秒横屏时执行。它表达制作目标，不是已成功生成的证据。导入映射保存于本地状态目录 `mcp-imports/`，供归档Project时登记；不能把本地映射文件当成已提交的项目修订。
 
 ## 结果、归档与重试
 
@@ -45,3 +53,5 @@
 - Prompt、引用、时长、画幅或模型变化：新建单元版本，不复用旧幂等键。
 - 创作检查失败：记录具体缺陷，在授权范围内修订候选，不伪造人工通过。
 - 取消只作用于明确任务，不删除原始Artifact或其他输出。
+
+汇报分别标明代码/Git完成、素材接入、任务ID与状态、结果下载校验、人工批准。仅参考图完成或代码提交时，不写“视频制作完成”。
