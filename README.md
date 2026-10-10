@@ -11,7 +11,7 @@ Project、Artifact、Blender 三项基础技能已实现并完成本地及 5090 
 - [`verdantflare-blender`](skills/verdantflare-blender/SKILL.md)：指定实例的场景操作、幂等恢复与 Project 工程归档。
 
 三项目录各自包含完整引用资料。本轮直接读取仓库源码验证，不安装到本地客户端。Project/Artifact 的本地工作副本操作复用 Studio 0.5.50 的 `studio-workspace`；宿主 MCP 仍是首选入口。
-Blender 0.1.5 补齐首次 edit 会话的工程恢复，并通过真实 Blender 隔离加载测试；第二主机恢复和完整桌面验收仍不包含在本轮通过范围内。
+Blender 0.1.5 的首次工程恢复已通过干净工作副本、真实内容服务、后台 Blender 编辑保存及重新打开验证。Project/Artifact 已完成 Windows↔Linux 往返；第二台物理 Blender 主机和完整桌面验收仍未覆盖。
 
 设计与测试事实由主工作区 `docs/design/skills/` 和 `plan/2026.10.skills-foundation.plan.md` 维护，未发布到 Center Catalog 或安装到 Studio Runtime。
 
