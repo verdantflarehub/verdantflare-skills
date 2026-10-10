@@ -21,7 +21,13 @@ Blender 0.1.5 的首次工程恢复已通过干净工作副本、真实内容服
 - 完整剧本交付六类独立文档，见[规范](skills/x-verdantflare-short-drama/references/writing/script-package-standard.md)与[模板](skills/x-verdantflare-short-drama/references/writing/delivery-templates.md)。
 - 旧目录与命令迁移见[迁移说明](skills/x-verdantflare-short-drama/references/migration.md)。仅保留一个可发现入口，媒体调用继续由 Image / Video / Music Skill 执行。
 
-本次为源码目录整理，不代表已发布到 Center Catalog 或更新已安装客户端。
+已发布 GitHub 版本 `x-verdantflare-short-drama-v0.1.0`，包含独立安装包与 SHA-256 校验文件；未发布到 Center Catalog，已安装客户端不会自动更新。
+
+安装命令：
+
+```text
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/x-verdantflare-short-drama-v0.1.0/skills/x-verdantflare-short-drama 安装 Skill。
+```
 
 ## verdantflare-music
 

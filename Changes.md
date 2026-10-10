@@ -1,5 +1,13 @@
 # Changes
 
+## x-verdantflare-short-drama-v0.1.0 — 2026-10-11
+
+- 首次发布统一短剧 Skill，保留作者标记 `x-`；原七项能力收拢为一个入口和按需模块。
+- 完整剧本必交正文、人物小传、地点与场次、道具、服装 Look、逐镜连续性，配套版本索引与审核返修记录。
+- 提供规范注释、交付模板、迁移说明、导演计划校验器与本机来源锚定拆解脚本。
+- 压缩包只包含该 Skill；媒体依赖文档使用固定源码链接，避免独立安装后出现兄弟目录断链。
+- GitHub 标签/Release 与独立压缩包发布，不代表 Center Catalog 上架或客户端已安装。
+
 ## 未发布
 
 - 新增 `verdantflare-project`、`verdantflare-artifact`、`verdantflare-blender`，各自包含完整元数据和按需操作参考，可独立目录安装。
