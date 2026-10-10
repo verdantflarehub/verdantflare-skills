@@ -4,16 +4,23 @@
 
 ## Studio入口与身份
 
-所有业务MCP的外部入口是Studio。`STUDIO_MCP_URL` 指向当前环境的 `/mcp`，`STUDIO_MCP_BEARER_TOKEN` 应绑定真实Core主体；Project/Artifact管理不能使用旧共享媒体令牌。宿主也可使用同源登录Cookie会话，按其认证契约携带Origin；Cookie值不是Core Bearer令牌。
+所有业务MCP的外部入口是Studio。`STUDIO_MCP_URL` 指向当前环境的 `/mcp`，
+`STUDIO_MCP_BEARER_TOKEN` 本身代表用户身份，服务端负责解析真实Core主体；客户端不需要
+额外输入账号密码或登录。已有Token的归属登记由服务端完成，不由客户端声明用户/组织。
+宿主浏览器也可沿用同源Cookie会话，但Cookie不是MCP客户端的必需条件，不能当Bearer使用。
 
 遇到403、管理工具不可见或旧CLI检查失败时：
 
 1. 区分认证失败、工具未注册、渠道未连接、引用未适配和任务执行失败；媒体工具可见不等于Project权限正常。
-2. 检查当前令牌类型。已有授权登录信息时恢复真实Studio会话并重新执行 `tools/list`、必要的只读项目查询，不重复索取已配置凭据。工作区测试账号按根AGENTS从受控本地配置读取。
+2. 用已配置的Bearer重新执行 `tools/list` 和必要的只读项目查询。若媒体可见但项目不可见，
+   检查网关是否仍部署旧媒体过滤逻辑、Token在Core的服务端归属及Project注册状态；
+   修复服务端绑定或部署，不能要求用户额外登录，也不能伪造主体补齐权限。
 3. 核对当前注册的工具名和参数。现有网关创建名为 `image.create` / `video.create`，不能因旧脚本只认 `.generate` 就报告服务不可用。
 4. 分别核对宿主渠道配置、就绪状态和输入规格。工具列表的默认值不证明渠道已接入；静态Schema与匹配部署版本的能力说明冲突时，先核实差异，不试填参数或用收费生成探测能力。
 
-仅有真实Cookie会话时，可用支持该会话的宿主工具。`studio-workspace` CLI当前需要Core Bearer；由宿主提供受控会话适配，不伪造身份头，不把旧共享令牌或Cookie当Core令牌。
+`studio-workspace` 使用同一个用户Bearer。支持本次修复的构建可运行 `tools` 进行只读发现，
+再用 `call` 调用项目操作；没有 `--auth login` 或账号密码输入。旧发布产物可用 `--help`
+检查是否支持 `tools`，调用及版本边界见 [统一客户端](./_shared/project-world-client.md)。
 
 ## 附带客户端的实际状态
 

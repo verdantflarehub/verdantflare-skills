@@ -2,22 +2,26 @@
 
 四个制作 Skill 共用 Studio 的 `studio-workspace` 客户端；不在 Skill 中重写工作副本、
 上传 journal 或工程清单生成逻辑。客户端从 Studio release CI 下载与系统匹配的
-`studio-v0.5.36-workspace-windows-amd64` 或 `studio-v0.5.36-workspace-linux-amd64`
+`studio-v0.5.50-workspace-windows-amd64` 或 `studio-v0.5.50-workspace-linux-amd64`
 产物，也可在 Studio 源码中执行 `bash scripts/build.sh workspace`。
 
 ## 会话与作用域
 
 宿主通过环境提供 `STUDIO_MCP_URL`（Studio 根地址或 `/mcp`）和
-`STUDIO_MCP_BEARER_TOKEN`（已绑定真实 Core 主体的会话）。只接受 HTTPS 或本机
-loopback HTTP。旧共享媒体 token 不具备 Project/World 管理权限；认证失败时恢复真实
-会话，不自报用户/组织，不索取 S3 或内部服务凭据。token 不进入命令参数、请求 JSON、
+`STUDIO_MCP_BEARER_TOKEN`（代表用户身份，由服务端解析真实 Core 主体）。只接受 HTTPS 或本机
+loopback HTTP。客户端无需额外登录；认证失败时检查服务端令牌归属、有效期及撤销状态，
+不自报用户/组织，不索取账号密码、S3 或内部服务凭据。token 不进入命令参数、请求 JSON、
 `.vf` 或日志。输入输出均为 UTF-8 JSON，Windows 子进程读取须明确 UTF-8。
 
 直接可用的 Studio MCP 工具仍优先使用；CLI 是需要本地文件读写或外部进程调用时的入口。
 
-认证排查见 [环境说明](../ENVIRONMENT.md)。媒体工具可见而 `project.*` / `artifact.*` 不可见时，先检查令牌类型；使用已有授权登录信息恢复真实会话，再重新发现工具。不要伪造项目或主体头，也不要把“客户端未适配”报告成“服务不可用”。
+认证排查见 [环境说明](../ENVIRONMENT.md)。媒体工具可见而 `project.*` / `artifact.*` 不可见时，
+检查服务端Token归属、旧网关过滤逻辑和服务注册，再用同一Bearer重新发现工具。不要通过
+额外登录绕过问题，不要伪造项目或主体头，也不要把“客户端未适配”报告成“服务不可用”。
 
-当前 `studio-workspace` CLI 接受真实Core主体的Bearer会话，不直接读取浏览器Cookie。宿主的Cookie登录会话与CLI的Bearer输入不能互换；仅有Cookie时使用宿主提供的受控文件传输或会话适配，不能把Cookie值当Bearer传给CLI。
+当前 `studio-workspace` CLI 只需上述Bearer，不直接读取浏览器Cookie，也不要求登录。
+`v0.5.50` 已发布 `studio-workspace tools` 只读发现入口；旧 `v0.5.36`
+产物尚无此子命令，可通过 `--help` 确认。`call` 与工作副本操作沿用同一凭据。
 
 ## 显式工作副本操作
 
