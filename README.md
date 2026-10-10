@@ -15,31 +15,13 @@ Blender 0.1.5 的首次工程恢复已通过干净工作副本、真实内容服
 
 设计与测试事实由主工作区 `docs/design/skills/` 和 `plan/2026.10.skills-foundation.plan.md` 维护，未发布到 Center Catalog 或安装到 Studio Runtime。
 
-以下五项已纳入 VF Skill 包，可从本仓库目录安装或直接在工作区开发验证：
+短剧相关能力统一为一个研发 Skill：
 
-- [`x-verdantflare-short-drama-director`](skills/x-verdantflare-short-drama-director/SKILL.md)：剧本、故事概念或广告 brief 到 treatment、Shot 计划和 Generation Unit 提案。
-- [`x-verdantflare-short-drama-film-production`](skills/x-verdantflare-short-drama-film-production/SKILL.md)：影视段落的资产、镜头、视频候选和验片交接。
-- [`x-verdantflare-short-drama-commercial-production`](skills/x-verdantflare-short-drama-commercial-production/SKILL.md)：品牌片、产品广告和电商短视频制作与声明审校。
-- [`x-verdantflare-short-drama-character-performance`](skills/x-verdantflare-short-drama-character-performance/SKILL.md)：单镜角色动作、情绪、对白表演与动态验片。
-- [`x-verdantflare-short-drama-local-scene-breakdown`](skills/x-verdantflare-short-drama-local-scene-breakdown/SKILL.md)：使用本机 Ollama 从单场剧本提取来源锚定事实和动作节拍。
+- [`verdantflare-short-drama`](skills/verdantflare-short-drama/SKILL.md)：编剧、审核、导演、制作，按需进入表演、本机拆解与广告适配模块。
+- 完整剧本交付六类独立文档，见[规范](skills/verdantflare-short-drama/references/writing/script-package-standard.md)与[模板](skills/verdantflare-short-drama/references/writing/delivery-templates.md)。
+- 旧目录与命令迁移见[迁移说明](skills/verdantflare-short-drama/references/migration.md)。仅保留一个可发现入口，媒体调用继续由 Image / Video / Music Skill 执行。
 
-本地安装时，将对应的 `skills/<name>` 目录交给 Skill Installer；正式发布前仍需完成版本、来源、授权和依赖登记。服务器能力继续通过现有 Image、Video、Music MCP 进入，不在这些 Skill 中伪造新的 MCP 接口。
-
-## x-verdantflare-short-drama-director（开发版）
-
-[`x-verdantflare-short-drama-director`](skills/x-verdantflare-short-drama-director/SKILL.md) 负责将剧本、故事概念或广告 brief 编成导演方案、Shot 时间线、资产需求和可选 Generation Unit 提案。它不调用生成模型；计划可用 `python3 skills/x-verdantflare-short-drama-director/scripts/validate_plan.py <plan.json>` 检查时码、引用与 H3 单元约束。设计边界见主工作区的 `docs/design/workflow/verdantflare-director-skill-v0.1.md` 草案。当前仅在仓库中完成本地实现和测试，未发布到 Center Catalog 或安装到 Studio Runtime。
-
-## 制作技能（开发版）
-
-- [`x-verdantflare-short-drama-film-production`](skills/x-verdantflare-short-drama-film-production/SKILL.md)：影视剧本、场景到资产、镜头、视频候选和验片交接。
-- [`x-verdantflare-short-drama-commercial-production`](skills/x-verdantflare-short-drama-commercial-production/SKILL.md)：广告 brief、产品连续性、制作与声明审校。
-- [`x-verdantflare-short-drama-character-performance`](skills/x-verdantflare-short-drama-character-performance/SKILL.md)：单镜角色动作、情绪、对白和动态验片。
-
-三者按任务阶段调用已有短剧 Director、Image、Video 和 Music MV Skill，不另建生成接口。本地源代码和指导文档可供开发验证，未发布到 Center Catalog 或安装到 Studio Runtime；边界见主工作区 `docs/design/workflow/verdantflare-production-skills-v0.1.md` 草案。
-
-## x-verdantflare-short-drama-local-scene-breakdown（本机模型开发版）
-
-[`x-verdantflare-short-drama-local-scene-breakdown`](skills/x-verdantflare-short-drama-local-scene-breakdown/SKILL.md) 使用本机 Ollama 已安装的 `gemma3:12b` 处理单场 UTF-8 剧本，输出带原文证据的事实、动作节拍、待审推断及拒收清单。直接运行 `python3 skills/x-verdantflare-short-drama-local-scene-breakdown/scripts/breakdown.py --input <scene.txt> --output <breakdown.json>`；不自动拉取模型、不连接远端、不覆盖已有输出。草案边界见主工作区 `docs/design/workflow/verdantflare-local-scene-breakdown-v0.1.md`。
+本次为源码目录整理，不代表已发布到 Center Catalog 或更新已安装客户端。
 
 ## verdantflare-music
 

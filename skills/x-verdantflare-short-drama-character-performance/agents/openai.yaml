@@ -1,4 +1,0 @@
-interface:
-  display_name: "VerdantFlare Character Performance"
-  short_description: "Design and review character performance for a shot"
-  default_prompt: "Use $x-verdantflare-short-drama-character-performance to design and review this character performance shot."

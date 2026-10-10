@@ -4,13 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILLS = (
-    "x-verdantflare-short-drama-character-performance",
-    "x-verdantflare-short-drama-commercial-production",
-    "x-verdantflare-short-drama-director",
-    "x-verdantflare-short-drama-film-production",
-    "x-verdantflare-short-drama-local-scene-breakdown",
-)
+SKILLS = ("verdantflare-short-drama",)
 
 
 class NewSkillPackageTests(unittest.TestCase):
@@ -29,11 +23,21 @@ class NewSkillPackageTests(unittest.TestCase):
     def test_referenced_local_files_exist(self):
         for name in SKILLS:
             folder = ROOT / "skills" / name
-            text = (folder / "SKILL.md").read_text(encoding="utf-8")
-            for target in re.findall(r"\]\(([^)#]+)", text):
-                if target.startswith(("http://", "https://")):
-                    continue
-                self.assertTrue((folder / target).resolve().exists(), f"{name}: {target}")
+            # Nested stage guides resolve links relative to themselves, not the router.
+            for document in folder.rglob("*.md"):
+                text = document.read_text(encoding="utf-8")
+                for target in re.findall(r"\]\(([^)#]+)", text):
+                    if target.startswith(("http://", "https://")):
+                        continue
+                    self.assertTrue((document.parent / target).resolve().exists(),
+                                    f"{document.relative_to(ROOT)}: {target}")
+
+    def test_short_drama_has_one_discoverable_entry(self):
+        # A nested SKILL.md would recreate duplicate discovery after consolidation.
+        root = ROOT / "skills"
+        entries = [p.relative_to(root).as_posix() for p in root.rglob("SKILL.md")
+                   if "short-drama" in p.relative_to(root).as_posix()]
+        self.assertEqual(entries, ["verdantflare-short-drama/SKILL.md"])
 
 
 if __name__ == "__main__":
