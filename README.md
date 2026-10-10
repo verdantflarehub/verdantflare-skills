@@ -17,9 +17,9 @@ Blender 0.1.5 的首次工程恢复已通过干净工作副本、真实内容服
 
 短剧相关能力统一为一个研发 Skill：
 
-- [`verdantflare-short-drama`](skills/verdantflare-short-drama/SKILL.md)：编剧、审核、导演、制作，按需进入表演、本机拆解与广告适配模块。
-- 完整剧本交付六类独立文档，见[规范](skills/verdantflare-short-drama/references/writing/script-package-standard.md)与[模板](skills/verdantflare-short-drama/references/writing/delivery-templates.md)。
-- 旧目录与命令迁移见[迁移说明](skills/verdantflare-short-drama/references/migration.md)。仅保留一个可发现入口，媒体调用继续由 Image / Video / Music Skill 执行。
+- [`x-verdantflare-short-drama`](skills/x-verdantflare-short-drama/SKILL.md)：编剧、审核、导演、制作，按需进入表演、本机拆解与广告适配模块。
+- 完整剧本交付六类独立文档，见[规范](skills/x-verdantflare-short-drama/references/writing/script-package-standard.md)与[模板](skills/x-verdantflare-short-drama/references/writing/delivery-templates.md)。
+- 旧目录与命令迁移见[迁移说明](skills/x-verdantflare-short-drama/references/migration.md)。仅保留一个可发现入口，媒体调用继续由 Image / Video / Music Skill 执行。
 
 本次为源码目录整理，不代表已发布到 Center Catalog 或更新已安装客户端。
 

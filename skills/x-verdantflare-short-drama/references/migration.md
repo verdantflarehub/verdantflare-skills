@@ -2,7 +2,7 @@
 
 ## 1. 旧名称与新模块
 
-统一安装和调用 `verdantflare-short-drama`。下表保留旧名称以便定位历史资料，不是第二套注册入口。
+统一安装和调用 `x-verdantflare-short-drama`。下表保留旧名称以便定位历史资料，不是第二套注册入口。
 
 | 原名称后缀（前缀为 x-verdantflare-short-drama-） | 新模块 |
 | --- | --- |
@@ -16,7 +16,7 @@
 
 ## 2. 路径与兼容边界
 
-原模块 `references/<文件>` 改为 `verdantflare-short-drama/references/<模块>/<文件>`；原 `SKILL.md` 的执行说明改为该模块的 `guide.md`。只有包根保留 Skill frontmatter 与 UI 元数据，避免自动发现时出现重复能力。
+原模块 `references/<文件>` 改为 `x-verdantflare-short-drama/references/<模块>/<文件>`；原 `SKILL.md` 的执行说明改为该模块的 `guide.md`。只有包根保留 Skill frontmatter 与 UI 元数据，避免自动发现时出现重复能力。
 
 导演校验器和本机拆解脚本迁到包根 `scripts/`；测试迁到包根 `tests/`。脚本参数、计划 JSON 契约、拆解输出契约均不变。迁移后从包根执行命令，不从 references 子目录执行。
 

@@ -4,7 +4,7 @@
 
 确认交付是短片、场景、预告片还是纪录片段落。提取用户已给定的角色目标、阻碍、转折、场景边界、对白和禁用元素；按可观察的进入状态、动作、离开状态拆场景。完整短剧使用剧本做生产输入时，先读取 `verdantflare-short-drama-review` 的固定版本与审核结论；未解决的 P0/P1 所影响的剧情、镜头和资产保持草案状态。纪录片不能编造被摄者行为或采访事实，预告片遵守用户指定的剧透边界。
 
-原始剧本事实密集时，可先逐场使用 `verdantflare-short-drama` 的本机模型提取原文锚定候选；人工核对拒收项、推断和语义分类后，再使用 `verdantflare-short-drama` 编写 `treatment.md` 和 `plan.json`，并运行其校验器。Shot 时间线连续覆盖目标段落；每镜有叙事目的、主要动作、起落状态、相机与声音。Generation Unit 是模型调用提案，与 Shot 分开；同一角色造型、地点和连续时间才考虑组合，模型上限以当前 Video Skill 为准。
+原始剧本事实密集时，可先逐场使用 `x-verdantflare-short-drama` 的本机模型提取原文锚定候选；人工核对拒收项、推断和语义分类后，再使用 `x-verdantflare-short-drama` 编写 `treatment.md` 和 `plan.json`，并运行其校验器。Shot 时间线连续覆盖目标段落；每镜有叙事目的、主要动作、起落状态、相机与声音。Generation Unit 是模型调用提案，与 Shot 分开；同一角色造型、地点和连续时间才考虑组合，模型上限以当前 Video Skill 为准。
 
 ## 2. 资产与生成
 

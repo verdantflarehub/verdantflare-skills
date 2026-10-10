@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILLS = ("verdantflare-short-drama",)
+SKILLS = ("x-verdantflare-short-drama",)
 
 
 class NewSkillPackageTests(unittest.TestCase):
@@ -37,7 +37,7 @@ class NewSkillPackageTests(unittest.TestCase):
         root = ROOT / "skills"
         entries = [p.relative_to(root).as_posix() for p in root.rglob("SKILL.md")
                    if "short-drama" in p.relative_to(root).as_posix()]
-        self.assertEqual(entries, ["verdantflare-short-drama/SKILL.md"])
+        self.assertEqual(entries, ["x-verdantflare-short-drama/SKILL.md"])
 
 
 if __name__ == "__main__":

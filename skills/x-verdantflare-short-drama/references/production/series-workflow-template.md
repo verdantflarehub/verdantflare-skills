@@ -41,13 +41,13 @@
 
 | 工作 | Skill 或能力 | 边界 |
 | --- | --- | --- |
-| 完整剧本与六类设计基础文档 | `verdantflare-short-drama` | 创作、返修和同步配套设定；交固定版本包，不提前称图像或成片获批 |
+| 完整剧本与六类设计基础文档 | `x-verdantflare-short-drama` | 创作、返修和同步配套设定；交固定版本包，不提前称图像或成片获批 |
 | 剧本与人物小传审核 | `verdantflare-short-drama-review` | 审核结论带版本和证据；不替代人工批准或实际观看数据 |
-| 单场原文证据提取 | `verdantflare-short-drama` | 本机 Ollama 草案，人工核对后使用 |
-| 导演方案、Shot 与计划校验 | `verdantflare-short-drama` | `plan.json` 是本地策划契约，不是 MCP 请求 |
-| 跨阶段影视制作 | `verdantflare-short-drama` | 维护输入版本与交接，不代替专业工具 |
+| 单场原文证据提取 | `x-verdantflare-short-drama` | 本机 Ollama 草案，人工核对后使用 |
+| 导演方案、Shot 与计划校验 | `x-verdantflare-short-drama` | `plan.json` 是本地策划契约，不是 MCP 请求 |
+| 跨阶段影视制作 | `x-verdantflare-short-drama` | 维护输入版本与交接，不代替专业工具 |
 | 角色、Look、场景、分镜图 | `verdantflare-image` | 产出候选并核对 Artifact/哈希 |
-| 表演难点 | `verdantflare-short-drama` | 单镜或相邻镜头的动作/情绪/对白 |
+| 表演难点 | `x-verdantflare-short-drama` | 单镜或相邻镜头的动作/情绪/对白 |
 | 视频生成与恢复 | `verdantflare-video` | 从当前宿主解析模型/渠道，正式项目 ID 必填 |
 | 原创歌曲、MV（按需） | `verdantflare-music`、`verdantflare-music-mv` | 独立审核歌曲与音色，不把配乐视为默认必做 |
 

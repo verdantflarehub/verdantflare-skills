@@ -1,4 +1,0 @@
-interface:
-  display_name: "VerdantFlare 短剧"
-  short_description: "统一完成短剧编剧、审核、导演、制作与六类设计基础文档交接"
-  default_prompt: "使用 $verdantflare-short-drama 按当前阶段完成这部短剧；完整剧本任务须交付六类文档、版本索引与返修记录。"
