@@ -4,6 +4,17 @@
 
 ## 工作区新增研发技能
 
+Project、Artifact、Blender 三项基础技能已实现并完成本地及 5090 真实调用验证，当前为未发布开发版：
+
+- [`verdantflare-project`](skills/verdantflare-project/SKILL.md)：项目创建、固定修订、工作副本保存与恢复。
+- [`verdantflare-artifact`](skills/verdantflare-artifact/SKILL.md)：内容上传、受控下载、摘要校验与上传恢复。
+- [`verdantflare-blender`](skills/verdantflare-blender/SKILL.md)：指定实例的场景操作、幂等恢复与 Project 工程归档。
+
+三项目录各自包含完整引用资料。本轮直接读取仓库源码验证，不安装到本地客户端。Project/Artifact 的本地工作副本操作复用 Studio 0.5.50 的 `studio-workspace`；宿主 MCP 仍是首选入口。
+Blender 0.1.5 补齐首次 edit 会话的工程恢复，并通过真实 Blender 隔离加载测试；第二主机恢复和完整桌面验收仍不包含在本轮通过范围内。
+
+设计与测试事实由主工作区 `docs/design/skills/` 和 `plan/2026.10.skills-foundation.plan.md` 维护，未发布到 Center Catalog 或安装到 Studio Runtime。
+
 以下五项已纳入 VF Skill 包，可从本仓库目录安装或直接在工作区开发验证：
 
 - [`x-verdantflare-short-drama-director`](skills/x-verdantflare-short-drama-director/SKILL.md)：剧本、故事概念或广告 brief 到 treatment、Shot 计划和 Generation Unit 提案。
@@ -67,7 +78,7 @@ STUDIO_MCP_URL=https://studio.example.com/mcp
 STUDIO_MCP_BEARER_TOKEN=<绑定真实Core主体的会话令牌>
 ```
 
-旧共享媒体令牌可能仍能列出或调用生成工具，但不能访问Project/Artifact。遇到管理工具缺失或403，先使用已有授权登录信息恢复真实会话，再重新查询能力。浏览器Cookie会话和CLI Bearer会话各走对应认证方式，不能互换令牌值。
+现行 Bearer 本身代表用户身份，由 Core 校验归属、有效期与撤销状态，客户端无需额外登录。遇到工具缺失或403，核对服务端身份绑定、工具注册及项目权限，不用登录步骤或自报用户头绕过。浏览器Cookie与CLI Bearer各用对应认证方式，不能互换令牌值。
 
 素材通过Project/Artifact受控保存。生成服务的原生Artifact与中央 `ContentRef` 按宿主适配流程转换；上传成功不等于任意生成服务已经能消费该引用。当前流程不要求客户端持有S3密钥或供应商密钥。
 

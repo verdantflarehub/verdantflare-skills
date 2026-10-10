@@ -2,6 +2,11 @@
 
 ## 未发布
 
+- 新增 `verdantflare-project`、`verdantflare-artifact`、`verdantflare-blender`，各自包含完整元数据和按需操作参考，可独立目录安装。
+- 复用 Studio workspace 客户端；明确仅 Bearer 身份、固定修订、上传幂等、Blender 实例路由与 text JSON 响应、场景保存和工程归档边界。
+- 直接从源码验证元数据和包内引用，完成工作副本、Blender 服务回归及 5090 真实内容/工程闭环；未安装技能或发布技能标签。详细证据见主工作区技能验收计划。
+- 补充 Blender 0.1.5 首次已有工程恢复、只读初始化限制及未知状态处理；服务修复的发布状态独立记录，不与技能安装混写。
+
 - 修正 Image / Video Skill、README 与环境说明中的旧工具名、固定渠道默认值和认证前提，以当前 Studio 工具发现和真实主体会话为入口。
 - 明确中央 ContentRef 与媒体服务原生 Artifact 的适配边界、Project 归档及 Markdown Preview 展示方式；按实际输出核验图像尺寸。
 - 标注 Image REST 客户端、Video 旧 SD2 / fal 分支与当前 Studio 的兼容限制，保留历史 API 契约供旧任务识别和恢复。

@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Blender"
+  short_description: "Edit a bound Blender scene and save verified project revisions"
+  default_prompt: "Use $verdantflare-blender to inspect the specified instance, make the requested scene changes and verify the project save."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Artifact"
+  short_description: "Transfer and verify immutable Studio content versions"
+  default_prompt: "Use $verdantflare-artifact to upload the selected file through Studio and verify its immutable content reference."

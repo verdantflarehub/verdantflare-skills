@@ -1,6 +1,6 @@
 # Project / World 实际调用入口
 
-四个制作 Skill 共用 Studio 的 `studio-workspace` 客户端；不在 Skill 中重写工作副本、
+制作技能及 Project/Artifact 技能共用 Studio 的 `studio-workspace` 客户端；不在 Skill 中重写工作副本、
 上传 journal 或工程清单生成逻辑。客户端从 Studio release CI 下载与系统匹配的
 `studio-v0.5.50-workspace-windows-amd64` 或 `studio-v0.5.50-workspace-linux-amd64`
 产物，也可在 Studio 源码中执行 `bash scripts/build.sh workspace`。
@@ -14,6 +14,8 @@ loopback HTTP。客户端无需额外登录；认证失败时检查服务端令�
 `.vf` 或日志。输入输出均为 UTF-8 JSON，Windows 子进程读取须明确 UTF-8。
 
 直接可用的 Studio MCP 工具仍优先使用；CLI 是需要本地文件读写或外部进程调用时的入口。
+独立任务可从 [Project](../verdantflare-project/SKILL.md) 或 [Artifact](../verdantflare-artifact/SKILL.md) 进入；
+已有明确服务参数的制作流程不需要额外加载所有技能。Blender 实例保存已在服务内完成上传与提交，不在客户端重复执行。
 
 认证排查见 [环境说明](../ENVIRONMENT.md)。媒体工具可见而 `project.*` / `artifact.*` 不可见时，
 检查服务端Token归属、旧网关过滤逻辑和服务注册，再用同一Bearer重新发现工具。不要通过
@@ -46,7 +48,8 @@ studio-workspace resume --dir <directory> --alias <connection> --project-id <pro
 文本保存、新文件导入及媒体保存复用同一 Project/Artifact 链路。二进制按流传输，
 校验大小及 SHA-256；默认 fetch 上限为 1 GiB，可显式指定 `--max-bytes`，实际能力仍
 受服务上限和磁盘空间约束。保存中断或响应未知时使用 `resume`，保留原 write_id 与
-commit_id；不要删除 journal 或重新生成一次任务来掩盖失败。
+commit_id；不要删除 journal 或重新生成一次任务来掩盖失败。先通过 status 确认存在待恢复操作；
+无 pending 时不将 resume 当作健康检查，正常保存后回读固定修订。
 
 `switch-head` 仅在本地无改动、无待恢复提交时切换基础修订，不覆盖文件；切换后仍按需
 fetch。并发提交冲突保留本地正文与 pending 请求，不自动合并或强制提交。

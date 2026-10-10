@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Project"
+  short_description: "Manage Studio project revisions and recover working copies"
+  default_prompt: "Use $verdantflare-project to open my Studio project, save the selected changes and verify the resulting revision."
