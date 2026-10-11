@@ -267,7 +267,7 @@ def _mcp_reference(value: str) -> dict[str, str]:
     return {"artifact_id": artifact_id, "purpose": purpose}
 
 
-def _mcp_references(args: argparse.Namespace) -> dict[str, list[dict[str, str]]]:
+def _mcp_references(args: argparse.Namespace, *, allow_empty: bool = False) -> dict[str, list[dict[str, str]]]:
     references = {
         "images": [_mcp_reference(value) for value in args.image_ref],
         "videos": [_mcp_reference(value) for value in args.video_ref],
@@ -275,7 +275,7 @@ def _mcp_references(args: argparse.Namespace) -> dict[str, list[dict[str, str]]]
     }
     if len(references["images"]) > 9 or len(references["videos"]) > 3 or len(references["audios"]) > 3:
         raise ClientError("H3 supports at most 9 images, 3 videos, and 3 audio references")
-    if not any(references.values()):
+    if not any(references.values()) and not allow_empty:
         raise ClientError("H3 requires at least one reference")
     return references
 
@@ -315,8 +315,8 @@ def _save_mcp_attempt(path: Path, value: dict[str, Any]) -> None:
 
 
 def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
-    if args.model != FAL_MODEL:
-        raise ClientError("This CLI supports H3 generation; use the host MCP tools for other models")
+    if args.model and args.model not in {FAL_MODEL, "grok-imagine-video", "grok-imagine-video-1.5"}:
+        raise ClientError("Selected model requires the host MCP tools")
     if any((args.image, args.image_url, args.video, args.video_url, args.audio, args.audio_url)):
         raise ClientError("MCP generation accepts Video project Artifacts only; import inputs first and use --*-ref")
     if args.output or args.watermark or not args.generate_audio:
@@ -334,19 +334,19 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
     prompt = args.prompt.strip()
     if not prompt:
         raise ClientError("prompt must not be empty")
-    references = _mcp_references(args)
     duration = 5 if args.duration is None else args.duration
     inventory = check_mcp_tools(config)
     capabilities = inventory["capabilities"] or {}
     route = args.route or capabilities.get("default_route")
     if not isinstance(route, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", route):
         raise ClientError("Host default route is unavailable; explicitly select a verified --route")
+    references = _mcp_references(args, allow_empty=route == "grok")
     ratio = args.ratio or ("adaptive" if route == "fal" else "16:9")
-    if not 4 <= duration <= 15:
-        raise ClientError("H3 duration must be between 4 and 15 seconds")
+    if not (1 if route == "grok" else 4) <= duration <= 15:
+        raise ClientError("Duration exceeds the selected adapter limits")
     if ratio not in FAL_ALLOWED_RATIOS:
         raise ClientError(f"unsupported H3 ratio: {ratio}")
-    if route not in {"fal", "h3-singularity"} and not references["images"] and not references["videos"]:
+    if route not in {"fal", "h3-singularity", "grok"} and not references["images"] and not references["videos"]:
         raise ClientError("Local H3 routes require an image or video reference")
     if route in {"fal", "h3-vdn", "h3-singularity"} and sum(map(len, references.values())) > 12:
         raise ClientError("Selected route accepts at most 12 references")
@@ -360,13 +360,24 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
     request = {
         "project_id": project_id,
         "idempotency_key": idempotency_key,
-        "model": FAL_MODEL,
+        "model": args.model or (selected["model"] if route == "grok" and capabilities else FAL_MODEL),
         "route": route,
         "prompt": prompt,
         "duration_seconds": duration,
         "aspect_ratio": ratio,
         "references": references,
     }
+    if route == "grok":
+        if not capabilities or not selected.get("enabled"):
+            raise ClientError("Grok must be enabled in host capabilities")
+        if references["videos"] or references["audios"] or len(references["images"]) > 1 or any(r["purpose"] != "first_frame" for r in references["images"]):
+            raise ClientError("Grok accepts one first_frame image or no references")
+        request["mode"] = "image_to_video" if references["images"] else "text_to_video"
+        request["resolution"] = getattr(args, "resolution", None) or "720p"
+        if references["images"] and args.ratio is None:
+            request.pop("aspect_ratio")
+    elif getattr(args, "resolution", None):
+        raise ClientError("--resolution is currently a Grok parameter")
     attempt = {
         "schema_version": 1,
         "state": "submitting",
@@ -1789,9 +1800,9 @@ def make_parser() -> argparse.ArgumentParser:
     generate_parser = sub.add_parser("generate")
     generate_parser.add_argument(
         "--model",
-        default=FAL_MODEL,
-        choices=("verdantflare-sd2", FAL_MODEL),
-        help="H3 via Studio MCP; other models require the host's MCP tools",
+        default=None,
+        choices=("verdantflare-sd2", FAL_MODEL, "grok-imagine-video", "grok-imagine-video-1.5"),
+        help="H3 or Grok via Studio MCP; omitted resolves from the selected host route",
     )
     generate_parser.add_argument("--route", help="explicit configured route, otherwise use the host default")
     generate_parser.add_argument("--project-id")
@@ -1799,6 +1810,7 @@ def make_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--prompt", required=True)
     generate_parser.add_argument("--output")
     generate_parser.add_argument("--duration", type=int)
+    generate_parser.add_argument("--resolution", choices=("480p", "720p"))
     generate_parser.add_argument("--ratio", choices=sorted(FAL_ALLOWED_RATIOS))
     generate_parser.add_argument("--image", action="append", default=[])
     generate_parser.add_argument("--image-url", action="append", default=[])
@@ -1843,7 +1855,7 @@ def main() -> int:
             print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
         if args.command == "generate":
-            if args.model != FAL_MODEL:
+            if args.model == "verdantflare-sd2":
                 raise ClientError("New SD2 generation must use the host MCP tools; legacy direct generation is disabled")
             value = generate_mcp(load_mcp_config(), args)
             print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))

@@ -21,6 +21,8 @@ Project 归属、换电脑恢复、Artifact 保存及 World 固定资产引用�
 
 默认 codex / `gpt-image-2.5-sunburst`；用户明确选择优先，模型支持以宿主能力和调用契约为准。不绕过 MCP/受控客户端直连供应商。
 
+Grok 生成与单图编辑读取 [Grok 调用](references/grok.md)，以 `image.capabilities` 的实际模型为准；现有 REST CLI 不用于 Grok，使用 Studio MCP。
+
 使用真实Studio会话发现实际工具；现有网关提供 `image.create/edit/inpaint/status/result`，不假定历史 `image.generate` 或 `image.list` 已注册。旧共享媒体令牌不能访问Project/Artifact，认证恢复见 [环境说明](../ENVIRONMENT.md)。
 
 中央Artifact引用与Image原生Artifact ID需要受控适配，不因同名字段就互换。附带的 `scripts/image_client.py` 仍是REST兼容客户端，不能把Studio `/mcp` 地址当其REST根地址；具体限制见 [CLI](references/cli.md)。

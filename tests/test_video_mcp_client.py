@@ -158,11 +158,30 @@ class VideoClientContractTest(unittest.TestCase):
         self.assertIsNone(result["capabilities"])
 
     def test_default_generation_is_mcp_and_sd2_cannot_enter_legacy_s3(self):
-        self.assertEqual(self.generate_args().model, client.FAL_MODEL)
+        self.assertIsNone(self.generate_args().model)
         with mock.patch.object(sys, "argv", ["video_client.py", "generate", "--model", "verdantflare-sd2", "--prompt", "test"]), \
              mock.patch.object(client, "load_config", side_effect=AssertionError("legacy config accessed")), \
              mock.patch.object(sys, "stderr"):
             self.assertEqual(client.main(), 1)
+
+    def test_grok_text_and_first_frame_use_host_model_without_h3_parameters(self):
+        inventory={'create_tool':'video.create','tools':['video.create'], 'capabilities':{
+            'default_route':'grok','routes':[{'route':'grok','model':'grok-imagine-video-1.5',
+            'enabled':True,'configured':True,'duration_seconds':{'minimum':1,'maximum':15},
+            'aspect_ratios':['16:9','9:16']}]}}
+        for mode in ['text','image']:
+            args=client.make_parser().parse_args(['generate','--project-id','demo','--idempotency-key',mode,
+                '--prompt','Exact motion','--duration','1','--resolution','480p']+
+                (['--image-ref',ARTIFACT+'=first_frame'] if mode=='image' else []))
+            with mock.patch.object(client,'check_mcp_tools',return_value=inventory), mock.patch.object(
+                    client,'call_mcp_tool',return_value={'task_id':TASK,'status':'queued'}) as submit:
+                client.generate_mcp(self.config,args)
+                request=submit.call_args.args[2]
+                self.assertEqual(request['model'],'grok-imagine-video-1.5')
+                self.assertEqual(request['resolution'],'480p')
+                self.assertNotIn('quality_profile',request)
+                self.assertEqual(request['mode'],'image_to_video' if mode=='image' else 'text_to_video')
+                if mode=='image': self.assertNotIn('aspect_ratio',request)
 
     def test_large_chunk_import_resumes_after_lost_chunk_and_commit_responses(self):
         payload = b"chunked-media" * 300000

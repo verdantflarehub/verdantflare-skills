@@ -21,6 +21,7 @@ H3 模型支持六种画幅，Omni Reference 还有 Auto；渠道适配器里的
 
 - H3 生成单元：按当前阶段读取 [输入模式](references/input-modes.md)、[提示词](references/prompting.md)、[MCP 契约](references/video-mcp.md)、[执行流程](references/workflow.md) 或 [校验](references/validation.md)。
 - SD2：读取 [SD2 工作流](references/sd2-workflow.md)。
+- Grok：先读取 [Grok 调用](references/grok.md)，通过同一 Studio Video MCP 显式选择 `route=grok`；不要套用 H3 的参考数量、24 FPS 或提示词标签。
 - 已有任务沿原任务记录的模型与渠道恢复，不按当前默认值重新生成。
 - 每次创建任务都显式传入当前项目的 `project_id`、已解析的 `route` 和固定幂等键；不能依赖服务端猜测项目或渠道。
 - 中央Artifact的 `ContentRef` 与Video原生引用按宿主适配流程转换；不直接替换ID，不把受控下载路径当成匿名公网素材URL。
