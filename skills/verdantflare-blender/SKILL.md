@@ -27,7 +27,7 @@ GUI 或其他编辑者占用时报告，不抢占控制权或重启实例。
 
 ## 3. 保存与验证
 
-scene.save 只保存实例工作区。用户要求保存到项目时，按[工程归档](references/project-save.md)调用实例 project.save。
+scene.save 只保存实例工作区。用户要求保存到项目或执行 AI 短剧阶段归档时，按[工程归档](references/project-save.md)调用实例 project.save。
 等待 operation.get 明确完成，再从中央 Project/Artifact 回读固定修订和 `.blend` 内容。
 应用已执行上传和提交，客户端不重复保存同一检查点。
 

@@ -22,3 +22,7 @@
 - 结果通过技术校验后仍是候选。人工批准、World 入库和 Project 选用是不同动作，不能由文件名、哈希或工具成功状态推断。
 
 中央字段与操作以工作区的 [Project / World 操作契约](../../../docs/design/contracts/project-world-v1.md) 和 v2 Schema 为准；本文件不复制 Artifact URL、凭据或存储路径。
+
+## AI 短剧阶段归档
+
+AI 短剧创作与返修形成阶段成果后，默认保存到同一 Studio 项目（ai_short_drama），用户明确仅本地或只读讨论时遵循其范围。各媒体技能沿用真实 project_id，保留候选、状态、修改原因、任务和固定版本引用；完成 Artifact 传输、Project 提交并回读后才报告已同步。该规则不自动批准、选版或发布 World；未连通时保留恢复记录，不重复生成。

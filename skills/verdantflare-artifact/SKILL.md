@@ -13,7 +13,7 @@ AI 短剧任务形成阶段成果后默认同步到原 Studio 项目，沿用真
 使用 `STUDIO_MCP_URL`、`STUDIO_MCP_BEARER_TOKEN`；Bearer 由服务端解析真实身份，不额外登录或提交用户/组织头。
 
 Artifact 管内容版本；上传成功不等于已加入 Project。
-只上传时返回 ContentRef，用户要求加入项目时才显式提交 Project。生成服务原生 Artifact 不能直接当中央 ContentRef。
+只上传时返回 ContentRef，用户要求加入项目时显式提交 Project；AI 短剧阶段同步按上述默认归档范围执行。生成服务原生 Artifact 不能直接当中央 ContentRef。
 
 ## 2. 写入
 
