@@ -10,6 +10,10 @@
 
 ## 未发布
 
+- 补齐短剧场景、复杂道具与每镜 Blender 白模交付；完善人物参考职责、叙事机位和跨镜连续性。
+- AI 短剧及 Project、Artifact、Blender、Image、Video、Music、Music MV 入口统一阶段成果同步到原 Studio 项目；保留候选、修改、固定引用和恢复记录，不自动批准或发布 World。
+- 本项是源码规则更新；已安装包和在线 MCP 的生效状态分别核验，不据此宣称已部署。
+
 - 新增 `verdantflare-project`、`verdantflare-artifact`、`verdantflare-blender`，各自包含完整元数据和按需操作参考，可独立目录安装。
 - 复用 Studio workspace 客户端；明确仅 Bearer 身份、固定修订、上传幂等、Blender 实例路由与 text JSON 响应、场景保存和工程归档边界。
 - 直接从源码验证元数据和包内引用，完成工作副本、Blender 服务回归及 5090 真实内容/工程闭环；未安装技能或发布技能标签。详细证据见主工作区技能验收计划。

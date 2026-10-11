@@ -5,6 +5,8 @@ description: Create, open, save and recover VerdantFlare Studio projects and loc
 
 # VerdantFlare Project
 
+AI 短剧任务形成阶段成果后默认同步到原 Studio 项目，沿用真实 project_id；用户指定仅本地或只读讨论时遵循其范围。候选、返修与最终结果保留固定版本、修改原因、来源设定和任务记录，按当前 Project / Artifact 契约提交并回读修订；只上传或本地保存不算已同步。响应未知先对账恢复，不重复收费生成。同步不自动批准、选用或发布 World。
+
 ## 1. 连接与范围
 
 通过宿主 Studio `/mcp` 管理工程。沿用 `STUDIO_MCP_URL` 和 `STUDIO_MCP_BEARER_TOKEN`；Bearer 代表真实用户，不增加登录、密码或用户/组织请求头。

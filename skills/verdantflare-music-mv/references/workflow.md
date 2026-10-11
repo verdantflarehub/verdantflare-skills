@@ -41,6 +41,7 @@
 3. **审核分镜**：
    - 审核 Picture 2 Storyboard Grid（`02-storyboard-grid.png`，`F01~F08`）与内部各 Shot（`S01~S04`）的首尾帧条带图（`output/review/`）；
    - 检查机位角度、运镜轨迹、动作起落幅与负向防溢出约束。
+   - 按 [视频 Prompt 的跨镜连续性检查](../../verdantflare-video/references/prompting.md#跨镜连续性检查)核对相邻镜头的角色造型、道具状态、屏幕方向、空间地标与光线；只记录已批准资产能支持的事实，发现缺口时标记待核对。
 
 ### 步骤 5：提交渲染（分镜组合原则与批次确认）
 

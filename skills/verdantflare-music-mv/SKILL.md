@@ -5,6 +5,8 @@ description: 基于已批准歌曲，导演、审核并装配 30 秒高潮 MV；
 
 # VerdantFlare Music MV
 
+AI 短剧任务形成阶段成果后默认同步到原 Studio 项目，沿用真实 project_id；用户指定仅本地或只读讨论时遵循其范围。候选、返修与最终结果保留固定版本、修改原因、来源设定和任务记录，按当前 Project / Artifact 契约提交并回读修订；只上传或本地保存不算已同步。响应未知先对账恢复，不重复收费生成。同步不自动批准、选用或发布 World。
+
 范围为 30 秒高潮故事 MV。批准 Master 是音频与时间线事实源；已有授权素材直接复用。只请求某阶段时完成该阶段，不自动重做音乐或整支 MV。
 
 工程归属和固定引用遵循[共同接入规则](../_shared/project-world.md)。根目录 `project.json` 是本领域时钟与编排文档，`.vf/project.json` 是服务维护的通用 ProjectManifest 投影；两者职责不同，均使用 JSON。旧 `project.yaml` 只允许导入，不再生成或作为活跃事实源。人物形象、批准 Master 和动作参考在提交前解析为固定的 World 资产版本或当前 Project 文件。

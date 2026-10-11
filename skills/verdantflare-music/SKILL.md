@@ -5,6 +5,8 @@ description: 使用 VerdantFlare Music 创作、翻唱、换声、母带或局�
 
 # VerdantFlare Music
 
+AI 短剧任务形成阶段成果后默认同步到原 Studio 项目，沿用真实 project_id；用户指定仅本地或只读讨论时遵循其范围。候选、返修与最终结果保留固定版本、修改原因、来源设定和任务记录，按当前 Project / Artifact 契约提交并回读修订；只上传或本地保存不算已同步。响应未知先对账恢复，不重复收费生成。同步不自动批准、选用或发布 World。
+
 先确定用户要完成的阶段，从已有项目记录与 Artifact 继续；只做歌词、企划或单项修复时不扩展成整曲制作。对同一请求中无需新艺术决定的准备、技术检查和后续工具调用连续执行。
 
 Project、Artifact 和 World 的归属遵循[共同接入规则](../_shared/project-world.md)。歌曲、分轨和母带默认留在来源 Project；训练完成且明确可复用的人声模型才登记到 [World / Music](../../../docs/design/world/music/voice-model.md)，后续歌曲固定引用 `asset_id + asset_version_id`，不重复训练。

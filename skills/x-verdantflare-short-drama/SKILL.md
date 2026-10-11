@@ -39,7 +39,15 @@ metadata:
 - 导演计划校验：`python3 scripts/validate_plan.py <plan.json>`。
 - 本机单场提取：`python3 scripts/breakdown.py --input <scene.txt> --output <breakdown.json>`。仅在用户要求本机提取时使用；模型已安装且服务可用才执行，不自动下载模型。
 
-媒体调用仍使用当前宿主的 Image / Video / Music 能力和对应 Skill。项目保存与不可变内容传输使用现行 Project / Artifact 契约；本地文档交付不自动授权远端发布。技术校验、创作选版和正式发行分别记录。
+媒体调用仍使用当前宿主的 Image / Video / Music 能力和对应 Skill。项目保存与不可变内容传输使用现行 Project / Artifact 契约；AI 短剧阶段成果按下节同步到 Studio；项目归档不代表创作批准或远端公开发行。技术校验、创作选版和正式发行分别记录。
+
+### 3.1 短剧白模制作要求
+
+本工作流按用户确定的制作标准，为每个场景、全部镜头与复杂道具交付 Blender 白模。进入空间设计或镜头制作时读取[白模规范](references/production/blender-whitebox.md)。仅写剧本或制作人物身份图不强制先完成建模；已有白模按固定版本复用，每镜定位相机与帧范围，不能把预览图当成可编辑工程。
+
+### 3.2 Studio 阶段归档
+
+AI 短剧项目内容默认同步到同一 Studio 项目，读取[阶段同步与恢复](references/studio-sync.md)。用户明确要求仅本地、只讨论或仅审阅而不产生项目成果时遵循该范围。写作、返修、素材候选、白模、镜头与交付分别在形成可保存版本后归档；同步候选无需等待创作选版。
 
 ## 4. 旧入口迁移
 

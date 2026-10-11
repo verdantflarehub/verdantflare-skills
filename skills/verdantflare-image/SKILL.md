@@ -5,6 +5,8 @@ description: 通过 VerdantFlare Image MCP 生成或编辑图像候选，包括�
 
 # VerdantFlare Image
 
+AI 短剧任务形成阶段成果后默认同步到原 Studio 项目，沿用真实 project_id；用户指定仅本地或只读讨论时遵循其范围。候选、返修与最终结果保留固定版本、修改原因、来源设定和任务记录，按当前 Project / Artifact 契约提交并回读修订；只上传或本地保存不算已同步。响应未知先对账恢复，不重复收费生成。同步不自动批准、选用或发布 World。
+
 交付具有不可变 Artifact 与 SHA-256 的图像候选；不负责 MV 导演或剪辑。仅解释或修改代码时不启动生图。
 
 Project 归属、换电脑恢复、Artifact 保存及 World 固定资产引用遵循[共同接入规则](../_shared/project-world.md)。生成或导入结果先保存到当前 Project；确认可复用后，按 [World / Character 形象基线](../../../docs/design/world/character/identity.md) 显式登记固定版本。
