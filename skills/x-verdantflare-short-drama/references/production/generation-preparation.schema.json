@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "station://contracts/drafts/short-drama-generation-preparation",
+  "title": "ShortDramaGenerationPreparation",
+  "description": "WF1 fixed preparation and human-decision handoff document; not an execution permit or server-side budget ledger.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "project_id", "basis_revision_id", "stage", "scope", "basis", "coverage", "decision"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "short_drama_generation_preparation"},
+    "project_id": {"$ref": "#/$defs/id"},
+    "basis_revision_id": {"$ref": "#/$defs/id"},
+    "stage": {"enum": ["writing", "materials", "shots", "rough_cut", "delivery"]},
+    "scope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["targets", "instruction", "execution", "max_calls", "max_retries", "max_tokens", "cost_limit"],
+      "properties": {
+        "targets": {"type": "array", "minItems": 1, "maxItems": 1000, "uniqueItems": true, "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "key", "purpose"],
+          "properties": {
+            "kind": {"enum": ["script", "character", "wardrobe", "prop", "location", "sound", "music", "shot", "deliverable"]},
+            "key": {"$ref": "#/$defs/text"},
+            "state_key": {"$ref": "#/$defs/text"},
+            "purpose": {"$ref": "#/$defs/text"}
+          }
+        }},
+        "instruction": {"$ref": "#/$defs/text"},
+        "execution": {"oneOf": [{"type": "null"}, {
+          "type": "object", "additionalProperties": false,
+          "required": ["service", "model", "route"],
+          "properties": {"service": {"$ref": "#/$defs/text"}, "model": {"$ref": "#/$defs/text"}, "route": {"$ref": "#/$defs/text"}}
+        }]},
+        "max_calls": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "max_retries": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "max_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "cost_limit": {"oneOf": [{"type": "null"}, {
+          "type": "object", "additionalProperties": false,
+          "required": ["unit", "amount"],
+          "properties": {"unit": {"$ref": "#/$defs/text"}, "amount": {"type": "number", "minimum": 0}}
+        }]}
+      }
+    },
+    "basis": {"type": "array", "minItems": 1, "maxItems": 1000, "uniqueItems": true, "items": {
+      "type": "object", "additionalProperties": false,
+      "required": ["file_id", "content_ref", "purpose"],
+      "properties": {
+        "file_id": {"$ref": "#/$defs/id"}, "content_ref": {"$ref": "#/$defs/contentRef"},
+        "purpose": {"$ref": "#/$defs/text"}, "anchor": {"$ref": "#/$defs/text"}
+      }
+    }},
+    "coverage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["character", "wardrobe", "prop", "location", "sound", "music"],
+      "properties": {
+        "character": {"$ref": "#/$defs/coverage"}, "wardrobe": {"$ref": "#/$defs/coverage"},
+        "prop": {"$ref": "#/$defs/coverage"}, "location": {"$ref": "#/$defs/coverage"},
+        "sound": {"$ref": "#/$defs/coverage"}, "music": {"$ref": "#/$defs/coverage"}
+      }
+    },
+    "decision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "scope_sha256"],
+      "properties": {
+        "state": {"enum": ["pending", "approved", "rejected", "paused"]},
+        "scope_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "evidence": {
+          "type": "object", "additionalProperties": false,
+          "required": ["source", "reference", "summary"],
+          "properties": {
+            "source": {"enum": ["user_message", "studio_review"]},
+            "reference": {"$ref": "#/$defs/text"}, "summary": {"$ref": "#/$defs/text"}
+          }
+        }
+      },
+      "allOf": [{"if": {"properties": {"state": {"enum": ["approved", "rejected", "paused"]}}}, "then": {"required": ["evidence"]}}]
+    }
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "text": {"type": "string", "minLength": 1, "maxLength": 8192, "pattern": "\\S"},
+    "contentRef": {
+      "type": "object", "additionalProperties": false, "required": ["store_id", "artifact_id", "version_id"],
+      "properties": {"store_id": {"$ref": "#/$defs/id"}, "artifact_id": {"$ref": "#/$defs/id"}, "version_id": {"$ref": "#/$defs/id"}}
+    },
+    "coverage": {
+      "type": "object", "additionalProperties": false, "required": ["state", "note"],
+      "properties": {"state": {"enum": ["existing", "planned", "missing", "not_required"]}, "note": {"$ref": "#/$defs/text"}}
+    }
+  }
+}

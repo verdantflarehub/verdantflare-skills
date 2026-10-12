@@ -15,6 +15,8 @@ AI 短剧任务形成阶段成果后默认同步到原 Studio 项目，沿用真
 优先使用宿主 MCP。需要本地文件读写时使用 `studio-workspace`，操作见[工作副本](references/workspace.md)。
 直接提交、固定资产引用或恢复未知结果时，读取[修订与恢复](references/revisions.md)。两种方式使用同一用户凭据。
 
+短剧固定生成清单、人工消费授权、额度或未知提交恢复，读取[生成控制](references/generation-control.md)，以实际工具目录和服务端决定为准；普通归档不触发生成批准。
+
 ## 2. 打开与保存
 
 1. 沿用用户明确的项目，或通过 `project.list` 定位。存在无法区分的多个候选才询问。新建用 `project.create`，项目 ID 取自返回值，不用目录别名或 `default`。
