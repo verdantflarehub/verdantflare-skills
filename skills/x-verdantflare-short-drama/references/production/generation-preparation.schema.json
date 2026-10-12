@@ -2,10 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "station://contracts/drafts/short-drama-generation-preparation",
   "title": "ShortDramaGenerationPreparation",
-  "description": "WF1 fixed preparation and human-decision handoff document; not an execution permit or server-side budget ledger.",
+  "description": "Optional fixed preparation record. MCP authorization comes from the bearer user; legacy decisions are provenance only.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "kind", "project_id", "basis_revision_id", "stage", "scope", "basis", "coverage", "decision"],
+  "required": ["schema_version", "kind", "project_id", "basis_revision_id", "stage", "scope", "basis", "coverage"],
   "properties": {
     "schema_version": {"const": 1},
     "kind": {"const": "short_drama_generation_preparation"},
@@ -14,7 +14,7 @@
     "stage": {"enum": ["writing", "materials", "shots", "rough_cut", "delivery"]},
     "scope": {
       "type": "object", "additionalProperties": false,
-      "required": ["targets", "instruction", "execution", "max_calls", "max_retries", "max_tokens", "cost_limit"],
+      "required": ["targets", "instruction", "execution"],
       "properties": {
         "targets": {"type": "array", "minItems": 1, "maxItems": 1000, "uniqueItems": true, "items": {
           "type": "object", "additionalProperties": false,

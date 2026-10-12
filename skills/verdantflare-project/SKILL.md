@@ -15,7 +15,7 @@ AI 短剧任务形成阶段成果后默认同步到原 Studio 项目，沿用真
 优先使用宿主 MCP。需要本地文件读写时使用 `studio-workspace`，操作见[工作副本](references/workspace.md)。
 直接提交、固定资产引用或恢复未知结果时，读取[修订与恢复](references/revisions.md)。两种方式使用同一用户凭据。
 
-短剧固定生成清单、人工消费授权、额度或未知提交恢复，读取[生成控制](references/generation-control.md)，以实际工具目录和服务端决定为准；普通归档不触发生成批准。
+MCP Token 即用户调用授权，由 Studio 解析为真实用户并按其业务权限执行，不增加独立审批、再次登录或密码确认。媒体调用与未知提交恢复见[MCP 授权与恢复](references/mcp-authority.md)。
 
 ## 2. 打开与保存
 

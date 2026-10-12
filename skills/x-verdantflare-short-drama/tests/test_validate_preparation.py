@@ -40,13 +40,14 @@ def fixture():
 
 
 class PreparationTests(unittest.TestCase):
-    def test_pending_can_be_archived_but_not_handed_off(self):
+    def test_unresolved_execution_and_explicit_zero_limit_are_incomplete(self):
         record, opened = fixture()
         result = validator.evaluate(record, opened)
         self.assertTrue(result["valid"])
         self.assertTrue(result["basis_verified"])
         self.assertFalse(result["handoff_record_complete"])
-        self.assertFalse(result["execution_authorized"])
+        self.assertNotIn("execution_authorized", result)
+        self.assertNotIn("HUMAN_DECISION_REQUIRED", result["blockers"])
 
     def test_all_six_categories_required(self):
         for kind in ("character", "wardrobe", "prop", "location", "sound", "music"):
@@ -82,8 +83,24 @@ class PreparationTests(unittest.TestCase):
             "evidence": {"source": "user_message", "reference": "synthetic-only", "summary": "Not a real approval"}}
         result = validator.evaluate(record, opened)
         self.assertTrue(result["handoff_record_complete"])
-        self.assertFalse(result["execution_authorized"])
-        self.assertEqual(result["authority_check"], "requires_trusted_consumer")
+        self.assertNotIn("execution_authorized", result)
+        self.assertEqual(result["authority_check"], "studio_bearer_user")
+
+    def test_decision_and_unspecified_limits_do_not_block_bearer_calls(self):
+        for legacy_decision in (False, True):
+            record, opened = fixture()
+            record["scope"] = {k: v for k, v in record["scope"].items()
+                               if k in ("targets", "instruction", "execution")}
+            record["scope"]["execution"] = {"service": "test", "model": "fixture", "route": "fake"}
+            if legacy_decision:
+                record["decision"]["scope_sha256"] = validator.scope_digest(record)
+            else:
+                del record["decision"]
+            result = validator.evaluate(record, opened)
+            self.assertTrue(result["valid"])
+            self.assertTrue(result["handoff_record_complete"])
+            self.assertEqual(result["blockers"], [])
+            self.assertNotIn("execution_authorized", result)
 
     def test_missing_open_never_verifies_basis(self):
         record, _ = fixture()
@@ -101,7 +118,7 @@ class PreparationTests(unittest.TestCase):
         record["decision"] = {"state": "paused", "scope_sha256": validator.scope_digest(record),
             "evidence": {"source": "studio_review", "reference": "synthetic", "summary": "Synthetic pause"}}
         result = validator.evaluate(record, opened)
-        for code in ("HUMAN_DECISION_REQUIRED", "ZERO_TOKEN_ALLOWANCE", "ZERO_COST_ALLOWANCE"):
+        for code in ("ZERO_TOKEN_ALLOWANCE", "ZERO_COST_ALLOWANCE"):
             self.assertIn(code, result["blockers"])
 
     def test_cli_pending_is_nonzero_when_handoff_requested(self):
@@ -114,7 +131,7 @@ class PreparationTests(unittest.TestCase):
                        "--project-open", str(open_path), "--check-handoff"]
             result = subprocess.run(command, capture_output=True, text=True)
             self.assertEqual(result.returncode, 2)
-            self.assertFalse(json.loads(result.stdout)["execution_authorized"])
+            self.assertNotIn("execution_authorized", json.loads(result.stdout))
 
     def test_rpc_error_is_not_a_valid_manifest(self):
         record, _ = fixture()

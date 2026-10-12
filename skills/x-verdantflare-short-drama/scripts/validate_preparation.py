@@ -43,10 +43,10 @@ def evaluate(record, opened=None):
     verified = False
     blockers = []
     if not errors:
-        if scope_digest(record) != record["decision"]["scope_sha256"]:
+        if "decision" in record and scope_digest(record) != record["decision"]["scope_sha256"]:
             errors.append("SCOPE_DIGEST_MISMATCH")
         scope = record["scope"]
-        if scope["max_retries"] > max(0, scope["max_calls"] - 1):
+        if "max_calls" in scope and scope.get("max_retries", 0) > max(0, scope["max_calls"] - 1):
             errors.append("RETRIES_EXCEED_TOTAL_CALLS")
         if opened is not None:
             if not isinstance(opened, dict) or opened.get("isError") or opened.get("error"):
@@ -72,15 +72,13 @@ def evaluate(record, opened=None):
                             if refs.get(basis["file_id"]) != basis["content_ref"]:
                                 errors.append("BASIS_REFERENCE_MISMATCH: " + basis["file_id"])
                         verified = not errors
-        if record["decision"]["state"] != "approved":
-            blockers.append("HUMAN_DECISION_REQUIRED")
         if scope["execution"] is None:
             blockers.append("EXECUTION_UNRESOLVED")
-        if scope["max_calls"] <= 0:
+        if scope.get("max_calls") == 0:
             blockers.append("NO_CALL_ALLOWANCE")
-        if scope["max_tokens"] == 0:
+        if scope.get("max_tokens") == 0:
             blockers.append("ZERO_TOKEN_ALLOWANCE")
-        if scope["cost_limit"] is not None and scope["cost_limit"]["amount"] == 0:
+        if scope.get("cost_limit") is not None and scope["cost_limit"]["amount"] == 0:
             blockers.append("ZERO_COST_ALLOWANCE")
     if not verified:
         blockers.append("FIXED_BASIS_NOT_VERIFIED")
@@ -88,9 +86,8 @@ def evaluate(record, opened=None):
         "valid": not errors,
         "basis_verified": verified,
         "handoff_record_complete": not errors and not blockers,
-        "execution_authorized": False,
-        "authority_check": "requires_trusted_consumer",
-        "budget_enforcement": "not_implemented_in_WF1",
+        "authority_check": "studio_bearer_user",
+        "budget_enforcement": "not_enforced_by_this_validator",
         "errors": errors,
         "blockers": blockers,
     }
@@ -100,12 +97,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("record", type=Path)
     parser.add_argument("--project-open", type=Path, help="Saved response for the fixed basis revision")
-    parser.add_argument("--check-handoff", action="store_true", help="Fail if decision, scope or basis is incomplete")
+    parser.add_argument("--check-handoff", action="store_true", help="Check execution details, explicit limits and fixed basis; not authorization")
     args = parser.parse_args()
     try:
         result = evaluate(load_json(args.record), load_json(args.project_open) if args.project_open else None)
     except (OSError, ValueError, TypeError, KeyError, OverflowError):
-        result = {"valid": False, "execution_authorized": False, "errors": ["INVALID_INPUT"]}
+        result = {"valid": False, "errors": ["INVALID_INPUT"]}
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result["valid"]:
         return 1
