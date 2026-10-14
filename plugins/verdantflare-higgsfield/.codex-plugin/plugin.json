@@ -1,0 +1,16 @@
+{
+  "name": "verdantflare-higgsfield",
+  "version": "0.1.0",
+  "description": "Higgsfield official video workflow adapted for VerdantFlare team subscriptions through Studio.",
+  "author": {
+    "name": "VerdantFlare"
+  },
+  "license": "MIT",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Higgsfield · VerdantFlare Team",
+    "shortDescription": "通过自有 Video Skill 使用 Higgsfield 团队会员渠道",
+    "developerName": "VerdantFlare",
+    "category": "Design"
+  }
+}

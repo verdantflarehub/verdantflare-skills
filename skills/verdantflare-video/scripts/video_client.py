@@ -433,6 +433,39 @@ def mcp_result(config: MCPConfig, task_id: str) -> dict[str, Any]:
     return call_mcp_tool(config, "video.result", {"video_task_id": _validate_mcp_task_id(task_id)})
 
 
+def download_mcp_result(config: MCPConfig, result: dict[str, Any], output: str) -> dict[str, Any]:
+    """Download a native fixed Artifact without overwriting a different local file."""
+    media = result.get("media", {})
+    digest, size = media.get("sha256"), media.get("size")
+    if (result.get("status") != "succeeded" or not result.get("content_ref") or
+            not isinstance(digest, str) or not SHA256_PATTERN.fullmatch(digest) or
+            type(size) is not int or not 0 < size <= MAX_DOWNLOAD_BYTES):
+        raise ClientError("A completed native Artifact with verified media is required")
+    destination = Path(output).expanduser()
+    if destination.is_symlink():
+        raise ClientError("Output is a symlink")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    def matches(path):
+        if not path.is_file() or path.stat().st_size != size:
+            return False
+        with path.open("rb") as stream:
+            return hashlib.file_digest(stream, "sha256").hexdigest() == digest
+    # Authorize even when reusing an existing matching download.
+    with tempfile.TemporaryDirectory(prefix=".video-download-", dir=destination.parent) as directory:
+        staged = Path(directory) / "video.mp4"
+        _download_content_ref(config, result, staged)
+        if not matches(staged):
+            raise ClientError("Downloaded Artifact does not match Video media")
+        _validate_downloaded_video(staged)
+        try:
+            # Link is atomic and fails if the destination already exists.
+            os.link(staged, destination)
+        except FileExistsError:
+            if destination.is_symlink() or not matches(destination):
+                raise ClientError("Output exists with different content") from None
+    return {**result, "download": {"verified": True, "sha256": digest, "size": size}}
+
+
 def resume_mcp(config: MCPConfig, task_id: str, poll_interval: float, timeout: float) -> dict[str, Any]:
     task_id = _validate_mcp_task_id(task_id)
     if poll_interval < 1 or timeout < poll_interval:
@@ -1851,6 +1884,8 @@ def make_parser() -> argparse.ArgumentParser:
     for command in ("status", "result"):
         command_parser = sub.add_parser(command, help=f"read a Video MCP task {command}")
         command_parser.add_argument("video_task_id")
+        if command == "result":
+            command_parser.add_argument("--output", help="download and verify a native fixed Artifact; preserve existing files")
     recover_parser = sub.add_parser("recover")
     recover_parser.add_argument("client_request_id")
     return parser
@@ -1870,6 +1905,8 @@ def main() -> int:
                 value = mcp_status(mcp_config, args.video_task_id)
             else:
                 value = mcp_result(mcp_config, args.video_task_id)
+                if args.output:
+                    value = download_mcp_result(mcp_config, value, args.output)
             print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
         if args.command == "generate":

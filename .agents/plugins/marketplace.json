@@ -1,0 +1,20 @@
+{
+  "name": "verdantflare-skills",
+  "interface": {
+    "displayName": "VerdantFlare Skills"
+  },
+  "plugins": [
+    {
+      "name": "verdantflare-higgsfield",
+      "source": {
+        "source": "local",
+        "path": "./plugins/verdantflare-higgsfield"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Design"
+    }
+  ]
+}
