@@ -13,6 +13,8 @@ Project、Artifact 和 World 的生命周期遵循[共同接入规则](../_share
 
 H3 Ref2VA 使用业务模型 `minimax-h3-ref2va`；`route` 单独指定推理渠道。fal 适配器使用服务端锁定的 Reference-to-Video endpoint，但注册了工具不代表fal已配置或就绪。供应商凭据留在服务端，Skill 不持有或发送 `FAL_KEY`。
 
+创建前沿用用户名称，或用已有创作上下文生成简洁中文 Title（建议 8–16 字，单行 1–64 字），允许同名。面向用户使用服务端返回的 Title；技术 ID 保留在结构化 journal 与恢复记录。命名不改变 Prompt、幂等键或生成单元，resume 不重新 create 或补题。调用与兼容边界见 [MCP 调用说明](references/video-mcp.md)。
+
 先用真实Studio会话发现工具，按 [MCP调用说明](references/video-mcp.md) 解析当前注册名（现有网关为 `video.create/status/result`）与参数。遇到403或管理工具不可见，按 [环境说明](../ENVIRONMENT.md) 检查是否误用了旧共享媒体令牌；不立即推断Video服务不可用。
 
 `scripts/video_client.py` 的新生成统一走 Studio：发现 `video.create`（兼容已注册的 `video.generate`），通过 `video.capabilities` 解析默认渠道和适配器限制。素材优先通过 `video.import_prepare/import_chunk/import_status/import_commit` 可恢复导入，兼容旧 `video.import` 小图片入口。Singularity 用 `video.preflight` 返回实际画布、时长和参考编号；预检通过不代表 GPU 实测通过。没有能力工具的旧宿主须显式指定已核实的渠道。历史 SD2 仅保留恢复兼容，新 SD2 使用宿主 MCP 工具。具体命令见 [执行流程](references/workflow.md)。

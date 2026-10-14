@@ -230,6 +230,7 @@ def call_mcp_tool(config: MCPConfig, name: str, arguments: dict[str, Any]) -> di
 
 def check_mcp_tools(config: MCPConfig) -> dict[str, Any]:
     names = set()
+    schemas = {}
     params = {}
     cursors = set()
     while True:
@@ -238,6 +239,7 @@ def check_mcp_tools(config: MCPConfig) -> dict[str, Any]:
         if not isinstance(tools, list):
             raise ClientError("Video MCP tool inventory is invalid")
         names.update(tool["name"] for tool in tools if isinstance(tool, dict) and isinstance(tool.get("name"), str))
+        schemas.update({tool['name']: tool.get('inputSchema', {}) for tool in tools if isinstance(tool, dict) and isinstance(tool.get('name'), str)})
         cursor = result.get("nextCursor")
         if not cursor:
             break
@@ -253,7 +255,8 @@ def check_mcp_tools(config: MCPConfig) -> dict[str, Any]:
     if missing:
         raise ClientError("Video MCP is missing required tools: " + ", ".join(missing))
     capabilities = call_mcp_tool(config, "video.capabilities", {}) if "video.capabilities" in names else None
-    return {"status": "ok", "create_tool": create_tool, "tools": sorted(names), "capabilities": capabilities}
+    return {"status": "ok", "create_tool": create_tool, "tools": sorted(names), "capabilities": capabilities,
+            "create_supports_title": 'title' in schemas.get(create_tool, {}).get('properties', {})}
 
 
 def _mcp_reference(value: str) -> dict[str, str]:
@@ -401,6 +404,7 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
         "state": "submitting",
         "created_at": utc_now(),
         "request": request,
+        "title_snapshot": getattr(args, 'title', None),
     }
     path = _mcp_attempt_path(config, project_id, idempotency_key)
     if path.exists():
@@ -416,7 +420,10 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
         attempt["preflight"] = call_mcp_tool(config, "video.preflight", {k: v for k, v in request.items() if k != "idempotency_key"})
     _save_mcp_attempt(path, attempt)
     try:
-        result = call_mcp_tool(config, inventory["create_tool"], request)
+        naming = {'title': args.title} if getattr(args, 'title', None) is not None and inventory.get('create_supports_title') else {}
+        result = call_mcp_tool(config, inventory["create_tool"], {**request, **naming})
+        if getattr(args, 'title', None) is not None and not inventory.get('create_supports_title'):
+            result = {**result, 'title_warning': 'host_does_not_support_title; requested title was not saved'}
     except Exception:
         attempt["state"] = "submission_unknown"
         attempt["updated_at"] = utc_now()
@@ -1867,6 +1874,7 @@ def make_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--project-id")
     generate_parser.add_argument("--idempotency-key")
     generate_parser.add_argument("--prompt", required=True)
+    generate_parser.add_argument("--title", help="Readable task title; separate from immutable generation inputs")
     generate_parser.add_argument("--output")
     generate_parser.add_argument("--duration", type=int)
     generate_parser.add_argument("--resolution", choices=("480p", "720p"))
