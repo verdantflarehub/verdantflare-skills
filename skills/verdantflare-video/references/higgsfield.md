@@ -16,6 +16,8 @@
 
 ## 2. 恢复与费用
 
+Seedance 2.5 Draft 使用团队模型 `seedance_2_5_draft`，显式选择 `--route higgsfield --model seedance_2_5_draft --resolution 480p`。宿主当前仅开放 R2V、4–15 秒、最多 4 图＋1 视频，引用按同一 `--image-ref`／`--video-ref` 传入，不使用 first_frame／last_frame。服务端固定官方 `seedance_2_5` 的 `draft=true`、`mode=omni_reference`，不能改为普通 2.5 或文生视频。创建前按完整引用预检报价；Draft 不代表免费或 Unlimited。继续查询原任务，不自动升级草稿、重试新生成或提交 `draft_job_id`。
+
 持久保存项目、route、model、幂等键和 Video task ID。`submission_unknown` 表示可能已经扣费，继续查询原任务并对账，不能重复 create。远端完成但 Artifact 尚未登记时仍等待归档恢复；只在固定内容校验及受控回读完成后交付。`media_contract_mismatch` 表示供应商实际输出不符合请求规格，保留原任务与已消费额度，不自动重新生成。
 
 服务报价与实际流水分开记录，不把 quoted_credits 当实际扣费。费用及条数遵循用户已授权上限，先查可用能力和报价，不因为官方 Skill 默认建议而跳过预算约束。技术成功不替代创作审核。
