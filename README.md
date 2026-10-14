@@ -82,21 +82,31 @@ H3 Ref2VA业务模型为 `minimax-h3-ref2va`。现有网关创建工具为 `vide
 
 ### 安装与使用
 
-已发布版本：`verdantflare-video-v0.3.1`。固定标签不包含本地未发布更新。
+已发布版本：`verdantflare-video-v0.4.0`。固定标签不包含本地未发布更新。
 
 ```text
-使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.3.1/skills/verdantflare-video 安装 Skill。
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.4.0/skills/verdantflare-video 安装 Skill。
 ```
 
 ```text
 使用 $verdantflare-video，在当前Studio项目中制作一个16:9、15秒的H3视频。先检查宿主渠道与参考素材是否可用，再按确认的输入提交；已有任务按原ID恢复。
 ```
 
+### Seedance 2.5 Draft × Higgsfield
+
+Video v0.4.0 包含已上线 Draft R2V 的客户端支持。使用个人 Studio MCP Token，无需成员登录 Higgsfield 或安装官方 CLI；服务端保管会员凭据。需要可用团队额度，额度不足时由管理员在独立 Higgsfield 应用调整。
+
+```text
+使用 $verdantflare-video，以 Seedance 2.5 Draft × Higgsfield，使用当前项目的角色参考图和动作参考视频生成 4 秒、480p 的 R2V。按完整素材报价执行，已有任务按原 ID 恢复。
+```
+
+支持 `model=seedance_2_5_draft`、`route=higgsfield`、4–15 秒、480p、最多 4 图＋1 视频。通过 `--image-ref`／`--video-ref` 传入已导入的 Artifact，不使用首尾帧模式。
+
+Higgsfield 专用插件现为 **0.1.2**，在本仓库 marketplace 更新；依赖上述 Video v0.4.0。插件自动定位独立安装的 Video Skill，也兼容自有仓库配置。已安装成员需更新技能／插件并在新会话加载；源码发布不代表其他成员客户端已自动更新。
+
 ### 客户端兼容状态
 
-`scripts/video_client.py` 尚有两条旧路径：仅显式 `--model minimax-h3-ref2va --route fal` 进入MCP生成分支，且要求 `video.generate` / `artifact.import`；省略这些参数可能进入旧SD2公共API及S3上传分支。它目前不是所有Studio部署的通用生成入口。其 `check` 失败应结合实际工具列表判断，不能直接认定Video服务不可用。
-
-新任务优先使用宿主实际注册的Video工具。历史SD2安装脚本、API Key和S3配置仅用于识别旧安装，不再列为Studio流程的必填条件；不要为了修复Studio认证运行旧配置安装器。已有SD2任务的恢复边界见 [SD2说明](skills/verdantflare-video/references/sd2-workflow.md)。
+当前 `scripts/video_client.py` 的新生成统一通过 Studio 工具发现、能力检查及 `video.preflight/create` 提交，恢复保持原模型、渠道和任务 ID。历史 SD2 只保留恢复兼容；不要为 Studio 认证运行旧配置安装器或安装 S3 客户端。当前配置使用 `STUDIO_MCP_URL` 和 `STUDIO_MCP_BEARER_TOKEN`。
 
 ## verdantflare-image
 

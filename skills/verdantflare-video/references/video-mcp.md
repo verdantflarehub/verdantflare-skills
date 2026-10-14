@@ -1,6 +1,6 @@
 # Video经Studio调用说明
 
-本页描述Skill与领域Video服务的边界，不是Runtime或供应商API手册。工具名、参数、渠道和输入规格需在当前Studio会话中核实；认证与旧CLI差异见 [环境说明](../../ENVIRONMENT.md)。
+本页描述Skill与领域Video服务的边界，不是Runtime或供应商API手册。工具名、参数、渠道和输入规格需在当前Studio会话中核实；认证与旧CLI差异见 [环境说明](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-video-v0.4.0/skills/ENVIRONMENT.md)。
 
 ## 1. 工具发现与创建
 

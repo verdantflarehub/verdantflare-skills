@@ -2,7 +2,7 @@
 
 ## 1. 提交前
 
-1. 确认真实Studio会话，发现当前创建、状态、结果工具。现有网关为 `video.create/status/result`；管理工具缺失或403先按 [环境说明](../../ENVIRONMENT.md) 排查旧共享令牌。
+1. 确认真实Studio会话，发现当前创建、状态、结果工具。现有网关为 `video.create/status/result`；管理工具缺失或403先按 [环境说明](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-video-v0.4.0/skills/ENVIRONMENT.md) 排查旧共享令牌。
 2. 创建或打开当前Project，读取已保存的Generation Unit。核实模型、当前渠道配置与就绪状态、时长、画幅和输入模式；不从旧文档猜默认渠道。
 3. 按 [调用说明](video-mcp.md) 将授权的本地/World输入归档，并适配为Video可读取的同项目引用。只拿到中央ContentRef或Image原生ID时，不能声称Video输入已经齐备。
 4. Singularity 调用 `video.preflight` 确认实际输出网格与参考编号，再固定 Prompt、引用顺序和输入摘要。相同单元版本的不同输入应新建版本，不能覆盖旧摘要。
