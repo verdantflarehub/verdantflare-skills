@@ -343,6 +343,8 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
     route = args.route or capabilities.get("default_route")
     if not isinstance(route, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", route):
         raise ClientError("Host default route is unavailable; explicitly select a verified --route")
+    if route == "higgsfield" and not args.model:
+        raise ClientError("Host capabilities do not declare a Higgsfield model default; explicitly select --model; no generation submitted")
     references = _mcp_references(args, allow_empty=route in {"grok", "higgsfield"})
     ratio = args.ratio or ("adaptive" if route == "fal" else "16:9")
     if not (1 if route == "grok" else 2 if route == "higgsfield" else 4) <= duration <= 15:
@@ -354,7 +356,7 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
     if route in {"fal", "h3-vdn", "h3-singularity"} and sum(map(len, references.values())) > 12:
         raise ClientError("Selected route accepts at most 12 references")
     if capabilities:
-        selected_model = args.model or ("seedance_2_5" if route == "higgsfield" else None)
+        selected_model = args.model
         selected = next((r for r in capabilities.get("routes", []) if r.get("route") == route and
                          (route != "higgsfield" or r.get("model") == selected_model)), None)
         if not selected or not selected.get("configured"):

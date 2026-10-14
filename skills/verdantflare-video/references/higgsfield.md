@@ -6,6 +6,8 @@
 
 先发现 Studio `video.capabilities/create/preflight/status/result`，按 `route=higgsfield` 和目标 `model` 同时匹配能力；只在 configured、enabled 且目标组合可用时提交。模型、时长、画幅、分辨率以宿主声明为准，官方完整模型目录不等于团队入口全部开放。
 
+保留用户指定模型。当前宿主未提供 Higgsfield 默认模型，新提交必须显式 `--model`；客户端缺省时不选 Seedance 2.5、SD2 或目录第一项。已有任务恢复使用原任务记录，不因新提交参数要求重新创建。
+
 使用 `scripts/video_client.py generate --route higgsfield --model <宿主模型> --project-id <项目> --idempotency-key <固定尝试键> --prompt <提示词> --duration <秒数> --resolution 720p`。参数和素材通过现有 Video Artifact 导入；支持首帧时使用本项目 `--image-ref <Artifact ID>=first_frame`，不把本机路径或供应商上传 ID 当团队 Artifact。
 
 官方默认的全局安装、本地生成、`--wait` 和供应商 URL 交付在这里改为私有运行时、Studio 异步任务和中央 Artifact 固定 ContentRef。团队调用使用已有 MCP Token，不要求成员登录 Higgsfield，不将会员 Token 放入请求。模型或渠道失败不自动切换。

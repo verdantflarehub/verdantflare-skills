@@ -13,7 +13,7 @@ description: 用户明确请求通过团队 Higgsfield 会员生成视频、首�
 
 ## 2. 生成与恢复
 
-1. 通过命令桥 check 发现实际 Studio Video 工具、宿主能力及账号渠道配置。用户指定模型保持不变；在 Higgsfield 渠道未指定时采用自有 Skill 的 Seedance 2.5 默认，当前开放组合以 capabilities 为准。
+1. 通过命令桥 check 发现实际 Studio Video 工具、宿主能力及账号渠道配置。保留用户指定模型；当前宿主未声明本渠道默认模型，新提交须明确 `--model`，不自动选择 Seedance 2.5 或 SD2。用户选择 Wan 3.0／480p 时据此匹配能力；官网促销不等同于 CLI 零报价，也不等同于已启用 Unlimited。
 2. 按场景、主体、动作、镜头、光线和预期时长组织提示词；首帧仅在实际模型支持时使用本项目的受控 Artifact 引用。输入本机图片先经 Video 导入流程，不传供应商 URL 或服务器路径。
 3. 使用命令桥 generate，显式提供 project-id、固定 idempotency-key、prompt、duration 及模型。命令桥固定 route=higgsfield，参数验证和提交由自有 Video Skill 完成。报价和真实消费遵守当前用户预算，缺关键输入才集中澄清。
 4. 保存 Video task ID，使用原任务 status/result/resume。超时、未知提交和归档失败保持原身份，不创建新尝试，不切换账号、渠道或模型。

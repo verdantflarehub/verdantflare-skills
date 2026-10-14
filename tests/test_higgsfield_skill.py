@@ -50,8 +50,13 @@ class HiggsfieldSkillTest(unittest.TestCase):
         self.assertEqual(payload["references"], {"images": [], "videos": [], "audios": []})
         self.assertNotIn("quality_profile", payload)
 
-    def test_default_model_is_seedance_and_existing_attempt_is_reused(self):
-        args = self.args("--duration", "4")
+    def test_missing_model_never_preflights_or_submits(self):
+        with self.assertRaisesRegex(client.ClientError, "explicitly select --model"):
+            self.invoke(self.args("--duration", "4"))
+        self.assertEqual(self.calls, [])
+
+    def test_explicit_model_and_existing_attempt_are_preserved(self):
+        args = self.args("--model", "seedance_2_5", "--duration", "4")
         first = self.invoke(args)
         second = self.invoke(args)
         self.assertEqual(first["video_task_id"], second["video_task_id"])
@@ -59,12 +64,12 @@ class HiggsfieldSkillTest(unittest.TestCase):
         self.assertEqual(sum(name == "video.create" for name, _ in self.calls), 1)
 
     def test_disabled_or_unsupported_combination_never_submits(self):
-        for args in (self.args("--duration", "2"), self.args("--duration", "4", "--resolution", "480p")):
+        for args in (self.args("--model", "seedance_2_5", "--duration", "2"), self.args("--model", "seedance_2_5", "--duration", "4", "--resolution", "480p")):
             with self.assertRaises(client.ClientError):
                 self.invoke(args)
         self.inventory["capabilities"]["routes"][0]["enabled"] = False
         with self.assertRaises(client.ClientError):
-            self.invoke(self.args("--duration", "4"))
+            self.invoke(self.args("--model", "seedance_2_5", "--duration", "4"))
         self.assertEqual(self.calls, [])
 
     def test_admin_state_cannot_refresh_after_handover(self):
