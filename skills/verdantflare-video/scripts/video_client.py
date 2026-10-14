@@ -315,7 +315,7 @@ def _save_mcp_attempt(path: Path, value: dict[str, Any]) -> None:
 
 
 def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
-    if args.model and args.model not in {FAL_MODEL, "grok-imagine-video", "grok-imagine-video-1.5"}:
+    if args.model and args.model not in {FAL_MODEL, "grok-imagine-video", "grok-imagine-video-1.5", "seedance_2_5", "grok_video_v15_lite"}:
         raise ClientError("Selected model requires the host MCP tools")
     if any((args.image, args.image_url, args.video, args.video_url, args.audio, args.audio_url)):
         raise ClientError("MCP generation accepts Video project Artifacts only; import inputs first and use --*-ref")
@@ -340,18 +340,20 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
     route = args.route or capabilities.get("default_route")
     if not isinstance(route, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", route):
         raise ClientError("Host default route is unavailable; explicitly select a verified --route")
-    references = _mcp_references(args, allow_empty=route == "grok")
+    references = _mcp_references(args, allow_empty=route in {"grok", "higgsfield"})
     ratio = args.ratio or ("adaptive" if route == "fal" else "16:9")
-    if not (1 if route == "grok" else 4) <= duration <= 15:
+    if not (1 if route == "grok" else 2 if route == "higgsfield" else 4) <= duration <= 15:
         raise ClientError("Duration exceeds the selected adapter limits")
     if ratio not in FAL_ALLOWED_RATIOS:
         raise ClientError(f"unsupported H3 ratio: {ratio}")
-    if route not in {"fal", "h3-singularity", "grok"} and not references["images"] and not references["videos"]:
+    if route not in {"fal", "h3-singularity", "grok", "higgsfield"} and not references["images"] and not references["videos"]:
         raise ClientError("Local H3 routes require an image or video reference")
     if route in {"fal", "h3-vdn", "h3-singularity"} and sum(map(len, references.values())) > 12:
         raise ClientError("Selected route accepts at most 12 references")
     if capabilities:
-        selected = next((r for r in capabilities.get("routes", []) if r.get("route") == route), None)
+        selected_model = args.model or ("seedance_2_5" if route == "higgsfield" else None)
+        selected = next((r for r in capabilities.get("routes", []) if r.get("route") == route and
+                         (route != "higgsfield" or r.get("model") == selected_model)), None)
         if not selected or not selected.get("configured"):
             raise ClientError(f"Selected route {route} is not configured; no generation submitted")
         limits = selected["duration_seconds"]
@@ -360,24 +362,32 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
     request = {
         "project_id": project_id,
         "idempotency_key": idempotency_key,
-        "model": args.model or (selected["model"] if route == "grok" and capabilities else FAL_MODEL),
+        "model": args.model or (selected["model"] if route in {"grok", "higgsfield"} and capabilities else FAL_MODEL),
         "route": route,
         "prompt": prompt,
         "duration_seconds": duration,
         "aspect_ratio": ratio,
         "references": references,
     }
-    if route == "grok":
+    if getattr(args, "interpolate", False):
+        interpolation = capabilities.get("postprocess", {}).get("interpolate", {})
+        if route != "h3-singularity" or not interpolation.get("configured") or interpolation.get("readiness") != "ready":
+            raise ClientError("--interpolate requires a ready H3-Sing rife_2x capability")
+        request["postprocess"] = {"interpolate": {"profile": "rife_2x"}}
+    if route in {"grok", "higgsfield"}:
         if not capabilities or not selected.get("enabled"):
-            raise ClientError("Grok must be enabled in host capabilities")
+            raise ClientError("Selected provider must be enabled in host capabilities")
         if references["videos"] or references["audios"] or len(references["images"]) > 1 or any(r["purpose"] != "first_frame" for r in references["images"]):
-            raise ClientError("Grok accepts one first_frame image or no references")
+            raise ClientError("Selected provider accepts one first_frame image or no references")
         request["mode"] = "image_to_video" if references["images"] else "text_to_video"
         request["resolution"] = getattr(args, "resolution", None) or "720p"
+        if route == "higgsfield":
+            if request["mode"] not in selected.get("modes", []) or request["resolution"] not in selected.get("resolutions", []):
+                raise ClientError("Selected Higgsfield model does not support this mode or resolution")
         if references["images"] and args.ratio is None:
             request.pop("aspect_ratio")
     elif getattr(args, "resolution", None):
-        raise ClientError("--resolution is currently a Grok parameter")
+        raise ClientError("--resolution requires a supported internet video route")
     attempt = {
         "schema_version": 1,
         "state": "submitting",
@@ -392,9 +402,9 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
         if previous.get("video_task_id"):
             return {**previous["response"], "attempt_path": str(path)}
         raise ClientError("Submission is unresolved; retain the original attempt and reconcile it before retrying")
-    if route == "h3-singularity":
+    if route in {"h3-singularity", "higgsfield"}:
         if "video.preflight" not in inventory["tools"]:
-            raise ClientError("Singularity requires the deployed video.preflight adapter")
+            raise ClientError("Selected route requires the deployed video.preflight adapter")
         attempt["preflight"] = call_mcp_tool(config, "video.preflight", {k: v for k, v in request.items() if k != "idempotency_key"})
     _save_mcp_attempt(path, attempt)
     try:
@@ -431,11 +441,18 @@ def resume_mcp(config: MCPConfig, task_id: str, poll_interval: float, timeout: f
     while True:
         current = mcp_status(config, task_id)
         state = current.get("status")
-        if state == "succeeded":
+        delivery = current.get("delivery")
+        if delivery:
+            delivery_state = delivery.get("status")
+            if delivery_state in {"succeeded", "failed"}:
+                return mcp_result(config, task_id) if state == "succeeded" else current
+            if delivery_state not in {"queued", "running"}:
+                raise ClientError("video.status returned an unknown delivery state")
+        elif state == "succeeded":
             return mcp_result(config, task_id)
         if state in {"failed", "cancelled"}:
             return current
-        if state not in {"queued", "running"}:
+        if state not in {"queued", "running", "succeeded"}:
             raise ClientError("video.status returned an unknown state")
         if time.monotonic() >= deadline:
             raise ClientError("task polling timed out; resume the same task id later")
@@ -1801,10 +1818,11 @@ def make_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument(
         "--model",
         default=None,
-        choices=("verdantflare-sd2", FAL_MODEL, "grok-imagine-video", "grok-imagine-video-1.5"),
-        help="H3 or Grok via Studio MCP; omitted resolves from the selected host route",
+        choices=("verdantflare-sd2", FAL_MODEL, "grok-imagine-video", "grok-imagine-video-1.5", "seedance_2_5", "grok_video_v15_lite"),
+        help="Video via Studio MCP; omitted resolves from the selected host route",
     )
     generate_parser.add_argument("--route", help="explicit configured route, otherwise use the host default")
+    generate_parser.add_argument("--interpolate", action="store_true", help="H3-Sing: retain native video and deliver RIFE 2x FPS")
     generate_parser.add_argument("--project-id")
     generate_parser.add_argument("--idempotency-key")
     generate_parser.add_argument("--prompt", required=True)

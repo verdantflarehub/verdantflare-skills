@@ -2,7 +2,7 @@
 
 本页描述Skill与领域Video服务的边界，不是Runtime或供应商API手册。工具名、参数、渠道和输入规格需在当前Studio会话中核实；认证与旧CLI差异见 [环境说明](../../ENVIRONMENT.md)。
 
-## 工具发现与创建
+## 1. 工具发现与创建
 
 现有网关注册 `video.create`、`video.status`、`video.result`。历史 `video.generate` 只有在当前宿主实际注册且语义明确时才使用，不能向网关发送未注册别名。工具注册、渠道已配置、推理就绪、引用可读是不同检查。
 
@@ -33,7 +33,7 @@
 
 H3模型规格包含21:9、16:9、4:3、1:1、3:4、9:16，Omni支持Auto。`video.capabilities.model_specification` 表示模型规格；`routes[].aspect_ratios` / `duration_seconds` 且 `limit_scope=adapter` 表示当前适配器实际接受范围。若后者仍为9:16，应记录“本地多画幅适配缺口”，不能改写模型规格或降低用户目标。`configured=true` 只确认配置可解析，`readiness=not_checked` 表示没有探测GPU，不承诺推理成功。
 
-## 渠道解析
+## 2. 渠道解析
 
 - 用户指定模型/渠道时保留该选择，先核实实际映射和就绪状态；不可用时不静默切换。
 - 未指定时使用当前宿主明确配置的默认值，并把解析后的渠道写入请求。文档中的历史默认值、工具Schema默认值和列表中的第一个可用项都不能单独替代宿主配置。
@@ -41,7 +41,7 @@ H3模型规格包含21:9、16:9、4:3、1:1、3:4、9:16，Omni支持Auto。`vid
 - fal适配器使用H3 Ref2VA；其端点、供应商凭据和供应商任务ID由服务端管理。工具存在但fal未配置时，不能由Skill读取 `FAL_KEY` 补交请求。
 - 已有任务按记录的原模型、渠道和任务ID恢复，不能以当前默认值重新生成。
 
-## 素材引用转换
+## 3. 素材引用转换
 
 中央 `ContentRef` 固定 `store_id + artifact_id + version_id`；现存Video服务可使用不同的原生Artifact格式。按宿主受控适配取得同项目的可读引用，再填入 `references`，不能把Image原生ID、中央ID、World显示名或本地路径直接互换。
 
@@ -60,7 +60,7 @@ World输入先解析已授权固定版本，再导入或关联当前项目。记
 
 Singularity 生成前调用 `video.preflight`，使用与 create 相同的生成参数但不含 idempotency_key。返回 resolved_output、reference_mapping、reference_media、input_digest 和实际 Prompt，不创建任务。核对图片、视频配对音轨、独立音频标签后保存请求；服务不替用户编写批准事实。音频单参考要求显式画幅。
 
-## 状态与结果
+## 4. 状态与结果
 
 创建成功后先保存服务返回的原始任务ID，再轮询。当前响应可能同时返回 `task_id` / `video_task_id`；按当前Schema传入受支持字段，保留原值，不改写成UUID。常见状态为 `queued`、`running`、`succeeded`、`failed`、`cancelled`；未知状态按协议错误处理。
 
@@ -69,3 +69,13 @@ Singularity 生成前调用 `video.preflight`，使用与 create 相同的生成
 原生结果返回不代表中央Project归档已完成。有输出适配时用可信来源登记；没有时可在授权范围内通过现有工作副本客户端显式导入校验后的文件为 `user_import`，保留原生任务、Artifact和摘要映射，不伪造 `task_output`。
 
 Project提交保存文件、`run_refs`、Prompt和审核记录。MD作为普通文件，`domain_documents` 只用于服务支持的领域JSON。技术验收通过仍是候选；不自动选用或注册World。
+
+## 5. 可选与独立插帧
+
+发现 `video.capabilities.postprocess.interpolate`，核对 `configured=true`、`readiness=ready` 和 `profile=rife_2x`。生成集成只支持 `route=h3-singularity`，在原请求中增加 `"postprocess":{"interpolate":{"profile":"rife_2x"}}`；省略或 null 关闭。CLI 使用 `generate --interpolate`，预检与创建传相同选项。不得因开启选项而静默改渠道；预检不预留 GPU。
+
+独立工具 `video.interpolate` 必填 `project_id`、固定 `idempotency_key`、同项目 `source_artifact_id`；`backend=rife`，默认目标 `target_fps_num=48,target_fps_den=1`。30 FPS 源显式指定 60/1；仅接受源帧率的 2 倍且不超过 120 FPS。该工具和生成选项共用内部运行时，没有独立应用卡片或 MCP Server。
+
+开启选项后，父任务 `status` 和顶层 Artifact 仍描述原生生成；`delivery.status` 表示整个交付进度。生成成功而插帧仍运行时不得结束交付。等待 delivery 成功后读取 `final_artifact_id`、`interpolation_task_id`、`preview_artifact_id` 及 `result`，同时保存 `source_artifact_id` 和各自摘要。CLI `resume` 已按此规则等待；后台不依赖客户端轮询。
+
+`delivery.status=failed` 时保存阶段错误及原片。实际推理失败需要重试时，对原片用新的明确重试键调用独立工具；响应未知时继续查原任务，不换键。独立重试保留原失败父子历史，不自动改写为成功。查询统一使用 `video.status/result`；历史别名仅在实际发现时使用。所有调用、下载沿用 Studio 有效 Token 与项目权限。
