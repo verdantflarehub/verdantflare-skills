@@ -315,7 +315,7 @@ def _save_mcp_attempt(path: Path, value: dict[str, Any]) -> None:
 
 
 def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
-    if args.model and args.model not in {FAL_MODEL, "grok-imagine-video", "grok-imagine-video-1.5", "seedance_2_5", "grok_video_v15_lite"}:
+    if args.model and args.model not in {FAL_MODEL, "grok-imagine-video", "grok-imagine-video-1.5", "seedance_2_5", "grok_video_v15_lite", "wan3_0"}:
         raise ClientError("Selected model requires the host MCP tools")
     if any((args.image, args.image_url, args.video, args.video_url, args.audio, args.audio_url)):
         raise ClientError("MCP generation accepts Video project Artifacts only; import inputs first and use --*-ref")
@@ -377,14 +377,22 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
     if route in {"grok", "higgsfield"}:
         if not capabilities or not selected.get("enabled"):
             raise ClientError("Selected provider must be enabled in host capabilities")
-        if references["videos"] or references["audios"] or len(references["images"]) > 1 or any(r["purpose"] != "first_frame" for r in references["images"]):
-            raise ClientError("Selected provider accepts one first_frame image or no references")
-        request["mode"] = "image_to_video" if references["images"] else "text_to_video"
+        mixed_ref = route == "higgsfield" and request["model"] == "wan3_0"
+        if mixed_ref:
+            limits = selected.get("reference_limits", {})
+            if (any(len(references[k]) > limits.get(k, 0) for k in ("images", "videos", "audios")) or
+                    any(r["purpose"] in {"first_frame", "last_frame"} for r in references["images"])):
+                raise ClientError("Wan reference inputs exceed host limits or mix first/last frames")
+            request["mode"] = "reference_to_video" if references["images"] or references["videos"] else "text_to_video"
+        else:
+            if references["videos"] or references["audios"] or len(references["images"]) > 1 or any(r["purpose"] != "first_frame" for r in references["images"]):
+                raise ClientError("Selected provider accepts one first_frame image or no references")
+            request["mode"] = "image_to_video" if references["images"] else "text_to_video"
         request["resolution"] = getattr(args, "resolution", None) or "720p"
         if route == "higgsfield":
             if request["mode"] not in selected.get("modes", []) or request["resolution"] not in selected.get("resolutions", []):
                 raise ClientError("Selected Higgsfield model does not support this mode or resolution")
-        if references["images"] and args.ratio is None:
+        if not mixed_ref and references["images"] and args.ratio is None:
             request.pop("aspect_ratio")
     elif getattr(args, "resolution", None):
         raise ClientError("--resolution requires a supported internet video route")
@@ -1851,7 +1859,7 @@ def make_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument(
         "--model",
         default=None,
-        choices=("verdantflare-sd2", FAL_MODEL, "grok-imagine-video", "grok-imagine-video-1.5", "seedance_2_5", "grok_video_v15_lite"),
+        choices=("verdantflare-sd2", FAL_MODEL, "grok-imagine-video", "grok-imagine-video-1.5", "seedance_2_5", "grok_video_v15_lite", "wan3_0"),
         help="Video via Studio MCP; omitted resolves from the selected host route",
     )
     generate_parser.add_argument("--route", help="explicit configured route, otherwise use the host default")

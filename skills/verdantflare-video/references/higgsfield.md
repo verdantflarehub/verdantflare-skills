@@ -10,6 +10,8 @@
 
 官方默认的全局安装、本地生成、`--wait` 和供应商 URL 交付在这里改为私有运行时、Studio 异步任务和中央 Artifact 固定 ContentRef。团队调用使用已有 MCP Token，不要求成员登录 Higgsfield，不将会员 Token 放入请求。模型或渠道失败不自动切换。
 
+宿主声明 `wan3_0` 的 `reference_to_video` 后，可重复传 `--image-ref <Artifact ID>=<用途>` 和 `--video-ref <Artifact ID>=<用途>`，显式指定 `--resolution 480p --ratio 9:16`。数量按宿主 `reference_limits` 校验，不混用 `first_frame/last_frame`。Skill 的预检通过同一 Studio 查询完整素材报价；多素材由服务器受控上传并持久复用供应商回执。官网促销、CLI 报价和实际扣费分别核验，不能假定 Wan 免费，也不自动换成其他模型。提示词说明有序图片与视频职责，不默认照搬 H3 标签语法。
+
 ## 2. 恢复与费用
 
 持久保存项目、route、model、幂等键和 Video task ID。`submission_unknown` 表示可能已经扣费，继续查询原任务并对账，不能重复 create。远端完成但 Artifact 尚未登记时仍等待归档恢复；只在固定内容校验及受控回读完成后交付。`media_contract_mismatch` 表示供应商实际输出不符合请求规格，保留原任务与已消费额度，不自动重新生成。

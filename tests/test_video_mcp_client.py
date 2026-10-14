@@ -119,6 +119,25 @@ class VideoClientContractTest(unittest.TestCase):
         self.assertFalse(any(name == "video.create" for name, _ in self.server.tool_calls))
         self.assertFalse((self.root / "mcp-attempts").exists())
 
+    def test_wan_mixed_refs_keep_order_and_run_quote_before_one_create(self):
+        args = self.generate_args("--route", "higgsfield", "--model", "wan3_0", "--resolution", "480p",
+            "--image-ref", "art_" + "c" * 32 + "=wardrobe", "--video-ref", "art_" + "d" * 32 + "=motion")
+        inventory = {"tools": ["video.preflight"], "create_tool": "video.create", "capabilities": {"routes": [{
+            "route": "higgsfield", "model": "wan3_0", "enabled": True, "configured": True,
+            "duration_seconds": {"minimum": 2, "maximum": 30}, "aspect_ratios": ["9:16"],
+            "modes": ["reference_to_video"], "resolutions": ["480p"],
+            "reference_limits": {"images": 4, "videos": 1, "audios": 0}}]}}
+        with mock.patch.object(client, "check_mcp_tools", return_value=inventory), mock.patch.object(
+            client, "call_mcp_tool", side_effect=[{"quoted_credits": 15}, {"video_task_id": TASK}]) as call:
+            client.generate_mcp(self.config, args)
+            client.generate_mcp(self.config, args)
+            self.assertEqual([c.args[1] for c in call.call_args_list], ["video.preflight", "video.create"])
+            request = call.call_args_list[-1].args[2]
+            self.assertEqual(request["mode"], "reference_to_video")
+            self.assertEqual(request["resolution"], "480p")
+            self.assertEqual([r["purpose"] for r in request["references"]["images"]], ["identity", "wardrobe"])
+            self.assertEqual(len(request["references"]["videos"]), 1)
+
     def test_revoked_and_corrupt_content_never_imported(self):
         for denied, payload in [(True, PAYLOAD), (False, b"corrupt")]:
             self.server.deny_download, self.server.payload = denied, payload
