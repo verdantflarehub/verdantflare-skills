@@ -2,7 +2,7 @@
 name: x-verdantflare-short-drama
 description: VF 短剧与影视段落的统一工作入口，按任务完成完整剧本包、审核返修、导演分镜、资产与镜头制作、角色表演或本机单场拆解；也支持广告段落适配，实际图像、视频与对白调用交由对应媒体 Skill。
 metadata:
-  version: "0.1.1"
+  version: "0.1.2"
 ---
 
 # VerdantFlare 短剧

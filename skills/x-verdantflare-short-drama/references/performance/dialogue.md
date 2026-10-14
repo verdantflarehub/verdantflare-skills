@@ -4,11 +4,11 @@
 
 独立对白、旁白、参考录音或单句返修交给 `verdantflare-speech`。先固定剧本修订、角色、句子、镜头与声音版本；单镜表演卡消费同一份台词和声音记录。歌曲、配乐与 RVC 换声仍交给 Music，视频是否支持音频参考或口型按实际 Video 能力决定。
 
-有已安装的 Speech 技能时读取该入口；独立安装本短剧包时，可按需读取[固定 Speech 技能源码](https://github.com/verdantflarehub/verdantflare-skills/blob/14c9e98903a38e16a3f9e31834a6e53ce575bfc7/skills/verdantflare-speech/SKILL.md)。不依赖本地兄弟目录，也不自动安装或索取内部服务凭据。
+有已安装的 Speech 技能时读取该入口；独立安装本短剧包时，可按需读取[固定 Speech 技能源码](https://github.com/verdantflarehub/verdantflare-skills/blob/edd08111ffe9722ea42018fcd02ae6b628667257/skills/verdantflare-speech/SKILL.md)。不依赖本地兄弟目录，也不自动安装或索取内部服务凭据。
 
 ## 2. 当前执行边界
 
-IndexTTS2 内部运行时已经完成参考录音实测，Studio Speech 业务工具尚未接入。实际提交前通过 Studio 重新发现工具与 Schema；未开放时继续录制文稿、参考接收、逐句输入与已有结果整理，明确不能从当前入口新建对白任务。不能把 Music 歌曲接口、视频提示词里的台词或已生成视频音轨当作独立对白服务已实现。
+Studio 已接通 speech.capabilities、speech.voices、speech.create、speech.status、speech.result，并完成 Mengsk 旁白生成、原生 Artifact 登记和 Project 回读。实际提交前重新发现工具与 Schema，固定项目修订和 voice_profile；未开放时继续准备并报告当前入口缺口。独立配音使用 Speech，歌曲与视频音轨沿用各自任务边界。
 
 用户明确要生成视频自带对白时沿用该任务范围，并按 Video 的实际能力执行；独立配音文件和可恢复语音任务仍分别验收。
 
