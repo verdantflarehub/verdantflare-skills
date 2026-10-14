@@ -1,8 +1,8 @@
 ---
 name: x-verdantflare-short-drama
-description: VF 短剧与影视段落的统一工作入口，按任务完成完整剧本包、审核返修、导演分镜、资产与镜头制作、角色表演或本机单场拆解；也支持广告段落适配，实际图像和视频调用交由对应媒体 Skill。
+description: VF 短剧与影视段落的统一工作入口，按任务完成完整剧本包、审核返修、导演分镜、资产与镜头制作、角色表演或本机单场拆解；也支持广告段落适配，实际图像、视频与对白调用交由对应媒体 Skill。
 metadata:
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # VerdantFlare 短剧
@@ -21,6 +21,7 @@ metadata:
 | 导演方案、分镜、相机和时间线 | [导演](references/directing/guide.md) |
 | 资产候选、镜头制作与验片 | [制作](references/production/guide.md) |
 | 单镜动作、情绪、对白表演 | [表演](references/performance/guide.md) |
+| 参考声线、独立对白、旁白与单句返修 | [对白交接](references/performance/dialogue.md) |
 | 明确要求本机 Ollama 提取原文事实 | [本机拆解](references/local-breakdown/guide.md) |
 | 品牌片、产品广告的声明与制作适配 | [广告适配](references/commercial/guide.md) |
 
@@ -39,7 +40,7 @@ metadata:
 - 导演计划校验：`python3 scripts/validate_plan.py <plan.json>`。
 - 本机单场提取：`python3 scripts/breakdown.py --input <scene.txt> --output <breakdown.json>`。仅在用户要求本机提取时使用；模型已安装且服务可用才执行，不自动下载模型。
 
-媒体调用仍使用当前宿主的 Image / Video / Music 能力和对应 Skill。项目保存与不可变内容传输使用现行 Project / Artifact 契约；AI 短剧阶段成果按下节同步到 Studio；项目归档不代表创作批准或远端公开发行。技术校验、创作选版和正式发行分别记录。
+媒体调用仍使用当前宿主的 Image / Video / Music / Speech 能力和对应 Skill。项目保存与不可变内容传输使用现行 Project / Artifact 契约；AI 短剧阶段成果按下节同步到 Studio；项目归档不代表创作批准或远端公开发行。技术校验、创作选版和正式发行分别记录。
 
 ### 3.1 短剧白模制作要求
 
@@ -59,4 +60,4 @@ AI 短剧项目内容默认同步到同一 Studio 项目，读取[阶段同步�
 
 ## 5. 安装与运行依赖
 
-编剧、审核和文字设计可独立使用本包。运行校验器需要 Python 3.10 或更高版本；本机拆解另外需要 Ollama 及已安装的 `gemma3:12b`，不自动拉取。图像、视频和音乐执行按实际任务使用对应已安装 Skill 与宿主能力；模块中的外部链接固定到可追溯源码版本，作为依赖说明，不是自动安装或调用授权。
+编剧、审核和文字设计可独立使用本包。运行校验器需要 Python 3.10 或更高版本；本机拆解另外需要 Ollama 及已安装的 `gemma3:12b`，不自动拉取。图像、视频、音乐和对白执行按实际任务使用对应已安装 Skill 与宿主能力；模块中的外部链接固定到可追溯源码版本，作为依赖说明，不是自动安装或调用授权。

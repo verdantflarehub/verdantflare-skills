@@ -2,7 +2,7 @@
 
 ## 1. 任务与调用授权
 
-MCP Token 即调用授权，由 Studio 解析为授权用户。沿用用户当前任务、模型渠道、固定版本和明确的次数或费用限制，不增加独立审批、密码确认、批准清单或默认零额度。通过实际媒体工具执行，见[MCP 授权与恢复](../../../verdantflare-project/references/mcp-authority.md)。
+MCP Token 即调用授权，由 Studio 解析为授权用户。沿用用户当前任务、模型渠道、固定版本和明确的次数或费用限制，不增加独立审批、密码确认、批准清单或默认零额度。通过实际媒体工具执行，见[MCP 授权与恢复](https://github.com/verdantflarehub/verdantflare-skills/blob/e51e12f52023bbca00c706ef818efca6d7faba9d/skills/verdantflare-project/references/mcp-authority.md)。
 
 人物、服装、道具、场景、声音与配乐按本轮任务保留完整依据。准备记录用于说明输入、用途与结果；它不是 MCP 调用许可证。生成结果保留为候选，选用和发布依照用户意图执行。
 
