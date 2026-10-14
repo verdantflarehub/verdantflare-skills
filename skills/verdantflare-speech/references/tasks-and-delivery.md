@@ -4,20 +4,28 @@
 
 回读用户指定的剧本修订或现有录制表，保留稳定句子 ID、角色、镜头、原文和声音配置。实际送入模型的文本与原文分开保存；只在任务明确或用户选择后调整读法。人物、场景或声音 ID 来自真实项目，不能将本地名称伪装成服务 ID。
 
-把语速、停顿、情绪和镜头时间窗口写成制作要求，再对照实际后端能力。IndexTTS2 0.1.3 内部验证覆盖普通话、500 字以内文本和可选八维情绪向量；向量顺序为 happy、angry、sad、afraid、disgusted、melancholic、surprised、calm，每项 0–1、总和不超过 0.8。这是适配背景，不是已开放的 Studio 参数 Schema；只有实际工具声明支持时才传入。
+把语速、停顿、情绪和镜头时间窗口写成制作要求，再对照 `speech.capabilities`。当前支持 `zh-CN`、500 字以内文本和可选八维情绪向量；向量顺序为 happy、angry、sad、afraid、disgusted、melancholic、surprised、calm，每项 0–0.8、总和不超过 0.8。普通旁白可省略情绪向量，避免替用户添加表演要求。语速与精确时长参数当前不支持。
 
 不把哭泣、喘息、笑声或精确时长控制假映射为普通文本或任意参数。视频消费音频和口型能力另查实际 Video 入口。不能完成的要求明确保留缺项。
 
 ## 2. 提交与恢复
 
-通过 Studio 实际发现的生成／查询／结果工具执行；缺工具时保持准备记录，不造任务 ID，也不使用内部 HTTP 路径补洞。
+通过 Studio 实际发现的工具执行；缺工具时保持准备记录，不造任务 ID，也不使用内部 HTTP 路径补洞。
+
+1. `project.open` 取得当前可写项目及固定 `revision_id`，再调用 `speech.capabilities` 检查就绪和限制。
+2. `speech.voices(project_id, revision_id)` 列出该修订内的配置；使用实际返回的 `voice_profile` ContentRef，检查 `compatible` 和参考来源。没有配置时按[参考接收](voice-reference.md)保存后重新打开修订。
+3. `speech.create` 传入 `project_id`、`revision_id`、`voice_profile`、稳定 `utterance_id`、完整 `text`、`language: zh-CN`、固定 `idempotency_key`。可选 `script_ref` 必须属于该修订；临时旁白可直接传入文本。仅传实际支持的可选 `emotion_vector`。
+4. 保存业务 `task_id`，用 `speech.status(project_id, task_id)` 查询；`runtime_task_id` 是内部原任务来源，不替代业务任务 ID。
+5. 成功后调用 `speech.result(project_id, task_id)`，取得 `original.wav`、`editing.wav`、`report.json`、`generation.json` 四份中央 ContentRef；使用 `artifact.read` 获取受控下载路径并校验。
 
 提交前保存固定输入、声音配置版本和稳定幂等键。收到任务后先持久保存原 task_id／run_id，再轮询；请求 ID、模型版本和任务 ID 使用各自真实返回值。
 
 - 同键同输入恢复原任务；同键异参冲突时保留旧请求，返修另建 take。
-- 网络超时先查询原记录。查不到不等于未执行；没有可靠查询能力时报告结果未知，不自动新建任务。
+- 网络超时先查询原记录；首次响应丢失而尚无 task_id 时，按保存的完全相同 create 请求和幂等键恢复。查不到不等于未执行，不换键自动重发。
 - 已生成但上传／Project 保存失败，只恢复传输或提交，不重新推理。
 - 服务明确返回 recovery_required 时保留原因，新的尝试与旧任务建立对应关系，不无限自动重试。
+
+`phase: archive` 的暂时故障由服务按原 write_id 恢复。权限丢失先解决既有项目权限，不能更换主体来绕过。`model_version_changed` 保留旧配置和任务，重新核对实际模型后再决定新 take。
 
 只修指定句子，不重生整场。保留其他已选 take 的字节与固定引用。
 
@@ -32,6 +40,8 @@
 ## 4. 项目归档
 
 服务返回中央 ContentRef 时直接复用固定引用。只有本地验证文件且任务授权导入时，使用 Artifact 的 user_import 和真实 project_id，保留原模型／运行时任务来源；不能自行冒充 task_output 或拼造 ContentRef。
+
+Speech 生成的四份文件已经是 `task_output/service_id=speech` 原生产物，不重复上传。结果的 `project_archive: pending` 表示仍需 Skill 显式提交；保存 Project 回执，不能把服务生成成功当成项目提交完成。
 
 原始音频、剪辑副本、请求、报告和版本绑定以最小 Project changes 提交。commit_id／write_id 在请求前固定，使用真实 expected_revision_id；冲突先合并，未知结果查询原提交。回读新修订、实际字节与失效选用，保留用户已有内容。
 

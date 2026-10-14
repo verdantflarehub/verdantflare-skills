@@ -1,8 +1,8 @@
 ---
 name: verdantflare-speech
-description: 准备 VerdantFlare 中文对白、旁白和参考声线，按 Studio 实际开放的能力逐句生成、恢复并归档试听。用于角色配音、短录音文稿、声线复用和单句返修；歌曲、RVC 换声、环境音效及口型驱动交由对应能力。
+description: 通过 VerdantFlare Studio 生成中文对白和旁白，使用固定参考声线逐句配音、恢复任务并归档试听。用于角色配音、短录音文稿、声线复用和单句返修；歌曲、RVC 换声、环境音效及口型驱动交由对应能力。
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # VerdantFlare Speech
@@ -13,7 +13,7 @@ metadata:
 
 用户入口统一为宿主 Studio MCP，读取 `STUDIO_MCP_URL` 与 `STUDIO_MCP_BEARER_TOKEN`，从实际工具目录确认本次需要的能力和 Schema。Bearer 由服务端解析身份，不附加用户／组织头，不索取内部服务凭据或新增生成审批令牌。
 
-2026-10-14 的已验证实现是 IndexTTS2 0.1.3 内部 API；Studio Speech 业务工具尚未接入。每次执行重新核验工具目录，不把这条历史状态当成永久禁用。未发现生成工具时明确报告“内部推理已验证，当前 Studio 入口不能提交对白”，继续可独立完成的录音准备、逐句计划、已有结果整理和已授权归档。
+2026-10-14 已通过 Studio 验证 Speech 0.1.1 → IndexTTS2 0.1.3 → Artifact 原生产物 → Project 固定修订。实际工具为 `speech.capabilities`、`speech.voices`、`speech.create`、`speech.status`、`speech.result`。每次执行重新发现 Schema 和就绪状态；缺工具时报告当前入口缺口，继续可独立完成的准备和已有结果整理。
 
 本技能不启动 GPU 服务、不读取 Kubernetes Secret，也不直连内部运行时。Music 歌曲接口或视频自带音轨不自动替代独立对白生成。
 

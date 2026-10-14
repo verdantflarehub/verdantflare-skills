@@ -15,7 +15,7 @@ Blender 0.1.5 的首次工程恢复已通过干净工作副本、真实内容服
 
 设计与测试事实由主工作区 `docs/design/skills/` 和 `plan/2026.10.skills-foundation.plan.md` 维护，未发布到 Center Catalog 或安装到 Studio Runtime。
 
-对白新增研发入口：[`verdantflare-speech`](skills/verdantflare-speech/SKILL.md)，用于参考录音、声线配置、逐句准备和已有结果恢复。内部 IndexTTS2 已验证；Studio Speech 工具尚未接入，技能按实际发现能力执行。源码更新不代表客户端已安装。
+对白入口：[`verdantflare-speech`](skills/verdantflare-speech/SKILL.md) 0.2.0，通过 Studio 生成对白／旁白，复用固定参考声线，恢复原任务并归档。Speech 0.1.1、IndexTTS2 0.1.3 和原生 Artifact／Project 交接已完成真实旁白验证；执行时仍发现实际工具和 Schema。源码更新不代表客户端已安装。
 
 短剧相关能力统一为一个研发 Skill：
 
