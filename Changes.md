@@ -10,6 +10,9 @@
 
 ## 未发布
 
+- 新增 `verdantflare-speech` 0.1.0 研发入口，补齐短录制文稿、参考接收、版本绑定、逐句输入、未知任务恢复和候选归档。
+- 区分已验证的 IndexTTS2 内部 API 与尚未开放的 Studio Speech 工具；缺工具时继续独立准备，不引入内部凭据或直连路径。
+
 - 补齐短剧场景、复杂道具与每镜 Blender 白模交付；完善人物参考职责、叙事机位和跨镜连续性。
 - AI 短剧及 Project、Artifact、Blender、Image、Video、Music、Music MV 入口统一阶段成果同步到原 Studio 项目；保留候选、修改、固定引用和恢复记录，不自动批准或发布 World。
 - 本项是源码规则更新；已安装包和在线 MCP 的生效状态分别核验，不据此宣称已部署。

@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Speech"
+  short_description: "Prepare voice references and recover dialogue takes"
+  default_prompt: "使用 $verdantflare-speech 准备当前项目的参考声线和逐句对白，按实际可用能力生成或恢复试听并保存来源。"
