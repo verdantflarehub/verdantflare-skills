@@ -82,10 +82,10 @@ H3 Ref2VA业务模型为 `minimax-h3-ref2va`。现有网关创建工具为 `vide
 
 ### 安装与使用
 
-已发布版本：`verdantflare-video-v0.4.0`。固定标签不包含本地未发布更新。
+已发布版本：`verdantflare-video-v0.4.1`。固定标签不包含本地未发布更新。
 
 ```text
-使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.4.0/skills/verdantflare-video 安装 Skill。
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.4.1/skills/verdantflare-video 安装 Skill。
 ```
 
 ```text
@@ -95,6 +95,8 @@ H3 Ref2VA业务模型为 `minimax-h3-ref2va`。现有网关创建工具为 `vide
 ### Seedance 2.5 Draft × Higgsfield
 
 Video v0.4.0 包含已上线 Draft R2V 的客户端支持。使用个人 Studio MCP Token，无需成员登录 Higgsfield 或安装官方 CLI；服务端保管会员凭据。需要可用团队额度，额度不足时由管理员在独立 Higgsfield 应用调整。
+
+Video v0.4.1 补齐管理员授权交接与停服升级互斥，复用原 Service 的发布标记；结果未知按原 pending 对账，不重传凭据。维护管理员需更新到该版本，已有成员的生成和恢复参数保持。
 
 ```text
 使用 $verdantflare-video，以 Seedance 2.5 Draft × Higgsfield，使用当前项目的角色参考图和动作参考视频生成 4 秒、480p 的 R2V。按完整素材报价执行，已有任务按原 ID 恢复。

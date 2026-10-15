@@ -120,6 +120,8 @@ class HiggsfieldSkillTest(unittest.TestCase):
         (state / "credentials.json").write_text('{"access_token":"synthetic","refresh_token":"synthetic"}')
         (state / "config.json").write_text('{}')
         with patch.object(admin, "STATE", state), patch.object(admin.shutil, "which", return_value="kubectl"), \
+             patch.object(admin, "fence_snapshot", return_value={"metadata":{"uid":"test-service"}}), \
+             patch.object(admin, "fence_patch"), \
              patch.object(admin.subprocess, "run", side_effect=admin.subprocess.TimeoutExpired("kubectl", 60)):
             with self.assertRaises(admin.subprocess.TimeoutExpired):
                 admin.handover("import-pod", "gateway", "workspace_test")
