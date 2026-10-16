@@ -9,6 +9,7 @@
 | 剧本或人物小传的锁稿前审核与返修 | [剧本审核 Skill](../review/guide.md)；发现与人工决定绑定具体版本 |
 | 从单场剧本提取有原文证据的人物、道具与动作 | [Local Scene Breakdown Skill](../local-breakdown/guide.md)；人工核对后再规划 |
 | 从剧本到场景、Shot 和资产需求 | [制作流程](workflow.md)；使用 [短剧 Director Skill](../directing/guide.md) 的计划契约与校验器 |
+| 场景正反打、人物站位、关键帧确认与视频返修 | [场景—关键帧—视频规范](scene-keyframe-video.md)；先确定空间与表演目标，再按真实模型能力生成和验片 |
 | 场景、道具、服装分别沉淀为跨集一致性资产 | [数字资产圣经模板](asset-bible-template.md)；地点本体、场次变体、道具状态、角色 Look 和逐镜引用分别记录 |
 | 角色、造型、场景或分镜图像候选 | [Image Skill](https://github.com/verdantflarehub/verdantflare-skills/blob/3c5a282fc4e8c30bda3bbfeef173f43d543bf93d/skills/verdantflare-image/SKILL.md) |
 | 已冻结 Generation Unit 的视频提示词、提交、查询和恢复 | [Video Skill](https://github.com/verdantflarehub/verdantflare-skills/blob/3c5a282fc4e8c30bda3bbfeef173f43d543bf93d/skills/verdantflare-video/SKILL.md) |
