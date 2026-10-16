@@ -23,6 +23,7 @@ DIGESTS = {"windows": "70116002288bf9f4acfe9bfc711c80e8de5d4f8f099634fdf5e903d84
 ROOT = Path(__file__).resolve().parents[1] / ".runtime" / "higgsfield"
 STATE = ROOT / "auth"
 PROXIES = {"http://127.0.0.1:19081", "http://openclash.openclash.svc.cluster.local:1081"}
+FENCE_KEY = "station.verdantflare.com/stopped-transition"
 
 
 class AdminError(RuntimeError):
@@ -98,6 +99,9 @@ def environment(proxy):
 
 
 def run_cli(args, proxy, *, login=False):
+    pending = STATE / "handover-pending.json"
+    if login and pending.exists() and json.loads(pending.read_text(encoding="utf-8")).get("service_fence"):
+        raise AdminError("credential_handover_unconfirmed")
     if not login and any((STATE / name).exists() for name in ("server-owned.json", "handover-pending.json")):
         raise AdminError("credentials_owned_by_server")
     protect_state()
@@ -148,6 +152,75 @@ def importer_command(pod, container):
                "-c", container, "--", "python", "-m", "higgsfield_gateway.credentials", "--state-dir", "/data/higgsfield"]
 
 
+def kube_request(command, args):
+    prefix = command[:command.index("exec")]
+    result = subprocess.run([*prefix, *args], capture_output=True, timeout=60)
+    if result.returncode:
+        raise AdminError("handover_resource_check_failed")
+    return json.loads(result.stdout)
+
+
+def fence_snapshot(command, pod):
+    deployment = kube_request(command, ["get", "deployment", "video-higgsfield-gateway", "-o", "json"])
+    service = kube_request(command, ["get", "service", "video-higgsfield-gateway", "-o", "json"])
+    if service["metadata"].get("annotations", {}).get(FENCE_KEY):
+        raise AdminError("application_transition_active")
+    if (deployment["spec"].get("replicas") != 0 or deployment.get("status", {}).get("replicas", 0) != 0 or
+            deployment["metadata"].get("deletionTimestamp") or service["metadata"].get("deletionTimestamp")):
+        raise AdminError("gateway_must_be_stopped")
+    selector = deployment["spec"]["selector"]["matchLabels"]
+    pods = kube_request(command, ["get", "pods", "-l", ",".join(k+"="+v for k, v in sorted(selector.items())), "-o", "json"])
+    for item in pods["items"]:
+        # An explicitly named, unready offline import pod is the only exception.
+        if (item["metadata"]["name"] != pod or item["metadata"].get("ownerReferences") or
+                any(c.get("type") == "Ready" and c.get("status") == "True" for c in item.get("status", {}).get("conditions", []))):
+            raise AdminError("credential_writer_not_drained")
+    return service
+
+
+def fence_patch(command, service, marker, *, release=False):
+    metadata = service["metadata"]
+    annotations = dict(metadata.get("annotations", {}))
+    if release:
+        if annotations.get(FENCE_KEY) != marker:
+            raise AdminError("handover_fence_conflict")
+        del annotations[FENCE_KEY]
+    else:
+        if annotations.get(FENCE_KEY):
+            raise AdminError("application_transition_active")
+        annotations[FENCE_KEY] = marker
+    patch = [{"op": "test", "path": "/metadata/uid", "value": metadata["uid"]},
+             {"op": "test", "path": "/metadata/resourceVersion", "value": metadata["resourceVersion"]},
+             {"op": "add", "path": "/metadata/annotations", "value": annotations}]
+    kube_request(command, ["patch", "service", "video-higgsfield-gateway", "--type=json", "--patch", json.dumps(patch), "-o", "json"])
+
+
+def release_fence(command, pending):
+    fence = pending.get("service_fence")
+    if fence is None:  # Older pending receipts used only the PVC lock.
+        return
+    service = kube_request(command, ["get", "service", "video-higgsfield-gateway", "-o", "json"])
+    if service["metadata"]["uid"] != fence["uid"]:
+        raise AdminError("handover_fence_conflict")
+    marker = service["metadata"].get("annotations", {}).get(FENCE_KEY)
+    if marker == fence["marker"]:
+        fence_patch(command, service, marker, release=True)
+    elif marker and pending.get("import_started", True):
+        raise AdminError("handover_fence_conflict")
+
+
+def save_pending(pending):
+    fd, temporary = tempfile.mkstemp(prefix=".pending-", dir=STATE)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(pending, stream)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, STATE / "handover-pending.json")
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
 def confirm_handover(receipt, pending):
     if (receipt.get("imported") is not True or receipt.get("revision") != pending["revision"] or
             receipt.get("workspace_id", pending["workspace_id"]) != pending["workspace_id"]):
@@ -157,6 +230,8 @@ def confirm_handover(receipt, pending):
         json.dump({"revision": receipt["revision"], "context": "dev.verdantflarehub.com"}, stream)
         stream.flush()
         os.fsync(stream.fileno())
+    if pending.get("service_fence"):
+        release_fence(importer_command(pending["pod"], pending["container"]), pending)
     (STATE / "handover-pending.json").unlink()
     return {"handed_over": True, "local_refresh_disabled": True}
 
@@ -165,6 +240,10 @@ def reconcile(pod, container):
     pending = json.loads((STATE / "handover-pending.json").read_text(encoding="utf-8"))
     if not re.fullmatch(r"[0-9a-f]{64}", pending.get("revision", "")):
         raise AdminError("invalid_credential_revision")
+    if pending.get("import_started") is False:
+        release_fence(importer_command(pod, container), pending)
+        (STATE / "handover-pending.json").unlink()
+        return {"not_imported": True, "pending_cleared": True}
     command = importer_command(pod, container) + ["--receipt", "--expected-revision", pending["revision"]]
     result = subprocess.run(command, input=b"", capture_output=True, timeout=60)
     if result.returncode:
@@ -178,22 +257,29 @@ def handover(pod, container, workspace, expected_revision=None):
     payload = {"credentials": json.loads((STATE / "credentials.json").read_text(encoding="utf-8")),
                "config": json.loads((STATE / "config.json").read_text(encoding="utf-8")), "workspace_id": workspace}
     command = importer_command(pod, container)
+    service = fence_snapshot(command, pod)
     if expected_revision:
         if not re.fullmatch(r"[0-9a-f]{64}", expected_revision):
             raise AdminError("invalid_credential_revision")
         command.extend(["--expected-revision", expected_revision])
     pending = STATE / "handover-pending.json"
     expected = hashlib.sha256(json.dumps(payload["credentials"], separators=(",", ":")).encode()).hexdigest()
+    record = {"revision": expected, "context": "dev.verdantflarehub.com", "workspace_id": workspace,
+              "pod": pod, "container": container, "import_started": False,
+              "service_fence": {"uid": service["metadata"]["uid"], "marker": "credential-handover-" + expected}}
     with pending.open("x", encoding="utf-8") as stream:
-        json.dump({"revision": expected, "context": "dev.verdantflarehub.com", "workspace_id": workspace}, stream)
+        json.dump(record, stream)
         stream.flush()
         os.fsync(stream.fileno())
+    fence_patch(command, service, record["service_fence"]["marker"])
+    record["import_started"] = True
+    save_pending(record)
     # Uncertain transport outcomes retain this marker and prohibit local refresh.
     result = subprocess.run(command, input=json.dumps(payload).encode(), capture_output=True, timeout=60)
     if result.returncode:
         raise AdminError("credential_handover_failed")
     receipt = json.loads(result.stdout)
-    return confirm_handover(receipt, {"revision": expected, "workspace_id": workspace})
+    return confirm_handover(receipt, record)
 
 
 def main():

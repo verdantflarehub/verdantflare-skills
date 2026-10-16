@@ -38,5 +38,9 @@ Blender 的实例 `project.save` 已完成服务内上传与项目提交，取�
 
 ## 4. 交付
 
+用户明确要求删除项目时，先发现 `project.delete`、`project.restore`、`project.lifecycle_status` 的在线 Schema。仅所有者可操作；用 list/open 返回的最新 head 和 lifecycle_version 建立请求，发送前持久保存原参数和稳定 change_id。删除后内容不能打开或编辑，修订和共享素材保留；恢复通过 `project.list(deleted=true)` 定位，沿用同一项目 ID 和 head。
+
+响应未知先查原 `project.lifecycle_status`，NOT_FOUND 时只重试原请求；PROJECT_BUSY 等原操作结束后重试。修订或生命周期冲突须刷新并重新确认目标，不能自动覆盖。删除授权仅适用于用户指定项目，不从本地文件缺失推导项目删除；不物理删除 Artifact 或 World 内容。
+
 返回项目与固定修订、修改摘要、失效选用和验证结果。未完成时说明保留位置及恢复入口。
 固定资产引用按实际请求使用 `project.use_asset`；不自动发布到 World、升级资产版本、修改成员或删除远端内容。

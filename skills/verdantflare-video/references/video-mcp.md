@@ -1,6 +1,6 @@
 # Video经Studio调用说明
 
-本页描述Skill与领域Video服务的边界，不是Runtime或供应商API手册。工具名、参数、渠道和输入规格需在当前Studio会话中核实；认证与旧CLI差异见 [环境说明](../../ENVIRONMENT.md)。
+本页描述Skill与领域Video服务的边界，不是Runtime或供应商API手册。工具名、参数、渠道和输入规格需在当前Studio会话中核实；认证与旧CLI差异见 [环境说明](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-video-v0.4.0/skills/ENVIRONMENT.md)。
 
 ## 1. 工具发现与创建
 
@@ -79,3 +79,7 @@ Project提交保存文件、`run_refs`、Prompt和审核记录。MD作为普通�
 开启选项后，父任务 `status` 和顶层 Artifact 仍描述原生生成；`delivery.status` 表示整个交付进度。生成成功而插帧仍运行时不得结束交付。等待 delivery 成功后读取 `final_artifact_id`、`interpolation_task_id`、`preview_artifact_id` 及 `result`，同时保存 `source_artifact_id` 和各自摘要。CLI `resume` 已按此规则等待；后台不依赖客户端轮询。
 
 `delivery.status=failed` 时保存阶段错误及原片。实际推理失败需要重试时，对原片用新的明确重试键调用独立工具；响应未知时继续查原任务，不换键。独立重试保留原失败父子历史，不自动改写为成功。查询统一使用 `video.status/result`；历史别名仅在实际发现时使用。所有调用、下载沿用 Studio 有效 Token 与项目权限。
+
+## 6. 任务 Title
+
+创建时先发现 create 的真实 inputSchema；只有 properties 含 `title` 才发送可选 Title（CLI `--title`）。返回 `title/title_source/title_revision/title_updated_at`，同名不去重。Title 独立于生成请求与 preflight，重放不同 Title 返回原任务，不隐式改名。旧宿主不发送未知字段；显式标题无法保存时报告 `title_warning`。改名仅在真实发现 `video.title_update` 后按其 Schema 提交 `video_task_id/title/expected_title_revision`，409 冲突先回读最新标题，不重试 create。权限沿 Studio 原业务项目写权限，不增加审批或凭据。

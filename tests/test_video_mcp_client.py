@@ -252,3 +252,39 @@ class VideoClientContractTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VideoTitleCompatibilityTest(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.config = client.MCPConfig('https://studio.invalid/mcp', 'test-token', Path(self.temp.name))
+
+    def args(self, title):
+        return client.make_parser().parse_args(['generate', '--project-id', 'demo', '--idempotency-key', 'shot/v1',
+            '--route', 'h3-sol', '--prompt', 'Single shot', '--duration', '5', '--ratio', '9:16', '--image-ref', ARTIFACT+'=identity', '--title', title])
+
+    def test_title_is_separate_and_replay_never_renames_or_resubmits(self):
+        inventory = {'create_tool':'video.create', 'tools':[], 'capabilities':None, 'create_supports_title':True}
+        with mock.patch.object(client, 'check_mcp_tools', return_value=inventory), mock.patch.object(client, 'call_mcp_tool', return_value={'video_task_id':TASK, 'title':'纸船'}) as call:
+            first = client.generate_mcp(self.config, self.args('纸船'))
+            second = client.generate_mcp(self.config, self.args('另一个标题'))
+            self.assertEqual(call.call_count, 1)
+            self.assertEqual(call.call_args.args[2]['title'], '纸船')
+            journal = json.loads(Path(first['attempt_path']).read_text(encoding='utf-8'))
+            self.assertNotIn('title', journal['request'])
+            self.assertEqual(journal['title_snapshot'], '纸船')
+            self.assertEqual(second['title'], '纸船')
+
+    def test_old_host_does_not_receive_unknown_title_and_reports_unsaved(self):
+        inventory = {'create_tool':'video.create', 'tools':[], 'capabilities':None}
+        with mock.patch.object(client, 'check_mcp_tools', return_value=inventory), mock.patch.object(client, 'call_mcp_tool', return_value={'video_task_id':TASK}) as call:
+            result = client.generate_mcp(self.config, self.args('纸船'))
+            self.assertNotIn('title', call.call_args.args[2])
+            self.assertIn('not saved', result['title_warning'])
+
+    def test_schema_discovery_follows_all_pages(self):
+        pages = [{'tools':[{'name':'video.status'},{'name':'video.result'}], 'nextCursor':'next'},
+                 {'tools':[{'name':'video.create','inputSchema':{'properties':{'title':{}}}}]}]
+        with mock.patch.object(client, '_mcp_json_request', side_effect=pages):
+            self.assertTrue(client.check_mcp_tools(self.config)['create_supports_title'])

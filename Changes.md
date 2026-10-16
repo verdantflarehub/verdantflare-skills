@@ -1,5 +1,11 @@
 # Changes
 
+## verdantflare-video-v0.4.0 / Higgsfield 插件 0.1.2 — 2026-10-14
+
+- 发布 Seedance 2.5 Draft × Higgsfield R2V 入口：480p、4–15 秒、多图与视频引用、完整素材报价与原任务恢复。
+- Higgsfield 插件可定位独立安装的 Video Skill，不再要求成员拥有开发源码工作区；保留显式源码路径兼容。
+- 更新成员安装入口、模型说明及独立安装文档引用；复用既有真实生成证据，不新增收费测试。
+
 ## x-verdantflare-short-drama-v0.1.0 — 2026-10-11
 
 - 首次发布统一短剧 Skill，保留作者标记 `x-`；原七项能力收拢为一个入口和按需模块。

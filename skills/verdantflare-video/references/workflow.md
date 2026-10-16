@@ -1,14 +1,14 @@
 # H3单元执行与恢复
 
-## 提交前
+## 1. 提交前
 
-1. 确认真实Studio会话，发现当前创建、状态、结果工具。现有网关为 `video.create/status/result`；管理工具缺失或403先按 [环境说明](../../ENVIRONMENT.md) 排查旧共享令牌。
+1. 确认真实Studio会话，发现当前创建、状态、结果工具。现有网关为 `video.create/status/result`；管理工具缺失或403先按 [环境说明](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-video-v0.4.0/skills/ENVIRONMENT.md) 排查旧共享令牌。
 2. 创建或打开当前Project，读取已保存的Generation Unit。核实模型、当前渠道配置与就绪状态、时长、画幅和输入模式；不从旧文档猜默认渠道。
 3. 按 [调用说明](video-mcp.md) 将授权的本地/World输入归档，并适配为Video可读取的同项目引用。只拿到中央ContentRef或Image原生ID时，不能声称Video输入已经齐备。
 4. Singularity 调用 `video.preflight` 确认实际输出网格与参考编号，再固定 Prompt、引用顺序和输入摘要。相同单元版本的不同输入应新建版本，不能覆盖旧摘要。
 5. 保存不可变 `attempt_id`、幂等键及请求；准备完成后才进入提交阶段。工具或引用适配缺失时不直连Runtime，独立本地工作继续。
 
-## 提交与恢复
+## 2. 提交与恢复
 
 调用当前注册的创建工具前将Attempt置为 `submitting`。成功返回后先保存原始任务ID，再查询状态。未收到明确提交结果时记录 `submission_unknown`，按原幂等键/任务ID恢复；不能将网络超时猜成失败，也不能换渠道或新建幂等键重放。
 
@@ -19,7 +19,7 @@
 
 当前服务若没有按幂等键查询不确定提交的能力，保留不确定状态并报告恢复缺口。不要写成“未创建任务”。
 
-## 现有Video CLI边界
+## 3. 现有Video CLI边界
 
 `scripts/video_client.py` 的调用边界：
 
@@ -42,7 +42,7 @@ python scripts/video_client.py generate --project-id <项目ID> --idempotency-ke
 
 最后一条仅在所选适配器实际接受15秒横屏时执行。它表达制作目标，不是已成功生成的证据。导入映射保存于本地状态目录 `mcp-imports/`，供归档Project时登记；不能把本地映射文件当成已提交的项目修订。
 
-## 结果、归档与重试
+## 4. 结果、归档与重试
 
 按 [媒体校验](validation.md) 完成下载、完整解码、摘要核验、逐秒联系表与完整回放。媒体技术可用不代表身份、表演和摄影连续性通过。
 
@@ -55,3 +55,7 @@ python scripts/video_client.py generate --project-id <项目ID> --idempotency-ke
 - 取消只作用于明确任务，不删除原始Artifact或其他输出。
 
 汇报分别标明代码/Git完成、素材接入、任务ID与状态、结果下载校验、人工批准。仅参考图完成或代码提交时，不写“视频制作完成”。
+
+## 5. 任务 Title
+
+已有 Agent 在创作上下文生成或沿用 Title，CLI 生成可加 `--title "湖面漂流的纸船"`。Title 是命名快照，与固定 Generation Unit / Attempt 的生成 request 分离；原 project_id、幂等键、task ID 和输入摘要仍是恢复身份。resume/status/result 读取原任务，不以重复名称查找、重命名或重新生成；用户报告同名时附镜头上下文或时间。具体字段及旧宿主兼容见 [MCP 调用说明](video-mcp.md)。

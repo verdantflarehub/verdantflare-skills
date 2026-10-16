@@ -9,14 +9,17 @@ def resolve():
     configured = os.getenv("VERDANTFLARE_SKILLS_ROOT")
     candidates = [Path(configured)] if configured else list(Path(__file__).resolve().parents)
     if not configured:
+        # A standalone Video Skill is sufficient; a developer checkout is optional.
+        candidates.append(Path(os.getenv("CODEX_HOME", Path.home() / ".codex")))
+        candidates.append(Path.home() / ".agents")
         for workspace in (Path.cwd(), *Path.cwd().parents):
-            candidates.extend((workspace, workspace / "verdantflare-skills"))
+            candidates.extend((workspace, workspace / "verdantflare-skills", workspace / ".agents", workspace / ".codex"))
     for root in candidates:
         client = root / "skills/verdantflare-video/scripts/video_client.py"
         skill = root / "skills/verdantflare-video/SKILL.md"
         if client.is_file() and skill.is_file():
             return client
-    raise ValueError("Set VERDANTFLARE_SKILLS_ROOT to the installed verdantflare-skills repository")
+    raise ValueError("Install verdantflare-video v0.4.0 or newer, or set VERDANTFLARE_SKILLS_ROOT to your updated skills repository")
 
 
 def arguments(args):

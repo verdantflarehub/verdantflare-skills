@@ -17,3 +17,7 @@ CLI 使用 `generate --route grok --project-id <项目> --idempotency-key <固�
 读取实际 MIME、SHA-256、宽高、时长、FPS 和音轨信息；不强制 H3 的 24 FPS，不虚构音频或费用。当前适配器最长观测 24 小时；超限终止本次观测，不自动重提。端点或凭据变更时旧任务暂停，恢复原配置后再查询；不向新端点发送旧任务 ID。
 
 凭据仅由服务端 Secret 提供。技术完成不代表用户艺术审核通过。
+
+## 3. 任务 Title
+
+任务 Title 遵循 [公共 MCP 命名规则](video-mcp.md)，不加入 xAI 生成请求、preflight 或幂等摘要；已有任务继续沿原 ID 与渠道恢复。

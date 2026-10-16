@@ -230,6 +230,7 @@ def call_mcp_tool(config: MCPConfig, name: str, arguments: dict[str, Any]) -> di
 
 def check_mcp_tools(config: MCPConfig) -> dict[str, Any]:
     names = set()
+    schemas = {}
     params = {}
     cursors = set()
     while True:
@@ -238,6 +239,7 @@ def check_mcp_tools(config: MCPConfig) -> dict[str, Any]:
         if not isinstance(tools, list):
             raise ClientError("Video MCP tool inventory is invalid")
         names.update(tool["name"] for tool in tools if isinstance(tool, dict) and isinstance(tool.get("name"), str))
+        schemas.update({tool['name']: tool.get('inputSchema', {}) for tool in tools if isinstance(tool, dict) and isinstance(tool.get('name'), str)})
         cursor = result.get("nextCursor")
         if not cursor:
             break
@@ -253,7 +255,8 @@ def check_mcp_tools(config: MCPConfig) -> dict[str, Any]:
     if missing:
         raise ClientError("Video MCP is missing required tools: " + ", ".join(missing))
     capabilities = call_mcp_tool(config, "video.capabilities", {}) if "video.capabilities" in names else None
-    return {"status": "ok", "create_tool": create_tool, "tools": sorted(names), "capabilities": capabilities}
+    return {"status": "ok", "create_tool": create_tool, "tools": sorted(names), "capabilities": capabilities,
+            "create_supports_title": 'title' in schemas.get(create_tool, {}).get('properties', {})}
 
 
 def _mcp_reference(value: str) -> dict[str, str]:
@@ -315,7 +318,7 @@ def _save_mcp_attempt(path: Path, value: dict[str, Any]) -> None:
 
 
 def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
-    if args.model and args.model not in {FAL_MODEL, "grok-imagine-video", "grok-imagine-video-1.5", "seedance_2_5", "grok_video_v15_lite", "wan3_0"}:
+    if args.model and args.model not in {FAL_MODEL, "grok-imagine-video", "grok-imagine-video-1.5", "seedance_2_5", "seedance_2_5_draft", "grok_video_v15_lite", "wan3_0"}:
         raise ClientError("Selected model requires the host MCP tools")
     if any((args.image, args.image_url, args.video, args.video_url, args.audio, args.audio_url)):
         raise ClientError("MCP generation accepts Video project Artifacts only; import inputs first and use --*-ref")
@@ -340,6 +343,8 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
     route = args.route or capabilities.get("default_route")
     if not isinstance(route, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", route):
         raise ClientError("Host default route is unavailable; explicitly select a verified --route")
+    if route == "higgsfield" and not args.model:
+        raise ClientError("Host capabilities do not declare a Higgsfield model default; explicitly select --model; no generation submitted")
     references = _mcp_references(args, allow_empty=route in {"grok", "higgsfield"})
     ratio = args.ratio or ("adaptive" if route == "fal" else "16:9")
     if not (1 if route == "grok" else 2 if route == "higgsfield" else 4) <= duration <= 15:
@@ -351,7 +356,7 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
     if route in {"fal", "h3-vdn", "h3-singularity"} and sum(map(len, references.values())) > 12:
         raise ClientError("Selected route accepts at most 12 references")
     if capabilities:
-        selected_model = args.model or ("seedance_2_5" if route == "higgsfield" else None)
+        selected_model = args.model
         selected = next((r for r in capabilities.get("routes", []) if r.get("route") == route and
                          (route != "higgsfield" or r.get("model") == selected_model)), None)
         if not selected or not selected.get("configured"):
@@ -377,18 +382,18 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
     if route in {"grok", "higgsfield"}:
         if not capabilities or not selected.get("enabled"):
             raise ClientError("Selected provider must be enabled in host capabilities")
-        mixed_ref = route == "higgsfield" and request["model"] == "wan3_0"
+        mixed_ref = route == "higgsfield" and "reference_to_video" in selected.get("modes", [])
         if mixed_ref:
             limits = selected.get("reference_limits", {})
             if (any(len(references[k]) > limits.get(k, 0) for k in ("images", "videos", "audios")) or
                     any(r["purpose"] in {"first_frame", "last_frame"} for r in references["images"])):
-                raise ClientError("Wan reference inputs exceed host limits or mix first/last frames")
+                raise ClientError("Reference inputs exceed host limits or mix first/last frames")
             request["mode"] = "reference_to_video" if references["images"] or references["videos"] else "text_to_video"
         else:
             if references["videos"] or references["audios"] or len(references["images"]) > 1 or any(r["purpose"] != "first_frame" for r in references["images"]):
                 raise ClientError("Selected provider accepts one first_frame image or no references")
             request["mode"] = "image_to_video" if references["images"] else "text_to_video"
-        request["resolution"] = getattr(args, "resolution", None) or "720p"
+        request["resolution"] = getattr(args, "resolution", None) or ("480p" if request["model"] == "seedance_2_5_draft" else "720p")
         if route == "higgsfield":
             if request["mode"] not in selected.get("modes", []) or request["resolution"] not in selected.get("resolutions", []):
                 raise ClientError("Selected Higgsfield model does not support this mode or resolution")
@@ -401,6 +406,7 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
         "state": "submitting",
         "created_at": utc_now(),
         "request": request,
+        "title_snapshot": getattr(args, 'title', None),
     }
     path = _mcp_attempt_path(config, project_id, idempotency_key)
     if path.exists():
@@ -416,7 +422,10 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
         attempt["preflight"] = call_mcp_tool(config, "video.preflight", {k: v for k, v in request.items() if k != "idempotency_key"})
     _save_mcp_attempt(path, attempt)
     try:
-        result = call_mcp_tool(config, inventory["create_tool"], request)
+        naming = {'title': args.title} if getattr(args, 'title', None) is not None and inventory.get('create_supports_title') else {}
+        result = call_mcp_tool(config, inventory["create_tool"], {**request, **naming})
+        if getattr(args, 'title', None) is not None and not inventory.get('create_supports_title'):
+            result = {**result, 'title_warning': 'host_does_not_support_title; requested title was not saved'}
     except Exception:
         attempt["state"] = "submission_unknown"
         attempt["updated_at"] = utc_now()
@@ -1859,7 +1868,7 @@ def make_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument(
         "--model",
         default=None,
-        choices=("verdantflare-sd2", FAL_MODEL, "grok-imagine-video", "grok-imagine-video-1.5", "seedance_2_5", "grok_video_v15_lite", "wan3_0"),
+        choices=("verdantflare-sd2", FAL_MODEL, "grok-imagine-video", "grok-imagine-video-1.5", "seedance_2_5", "seedance_2_5_draft", "grok_video_v15_lite", "wan3_0"),
         help="Video via Studio MCP; omitted resolves from the selected host route",
     )
     generate_parser.add_argument("--route", help="explicit configured route, otherwise use the host default")
@@ -1867,6 +1876,7 @@ def make_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--project-id")
     generate_parser.add_argument("--idempotency-key")
     generate_parser.add_argument("--prompt", required=True)
+    generate_parser.add_argument("--title", help="Readable task title; separate from immutable generation inputs")
     generate_parser.add_argument("--output")
     generate_parser.add_argument("--duration", type=int)
     generate_parser.add_argument("--resolution", choices=("480p", "720p"))

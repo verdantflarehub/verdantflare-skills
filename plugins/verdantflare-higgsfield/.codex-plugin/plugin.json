@@ -1,6 +1,6 @@
 {
   "name": "verdantflare-higgsfield",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Higgsfield official video workflow adapted for VerdantFlare team subscriptions through Studio.",
   "author": {
     "name": "VerdantFlare"
@@ -9,7 +9,7 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Higgsfield · VerdantFlare Team",
-    "shortDescription": "通过自有 Video Skill 使用 Higgsfield 团队会员渠道",
+    "shortDescription": "通过自有 Video Skill 使用 Seedance 2.5 Draft R2V 等团队视频能力",
     "developerName": "VerdantFlare",
     "category": "Design"
   }

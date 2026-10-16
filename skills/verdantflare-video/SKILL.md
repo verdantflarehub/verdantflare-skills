@@ -1,6 +1,6 @@
 ---
 name: verdantflare-video
-description: 统一通过 Video MCP 选择视频模型与渠道，执行生成、查询、恢复和下载；支持 H3、SD2 及后续视频渠道。
+description: 通过 Studio Video MCP 生成、恢复和下载视频，支持 H3、SD2、Wan 及 Seedance 2.5 Draft × Higgsfield 的 R2V／ref2va 多图与视频参考生成。
 ---
 
 # VerdantFlare Video
@@ -9,11 +9,13 @@ AI 短剧任务形成阶段成果后默认同步到原 Studio 项目，沿用真
 
 本 Skill 通过 Studio MCP 统一网关调用 Video 能力。用户未指定模型或渠道时，解析当前宿主配置并核实可用性；不把历史环境的 `h3-vdn`、`h3-sol` 或工具 Schema 中的 `fal` 默认值当成全局生产默认。用户可指定模型简称（如 H3、SD2）与渠道；只有宿主已接入的组合才能提交，失败不静默换渠道。
 
-Project、Artifact 和 World 的生命周期遵循[共同接入规则](../_shared/project-world.md)。提交前若输入来自 World，先解析并授权固定 `asset_id + asset_version_id`，再使用其中明确的 `ContentRef`；Video 输出先归档到当前 Video Project，Skill 不直接注册或升级 World 资产。
+Project、Artifact 和 World 的生命周期遵循[共同接入规则](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-video-v0.4.1/skills/_shared/project-world.md)。提交前若输入来自 World，先解析并授权固定 `asset_id + asset_version_id`，再使用其中明确的 `ContentRef`；Video 输出先归档到当前 Video Project，Skill 不直接注册或升级 World 资产。
 
 H3 Ref2VA 使用业务模型 `minimax-h3-ref2va`；`route` 单独指定推理渠道。fal 适配器使用服务端锁定的 Reference-to-Video endpoint，但注册了工具不代表fal已配置或就绪。供应商凭据留在服务端，Skill 不持有或发送 `FAL_KEY`。
 
-先用真实Studio会话发现工具，按 [MCP调用说明](references/video-mcp.md) 解析当前注册名（现有网关为 `video.create/status/result`）与参数。遇到403或管理工具不可见，按 [环境说明](../ENVIRONMENT.md) 检查是否误用了旧共享媒体令牌；不立即推断Video服务不可用。
+创建前沿用用户名称，或用已有创作上下文生成简洁中文 Title（建议 8–16 字，单行 1–64 字），允许同名。面向用户使用服务端返回的 Title；技术 ID 保留在结构化 journal 与恢复记录。命名不改变 Prompt、幂等键或生成单元，resume 不重新 create 或补题。调用与兼容边界见 [MCP 调用说明](references/video-mcp.md)。
+
+先用真实Studio会话发现工具，按 [MCP调用说明](references/video-mcp.md) 解析当前注册名（现有网关为 `video.create/status/result`）与参数。遇到403或管理工具不可见，按 [环境说明](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-video-v0.4.0/skills/ENVIRONMENT.md) 检查是否误用了旧共享媒体令牌；不立即推断Video服务不可用。
 
 `scripts/video_client.py` 的新生成统一走 Studio：发现 `video.create`（兼容已注册的 `video.generate`），通过 `video.capabilities` 解析默认渠道和适配器限制。素材优先通过 `video.import_prepare/import_chunk/import_status/import_commit` 可恢复导入，兼容旧 `video.import` 小图片入口。Singularity 用 `video.preflight` 返回实际画布、时长和参考编号；预检通过不代表 GPU 实测通过。没有能力工具的旧宿主须显式指定已核实的渠道。历史 SD2 仅保留恢复兼容，新 SD2 使用宿主 MCP 工具。具体命令见 [执行流程](references/workflow.md)。
 
@@ -22,7 +24,7 @@ H3 模型支持六种画幅，Omni Reference 还有 Auto；渠道适配器里的
 - H3 生成单元：按当前阶段读取 [输入模式](references/input-modes.md)、[提示词](references/prompting.md)、[MCP 契约](references/video-mcp.md)、[执行流程](references/workflow.md) 或 [校验](references/validation.md)。
 - SD2：读取 [SD2 工作流](references/sd2-workflow.md)。
 - Grok：先读取 [Grok 调用](references/grok.md)，通过同一 Studio Video MCP 显式选择 `route=grok`；不要套用 H3 的参考数量、24 FPS 或提示词标签。
-- Higgsfield：读取 [会员渠道与官方 Skills 适配](references/higgsfield.md)，通过同一 Studio Video MCP 显式选择 `route=higgsfield`。官方 CLI 封装在本 Skill 私有运行时，仅供管理员授权维护；成员生成、查询及结果通过 Studio，会员凭据留在服务器。
+- Higgsfield：读取 [会员渠道与官方 Skills 适配](references/higgsfield.md)，通过同一 Studio Video MCP 显式选择 `route=higgsfield`。Seedance 2.5 Draft 的 R2V／ref2va 使用 `model=seedance_2_5_draft`、480p、4–15 秒、最多 4 图＋1 视频，不替换为普通 2.5 或首尾帧。官方 CLI 封装在本 Skill 私有运行时，仅供管理员授权维护；成员生成、查询及结果通过 Studio，会员凭据留在服务器。
 - 已有任务沿原任务记录的模型与渠道恢复，不按当前默认值重新生成。
 - H3-Sing 可选 `postprocess.interpolate.profile=rife_2x`（CLI `--interpolate`），默认关闭；已有视频使用同一 Video MCP 的 `video.interpolate`。开启时等待 `delivery.status` 终态，交付 `delivery.final_artifact_id`，保留原片。插帧失败只对原片明确重试，不重跑成功的生成，详见调用与校验说明。
 - 每次创建任务都显式传入当前项目的 `project_id`、已解析的 `route` 和固定幂等键；不能依赖服务端猜测项目或渠道。

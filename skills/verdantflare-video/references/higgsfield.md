@@ -6,6 +6,8 @@
 
 先发现 Studio `video.capabilities/create/preflight/status/result`，按 `route=higgsfield` 和目标 `model` 同时匹配能力；只在 configured、enabled 且目标组合可用时提交。模型、时长、画幅、分辨率以宿主声明为准，官方完整模型目录不等于团队入口全部开放。
 
+保留用户指定模型。当前宿主未提供 Higgsfield 默认模型，新提交必须显式 `--model`；客户端缺省时不选 Seedance 2.5、SD2 或目录第一项。已有任务恢复使用原任务记录，不因新提交参数要求重新创建。
+
 使用 `scripts/video_client.py generate --route higgsfield --model <宿主模型> --project-id <项目> --idempotency-key <固定尝试键> --prompt <提示词> --duration <秒数> --resolution 720p`。参数和素材通过现有 Video Artifact 导入；支持首帧时使用本项目 `--image-ref <Artifact ID>=first_frame`，不把本机路径或供应商上传 ID 当团队 Artifact。
 
 官方默认的全局安装、本地生成、`--wait` 和供应商 URL 交付在这里改为私有运行时、Studio 异步任务和中央 Artifact 固定 ContentRef。团队调用使用已有 MCP Token，不要求成员登录 Higgsfield，不将会员 Token 放入请求。模型或渠道失败不自动切换。
@@ -13,6 +15,8 @@
 宿主声明 `wan3_0` 的 `reference_to_video` 后，可重复传 `--image-ref <Artifact ID>=<用途>` 和 `--video-ref <Artifact ID>=<用途>`，显式指定 `--resolution 480p --ratio 9:16`。数量按宿主 `reference_limits` 校验，不混用 `first_frame/last_frame`。Skill 的预检通过同一 Studio 查询完整素材报价；多素材由服务器受控上传并持久复用供应商回执。官网促销、CLI 报价和实际扣费分别核验，不能假定 Wan 免费，也不自动换成其他模型。提示词说明有序图片与视频职责，不默认照搬 H3 标签语法。
 
 ## 2. 恢复与费用
+
+Seedance 2.5 Draft 使用团队模型 `seedance_2_5_draft`，显式选择 `--route higgsfield --model seedance_2_5_draft --resolution 480p`。宿主当前仅开放 R2V、4–15 秒、最多 4 图＋1 视频，引用按同一 `--image-ref`／`--video-ref` 传入，不使用 first_frame／last_frame。服务端固定官方 `seedance_2_5` 的 `draft=true`、`mode=omni_reference`，不能改为普通 2.5 或文生视频。创建前按完整引用预检报价；Draft 不代表免费或 Unlimited。继续查询原任务，不自动升级草稿、重试新生成或提交 `draft_job_id`。
 
 持久保存项目、route、model、幂等键和 Video task ID。`submission_unknown` 表示可能已经扣费，继续查询原任务并对账，不能重复 create。远端完成但 Artifact 尚未登记时仍等待归档恢复；只在固定内容校验及受控回读完成后交付。`media_contract_mismatch` 表示供应商实际输出不符合请求规格，保留原任务与已消费额度，不自动重新生成。
 
@@ -32,8 +36,14 @@
 
 成功交接后本地标记为服务器托管，禁止继续使用本地旧 Refresh Token；登录新授权会明确开始新一轮交接。网关刷新文件与镜像分离，回滚不回写旧凭据。成员业务身份与管理员 OAuth 登录是两套职责，不增加成员调用审批。
 
+交接前脚本确认网关已缩容为零、旧 Pod 全部退出，并条件占用原 Service 的发布标记；升级占用时拒绝交接，交接占用时平台不能开始升级。成功后仅释放自己的标记。标记或传输结果未知时保留现有 pending，运行同一 `reconcile`；尚未发送凭据的 pending 可以确认取消，已发送的只能按原 revision 核对回执，不能清除他人标记或重新发送旧授权。
+
 交接前先保存本地 pending 标记；断线或响应未知时也停止本地刷新，管理员运行 `reconcile --pod <服务器Pod> --container <容器>`，按原 revision 对账；此命令只取脱敏回执，不读取或刷新账号。若导入在凭据保存后、回执落盘前中断，先停止网关，由同 PVC 导入 Pod 在独占锁下修复回执；不重传旧凭据。重新登录使用独立空授权目录获得新浏览器授权，成功后再替换本地状态，不使用服务器托管的旧副本刷新。
 
 ## 4. 验证边界
 
 本 Skill 的流程适配、私有 CLI 安装与真实宿主插件发现分别验收。官方 Skills 插件完整快照在临时研究中已安装；不能因为本 reference 存在就宣称宿主插件加载或团队调用已经通过。
+
+## 5. 任务 Title
+
+任务 Title 遵循 [公共 MCP 命名规则](video-mcp.md)，只影响展示，不作为供应商参数或会员调用身份；现有任务仍按原模型、渠道和 ID 恢复。
