@@ -1,4 +1,4 @@
 interface:
   display_name: "VerdantFlare Music"
-  short_description: "Create reviewed songs from an idea to final masters"
-  default_prompt: "Use $verdantflare-music to turn this music idea into a reviewed song production and final delivery package."
+  short_description: "Create video scores, independent music stems and songs"
+  default_prompt: "使用 $verdantflare-music 为当前视频制作配乐，核验实际长度与唱声，保留独立音乐轨及来源，按已有授权和选用继续。"

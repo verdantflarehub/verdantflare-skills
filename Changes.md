@@ -1,5 +1,13 @@
 # Changes
 
+## 参考声线与配乐检查工具 — 2026-10-17
+
+`verdantflare-speech-v0.3.0`, `verdantflare-music-v0.5.0`。
+
+- Speech 0.3.0 补充参考声线登记与实验性同文 WORLD 声谱融合工具，固定来源后可作为新参考生成不同文稿；保留候选、听审和稳定性边界。
+- 增加新音色设计路由，区分参考波形克隆与参考特征指导的文字设计。VoxCPM2 候选运行器在 Speech 应用源码中准备，23 项单元测试通过，尚未通过 5090 GPU 验证或作为 Studio 工具开放。
+- Music 0.5.0 配乐增加源长度、时间线覆盖、停乐冲突、BPM 和听审状态检查工具；17 项单元测试及 5090 dev 声谱融合回归通过。技能源码更新不代表客户端安装，配乐生成可用性仍由实时预检决定。
+
 ## 媒体执行流程六包发布 — 2026-10-17
 
 `x-verdantflare-short-drama-v0.2.0`, `verdantflare-video-v0.4.2`, `verdantflare-music-v0.4.1`, `verdantflare-speech-v0.2.1`, `verdantflare-project-v0.1.0`, `verdantflare-artifact-v0.1.0`。
@@ -24,6 +32,9 @@
 - GitHub 标签/Release 与独立压缩包发布，不代表 Center Catalog 上架或客户端已安装。
 
 ## 未发布
+
+
+
 
 - 短剧 0.1.1 研发源码新增对白交接入口，以固定提交关联 Speech 技能；补齐表演模块的声线、逐句恢复与项目归档路由。
 

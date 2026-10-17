@@ -10,12 +10,12 @@
 | --- | --- |
 | `x-verdantflare-short-drama` | [0.2.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/x-verdantflare-short-drama-v0.2.0) |
 | `verdantflare-video` | [0.4.2](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-video-v0.4.2) |
-| `verdantflare-music` | [0.4.1](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-music-v0.4.1) |
-| `verdantflare-speech` | [0.2.1](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-speech-v0.2.1) |
+| `verdantflare-music` | [0.5.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-music-v0.5.0) |
+| `verdantflare-speech` | [0.3.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-speech-v0.3.0) |
 | `verdantflare-project` | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-project-v0.1.0) |
 | `verdantflare-artifact` | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-artifact-v0.1.0) |
 
-使用 `$skill-installer` 从对应标签的 `skills/<技能名称>` 安装。已有目录先备份再升级；不覆盖个人配置或项目素材。Speech／Music并行研发的新声线、声谱融合和配乐计划检查工具不包含在本轮版本中。
+使用 `$skill-installer` 从对应标签的 `skills/<技能名称>` 安装。已有目录先备份再升级；不覆盖个人配置或项目素材。Speech 0.3.0 包含参考登记、实验性声谱融合及音色设计路由；Music 0.5.0 包含配乐计划检查。VoxCPM2 尚未完成 GPU 验证或开放 Studio 调用，音乐生成以实时预检为准。
 
 ## 工作区新增研发技能
 
@@ -30,7 +30,7 @@ Blender 0.1.5 的首次工程恢复已通过干净工作副本、真实内容服
 
 设计与测试事实由主工作区 `docs/design/skills/` 和 `plan/2026.10.skills-foundation.plan.md` 维护，未发布到 Center Catalog 或安装到 Studio Runtime。
 
-对白入口：[`verdantflare-speech`](skills/verdantflare-speech/SKILL.md) 0.2.1，通过 Studio 生成对白／旁白，复用固定参考声线，恢复原任务并归档。Speech 0.1.1、IndexTTS2 0.1.3 和原生 Artifact／Project 交接已完成真实旁白验证；执行时仍发现实际工具和 Schema。源码更新不代表客户端已安装。
+对白入口：[`verdantflare-speech`](skills/verdantflare-speech/SKILL.md) 0.3.0，通过 Studio 生成对白／旁白，复用固定参考声线，恢复原任务并归档。Speech 0.1.1、IndexTTS2 0.1.3 和原生 Artifact／Project 交接已完成真实旁白验证；执行时仍发现实际工具和 Schema。源码更新不代表客户端已安装。
 
 短剧相关能力统一为一个研发 Skill：
 
@@ -57,12 +57,12 @@ Blender 0.1.5 的首次工程恢复已通过干净工作副本、真实内容服
 
 ### 安装命令
 
-当前版本：`verdantflare-music-v0.4.1`
+当前版本：`verdantflare-music-v0.5.0`
 
 在 Codex 中执行：
 
 ```text
-使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-music-v0.4.1/skills/verdantflare-music 安装 Skill。
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-music-v0.5.0/skills/verdantflare-music 安装 Skill。
 ```
 
 ### 使用 Skill

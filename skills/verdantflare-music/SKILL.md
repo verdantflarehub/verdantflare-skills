@@ -2,7 +2,7 @@
 name: verdantflare-music
 description: 使用 VerdantFlare Music 创作歌曲或影视器乐配乐、翻唱、换声、母带及局部重绘，也用于已有音乐项目续作与技能研发优化。
 metadata:
-  version: "0.4.1"
+  version: "0.5.0"
 ---
 
 # VerdantFlare Music

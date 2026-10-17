@@ -1,4 +1,4 @@
 interface:
   display_name: "VerdantFlare Speech"
-  short_description: "Generate dialogue and narration through Studio MCP"
-  default_prompt: "使用 $verdantflare-speech 为当前项目生成对白或旁白，固定参考声线，恢复原任务并将试听与来源归档到同一项目。"
+  short_description: "Reuse reference voices and prepare new voice designs"
+  default_prompt: "使用 $verdantflare-speech 复用参考声线朗读新文稿，或按参考特征准备新音色设计；先确认实际生成能力，保留原声线、候选、固定参考和任务记录。"
