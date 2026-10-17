@@ -1,8 +1,8 @@
 ---
 name: x-verdantflare-short-drama
-description: VF 短剧与影视段落的统一工作入口，按任务完成完整剧本包、审核返修、导演分镜、资产与镜头制作、角色表演或本机单场拆解；也支持广告段落适配，实际图像、视频与对白调用交由对应媒体 Skill。
+description: VF 短剧、影视段落与宣传片的工作入口，完成剧本、导演分镜、执行方案、分批制作、审核返修及已有项目续作；实际图像、视频与声音调用交由对应媒体 Skill。
 metadata:
-  version: "0.1.2"
+  version: "0.2.0"
 ---
 
 # VerdantFlare 短剧
@@ -15,7 +15,8 @@ metadata:
 
 | 当前交付 | 读取入口 |
 | --- | --- |
-| 新项目、制作顺序与交接 | [全流程](references/production/series-workflow-template.md) |
+| 新短剧全流程立项、完整制作顺序与交接 | [全流程](references/production/series-workflow-template.md) |
+| 宣传片执行方案、多版本续作与分批交付 | [执行方案](references/production/execution-planning.md) |
 | 写作、改稿、补齐完整剧本包 | [编剧](references/writing/guide.md) |
 | 只审核、复审、核对问题 | [审核](references/review/guide.md) |
 | 导演方案、分镜、相机和时间线 | [导演](references/directing/guide.md) |

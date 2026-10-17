@@ -1,6 +1,8 @@
 ---
 name: verdantflare-artifact
 description: Upload, read, download and verify immutable content versions through VerdantFlare Studio Artifact MCP. Use for controlled file transfer, ContentRef integrity and interrupted uploads; not for generic local file editing or build artifact management.
+metadata:
+  version: "0.1.0"
 ---
 
 # VerdantFlare Artifact

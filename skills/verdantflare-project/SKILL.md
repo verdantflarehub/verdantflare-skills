@@ -1,6 +1,8 @@
 ---
 name: verdantflare-project
 description: Create, open, save and recover VerdantFlare Studio projects through Studio MCP. Use automatically for material creation, edits, queries and deletions in an already bound Studio creative project, including transfer and association checks; not for generic software planning or Git repositories.
+metadata:
+  version: "0.1.0"
 ---
 
 # VerdantFlare Project

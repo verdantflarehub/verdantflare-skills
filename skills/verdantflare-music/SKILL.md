@@ -1,6 +1,8 @@
 ---
 name: verdantflare-music
-description: 使用 VerdantFlare Music 创作、翻唱、换声、母带或局部重绘，也用于已有音乐项目续作及音乐制作技能的研发优化。
+description: 使用 VerdantFlare Music 创作歌曲或影视器乐配乐、翻唱、换声、母带及局部重绘，也用于已有音乐项目续作与技能研发优化。
+metadata:
+  version: "0.4.1"
 ---
 
 # VerdantFlare Music
@@ -9,23 +11,28 @@ AI 短剧任务形成阶段成果后默认同步到原 Studio 项目，沿用真
 
 先确定用户要完成的阶段，从已有项目记录与 Artifact 继续；只做歌词、企划或单项修复时不扩展成整曲制作。对同一请求中无需新艺术决定的准备、技术检查和后续工具调用连续执行。
 
-Project、Artifact 和 World 的归属遵循[共同接入规则](../_shared/project-world.md)。歌曲、分轨和母带默认留在来源 Project；训练完成且明确可复用的人声模型才登记到 [World / Music](../../../docs/design/world/music/voice-model.md)，后续歌曲固定引用 `asset_id + asset_version_id`，不重复训练。
+为宣传片或影视时间线制作器乐配乐时，先读[贴片配乐](references/picture-scoring.md)，按画面内容、旁白窗口和真实音乐长度编排；不套用歌曲的歌词、歌手训练或五个完整审核点。用户已批准的选用与停乐方案直接执行。
+
+Project、Artifact 和 World 的归属遵循[共同接入规则](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-music-v0.4.1/skills/_shared/project-world.md)。歌曲、分轨和母带默认留在来源 Project；训练完成且明确可复用的人声模型才登记到 [World / Music](https://github.com/verdantflarehub/verdantflare-design/blob/cce3dc47f0954bbce9c83ebc9c4a3a1aba81697f/docs/design/world/music/voice-model.md)，后续歌曲固定引用 `asset_id + asset_version_id`，不重复训练。
 
 用户要求研发或优化本技能时，处理通用工作流与能力契约，不以某首歌作为默认交付，也不自动运行音乐生成、转换或远端部署。先核对技能说明、本地服务实现、实际部署工具三者的差异；只把真实可用的能力写成可执行步骤。按 [技能研发检查](references/skill-development.md) 维护配置、文档与验证边界。
 
-## 一键能力路由
+## 1. 一键能力路由
 
 每次只进入一个能力文件；需要组合多个能力时，先完成前一个文件的输出和验证，再把它作为下一个文件的输入。不要把“独立生成”“翻唱”“曲谱提取”“换声”和“多声部”当成同一个调用。
 
-| 一键能力 | 独立引导文件 | 入口结果 |
-| --- | --- | --- |
-| 独立生成歌曲 | [一键独立生成](references/one-click-independent-generation.md) | 歌词/风格到新歌，不保留参考旋律 |
-| 自动提取曲谱 | [一键提取曲谱](references/one-click-score-extraction.md) | 音频到待审核的可编辑曲谱 |
-| 无曲谱翻唱 | [一键无曲谱翻唱](references/one-click-cover.md) | 参考音频 + 风格 + 匹配歌词到翻唱候选 |
-| 曲谱约束翻唱 | [一键曲谱约束翻唱](references/one-click-score-constrained-cover.md) | 自动提谱/已审核曲谱 + 歌词到受约束翻唱 |
-| 单歌手换声 | [一键单歌手换声](references/one-click-voice-replacement.md) | 保留已批准歌曲，只替换指定声线 |
-| 男女对唱 | [一键男女对唱](references/one-click-duet.md) | 两条独立声部到对唱预混/母带 |
-| 多人合唱 | [一键多人合唱](references/one-click-ensemble.md) | 三人及以上独立声部到团体合唱 |
+| 一键能力 | 独立引导文件 |
+| --- | --- |
+| 视频配乐、旁白底乐、纯器乐 | [贴片配乐](references/picture-scoring.md) |
+| 生成新歌，不保留参考旋律 | [一键独立生成](references/one-click-independent-generation.md) |
+| 音频提取待审可编辑曲谱 | [一键提取曲谱](references/one-click-score-extraction.md) |
+| 参考音频与歌词制作翻唱 | [一键无曲谱翻唱](references/one-click-cover.md) |
+| 按曲谱与歌词约束翻唱 | [一键曲谱约束翻唱](references/one-click-score-constrained-cover.md) |
+| 保留歌曲，只替换指定声线 | [一键单歌手换声](references/one-click-voice-replacement.md) |
+| 两条独立声部制作对唱 | [一键男女对唱](references/one-click-duet.md) |
+| 三人及以上独立声部合唱 | [一键多人合唱](references/one-click-ensemble.md) |
+
+## 2. 阶段参考
 
 | 当前阶段                                     | 按需读取                                                                                                                                    |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -38,7 +45,7 @@ Project、Artifact 和 World 的归属遵循[共同接入规则](../_shared/proj
 | 输入输出、命名、目录或质量检查               | [交付契约](references/artifacts.md)                                                                                                         |
 | 原始人声准备或训练                           | [人声准备](references/voice-preparation.md)                                                                                                 |
 | 候选选择、批准、终审或恢复审核记录           | [审核门](references/review-gates.md)                                                                                                        |
-| 配置问题                                     | [环境说明](../ENVIRONMENT.md)                                                                                                               |
+| 配置问题                                     | [环境说明](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-music-v0.4.1/skills/ENVIRONMENT.md)                                                                                                               |
 
 音符驱动对唱进入预混或整曲前，按 [多声部制作](references/multi-vocal.md) 的 `duet-score-v1` 计划运行 `scripts/validate_duet.py`；自然演唱源换声前运行 `scripts/audit_performance_voice_source.py`。已有合格对唱基线的单声部替换可用 `scripts/replace_performance_duet_voice.py`；若须更换分离伴奏，先按 [多声部制作](references/multi-vocal.md) 判断能否用 `scripts/prepare_duet_replacement_backing.py` 恢复基线电平。逐句编排后用**上一版获认可的试听**作参照运行 `scripts/validate_performance_duet.py`。角色窗口轨通过不等于可独立重混的男女干声；需加伴奏轨核验能否重建试听。任一适用检查退出码非零时，只保留为诊断候选，不能调用母带或声部扩展；脚本通过也仍需逐句与整曲人耳听审。
 
@@ -47,6 +54,8 @@ Project、Artifact 和 World 的归属遵循[共同接入规则](../_shared/proj
 已有完整对唱混音且只需替换其中一位歌手时，按[多声部制作](references/multi-vocal.md)的“原混音局部换声”分支制作：独唱句取原人声，同唱句先分出目标歌手，再从原混音局部减去旧声、加入换声。原混音未替换区和另一歌手的保真检查见[换声保真与返工](references/vocal-replacement-mix.md)；脚本检查与用户试听分别记录，不能把分轨重建或电平通过当成音质无损。
 
 默认男女对唱采用“女声/男声接力，最后副歌合流”的 `call_response_final_merge` 模板；`both` 不是副歌的默认标签。参考拆解见 [《水晶》对唱参考](references/duet-reference-water-crystal.md)。
+
+## 3. 曲风与执行
 
 曲风只加载当前需要的一组：
 

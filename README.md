@@ -2,49 +2,67 @@
 
 本文描述工作区 Skill 包。每个目录都包含可被 Codex 发现和安装的 `SKILL.md` 与 `agents/openai.yaml`；工作区新增能力仍属于研发版，未自动发布到 Center Catalog 或安装到 Studio Runtime。下方版本标签是既有发布入口。当前可用技能还包括 [30 秒 MV](skills/verdantflare-music-mv/SKILL.md)。
 
+## 本轮媒体技能发布（2026-10-17）
+
+各技能使用独立不可变标签，Release附独立ZIP和SHA256SUMS。安装到当前客户端后在下一回合加载；发布不代表Center Catalog或Studio Runtime已安装，也不代替媒体听审。
+
+| 技能 | 固定版本 |
+| --- | --- |
+| `x-verdantflare-short-drama` | [0.2.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/x-verdantflare-short-drama-v0.2.0) |
+| `verdantflare-video` | [0.4.2](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-video-v0.4.2) |
+| `verdantflare-music` | [0.4.1](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-music-v0.4.1) |
+| `verdantflare-speech` | [0.2.1](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-speech-v0.2.1) |
+| `verdantflare-project` | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-project-v0.1.0) |
+| `verdantflare-artifact` | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-artifact-v0.1.0) |
+
+使用 `$skill-installer` 从对应标签的 `skills/<技能名称>` 安装。已有目录先备份再升级；不覆盖个人配置或项目素材。Speech／Music并行研发的新声线、声谱融合和配乐计划检查工具不包含在本轮版本中。
+
 ## 工作区新增研发技能
 
-Project、Artifact、Blender 三项基础技能已实现并完成本地及 5090 真实调用验证，当前为未发布开发版：
+Project、Artifact、Blender 三项基础技能已实现并完成本地及 5090 真实调用验证。Project与Artifact本轮首次发布0.1.0；Blender仍为未发布开发版：
 
 - [`verdantflare-project`](skills/verdantflare-project/SKILL.md)：项目创建、固定修订、工作副本保存与恢复。
 - [`verdantflare-artifact`](skills/verdantflare-artifact/SKILL.md)：内容上传、受控下载、摘要校验与上传恢复。
 - [`verdantflare-blender`](skills/verdantflare-blender/SKILL.md)：指定实例的场景操作、幂等恢复与 Project 工程归档。
 
-三项目录各自包含完整引用资料。本轮直接读取仓库源码验证，不安装到本地客户端。Project/Artifact 的本地工作副本操作复用 Studio 0.5.50 的 `studio-workspace`；宿主 MCP 仍是首选入口。
+三项目录各自包含完整引用资料。此前源码联调未安装客户端；本轮六包的发布与安装入口见首节。Project/Artifact 的本地工作副本操作复用 Studio 0.5.50 的 `studio-workspace`；宿主 MCP 仍是首选入口。
 Blender 0.1.5 的首次工程恢复已通过干净工作副本、真实内容服务、后台 Blender 编辑保存及重新打开验证。Project/Artifact 已完成 Windows↔Linux 往返；第二台物理 Blender 主机和完整桌面验收仍未覆盖。
 
 设计与测试事实由主工作区 `docs/design/skills/` 和 `plan/2026.10.skills-foundation.plan.md` 维护，未发布到 Center Catalog 或安装到 Studio Runtime。
 
-对白入口：[`verdantflare-speech`](skills/verdantflare-speech/SKILL.md) 0.2.0，通过 Studio 生成对白／旁白，复用固定参考声线，恢复原任务并归档。Speech 0.1.1、IndexTTS2 0.1.3 和原生 Artifact／Project 交接已完成真实旁白验证；执行时仍发现实际工具和 Schema。源码更新不代表客户端已安装。
+对白入口：[`verdantflare-speech`](skills/verdantflare-speech/SKILL.md) 0.2.1，通过 Studio 生成对白／旁白，复用固定参考声线，恢复原任务并归档。Speech 0.1.1、IndexTTS2 0.1.3 和原生 Artifact／Project 交接已完成真实旁白验证；执行时仍发现实际工具和 Schema。源码更新不代表客户端已安装。
 
 短剧相关能力统一为一个研发 Skill：
 
 - [`x-verdantflare-short-drama`](skills/x-verdantflare-short-drama/SKILL.md)：编剧、审核、导演、制作，按需进入表演、本机拆解与广告适配模块。
 - 完整剧本交付六类独立文档，见[规范](skills/x-verdantflare-short-drama/references/writing/script-package-standard.md)与[模板](skills/x-verdantflare-short-drama/references/writing/delivery-templates.md)。
+- 本轮发布新增[多版本媒体执行方案](skills/x-verdantflare-short-drama/references/production/execution-planning.md)与[编写模板](skills/x-verdantflare-short-drama/references/production/execution-plan-template.md)，用于宣传片的要求收敛、分批生成、素材盘点与粗剪交接。
 - 旧目录与命令迁移见[迁移说明](skills/x-verdantflare-short-drama/references/migration.md)。仅保留一个可发现入口，媒体调用继续由 Image / Video / Music Skill 执行。
 
-已发布 GitHub 版本 `x-verdantflare-short-drama-v0.1.0`，包含独立安装包与 SHA-256 校验文件；未发布到 Center Catalog，已安装客户端不会自动更新。
+已发布 GitHub 版本 `x-verdantflare-short-drama-v0.2.0`，包含独立安装包与 SHA-256 校验文件；未发布到 Center Catalog，已安装客户端不会自动更新。
 
 安装命令：
 
 ```text
-使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/x-verdantflare-short-drama-v0.1.0/skills/x-verdantflare-short-drama 安装 Skill。
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/x-verdantflare-short-drama-v0.2.0/skills/x-verdantflare-short-drama 安装 Skill。
 ```
 
 ## verdantflare-music
 
 `verdantflare-music` 是从一句灵感推进到最终母带交付的 Codex Skill。它负责编制词曲企划、调用 VerdantFlare Music 制作工具，并通过五个人工审核点管理候选、分轨、个人音色、音色转换和母带结果。
 
+本轮发布的[影视器乐配乐分支](skills/verdantflare-music/references/picture-scoring.md)按画面、旁白与实测长度编排，不套用完整歌曲的人声制作流程。
+
 输入是一句音乐灵感，以及原始人声 MP3 或一个已批准的人声模型。原始人声和训练模型按创作者管理并可跨歌曲复用，歌曲交付物统一放在当前工作区的 `.output/music/<创作者>/<项目>/`。
 
 ### 安装命令
 
-当前版本：`verdantflare-music-v0.4.0`
+当前版本：`verdantflare-music-v0.4.1`
 
 在 Codex 中执行：
 
 ```text
-使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-music-v0.4.0/skills/verdantflare-music 安装 Skill。
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-music-v0.4.1/skills/verdantflare-music 安装 Skill。
 ```
 
 ### 使用 Skill
@@ -82,10 +100,10 @@ H3 Ref2VA业务模型为 `minimax-h3-ref2va`。现有网关创建工具为 `vide
 
 ### 安装与使用
 
-已发布版本：`verdantflare-video-v0.4.1`。固定标签不包含本地未发布更新。
+已发布版本：`verdantflare-video-v0.4.2`。固定标签不包含本地未发布更新。
 
 ```text
-使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.4.1/skills/verdantflare-video 安装 Skill。
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.4.2/skills/verdantflare-video 安装 Skill。
 ```
 
 ```text

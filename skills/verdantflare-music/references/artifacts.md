@@ -73,7 +73,7 @@
 └── local.json     # 仅本机的连接别名、基础修订和下载状态
 ```
 
-`voice-model.json` 是 World / Music 的领域 JSON，按 [VoiceModel Schema](../../../../docs/design/contracts/v2/voice-model.schema.json) 登记原生模型、固定文件用途、兼容能力和验证证据；它作为 Project 的 `domain_documents`，入库时与明确选定的模型文件一起提交。通用文件归属、Artifact `ContentRef`、歌曲候选、分轨、母带和任务引用由 `.vf/project.json` 代表的 ProjectManifest 管理。人声模型可在审核后登记到 World/music，被多个歌曲 Project 固定引用；歌曲候选、分轨和母带默认属于单个 Project。
+`voice-model.json` 是 World / Music 的领域 JSON，按 [VoiceModel Schema](https://github.com/verdantflarehub/verdantflare-design/blob/cce3dc47f0954bbce9c83ebc9c4a3a1aba81697f/docs/design/contracts/v2/voice-model.schema.json) 登记原生模型、固定文件用途、兼容能力和验证证据；它作为 Project 的 `domain_documents`，入库时与明确选定的模型文件一起提交。通用文件归属、Artifact `ContentRef`、歌曲候选、分轨、母带和任务引用由 `.vf/project.json` 代表的 ProjectManifest 管理。人声模型可在审核后登记到 World/music，被多个歌曲 Project 固定引用；歌曲候选、分轨和母带默认属于单个 Project。
 
 旧 `assets.json`、`model.json`、`recordings.json` 只可作为历史工程导入或只读投影。迁移后不得继续编辑这些库存文件，也不得让它们与 ProjectManifest 形成第二套事实源；原始录音、训练素材和私有审核资料仍保留在来源 Project。
 

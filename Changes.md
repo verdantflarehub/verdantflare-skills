@@ -1,5 +1,14 @@
 # Changes
 
+## 媒体执行流程六包发布 — 2026-10-17
+
+`x-verdantflare-short-drama-v0.2.0`, `verdantflare-video-v0.4.2`, `verdantflare-music-v0.4.1`, `verdantflare-speech-v0.2.1`, `verdantflare-project-v0.1.0`, `verdantflare-artifact-v0.1.0`。
+
+- 固化多版本宣传片的执行方案与模板：当前依据、故事因果、素材动作盘点、生成／剪辑映射、依赖和授权延续；不新增服务Schema或固定审批数量。
+- Music增加画面驱动的器乐配乐分支；Speech增加旁白音色／表演及时间窗口交接；Video增加叙事动作与可用选段验收。
+- Project／Artifact按原提交与不可变版本恢复未验证文件，区分项目提交和字节回读。
+- 六包提供独立ZIP和SHA-256校验，修复Music独立安装的外部引用；服务能力与创作听审另行核验。
+
 ## verdantflare-video-v0.4.0 / Higgsfield 插件 0.1.2 — 2026-10-14
 
 - 发布 Seedance 2.5 Draft × Higgsfield R2V 入口：480p、4–15 秒、多图与视频引用、完整素材报价与原任务恢复。

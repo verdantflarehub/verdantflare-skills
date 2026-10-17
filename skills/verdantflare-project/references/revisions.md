@@ -39,6 +39,8 @@ AI 短剧素材提交还须维护 `project-content` 的所属对象、剧情状�
 preparing 仍在准备；committed 回读原结果；conflict/failed 保留原草稿和错误，不伪装成功。
 新建响应完全丢失时，project_id 尚未知，重发原 project.create 请求找回结果。
 
+提交已取得固定revision而大文件回读超时时，保留提交成功与回读未完成两个状态；从原修订和ContentRef继续核验，已核验文件复用摘要结果，不重新上传或commit整批文件。先让用户取得已完成的本地交付，不能因远端回读慢把成片说成尚未生成，也不能把已提交说成全部回读通过。
+
 同 ID 同请求才能幂等；相同 ID 换输入会发生 IDEMPOTENCY_CONFLICT。
 修订冲突读取 current head，明确合并后新建 commit_id，不修改旧请求并复用旧 ID。
 网络暂不可用保留恢复记录，不无限重试；轮询需有任务范围内的时间上限。

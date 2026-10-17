@@ -29,6 +29,8 @@ IndexTTS2 0.1.3 已验证的参考范围：PCM16／PCM24 单声道 WAV，16／22
 
 每次生成固定此配置和参考。换参考或选段另建版本；运行时升级记录新的实际绑定，旧配置和任务保留。仅改台词无需重录参考。没有训练过程、权重包和加载证据时，不创建虚假训练 run 或 World voice-model。
 
+用户要求结合两个参考时，先按[旁白方向](narration-direction.md)区分借鉴表演与融合音色；不把单参考配置或本地派生音频描述为后端已支持多声线融合。
+
 当前 Speech 可发现配置的项目路径为 `speech/voices/<voice_id>/profile.json`。配置与参考 WAV 必须同时属于生成时指定的项目修订；原件、详细处理和来源记录可另存领域文件，不把未声明字段塞入服务配置。
 
 配置字段为 `schema_version: 1`、稳定小写 `voice_id`、`label`、`engine: indextts2`、实际 `model_manifest_sha256`、`reference.content_ref`、`reference.sha256`、`candidate_state` 和 `listening_review`。模型摘要从实际能力读取并核对，不能抄示例值。未听审使用 `candidate`／`pending`；`selected` 或 `approved` 只引用真实选择和听审。保存后使用 `speech.voices` 回读，生成时传入该文件的完整 ContentRef。

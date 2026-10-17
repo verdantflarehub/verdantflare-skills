@@ -2,7 +2,7 @@
 name: verdantflare-speech
 description: 通过 VerdantFlare Studio 生成中文对白和旁白，使用固定参考声线逐句配音、恢复任务并归档试听。用于角色配音、短录音文稿、声线复用和单句返修；歌曲、RVC 换声、环境音效及口型驱动交由对应能力。
 metadata:
-  version: "0.2.0"
+  version: "0.2.1"
 ---
 
 # VerdantFlare Speech
@@ -21,6 +21,7 @@ metadata:
 
 - 用户要短录制文稿、提交录音或复用声线：读取[参考接收与版本](references/voice-reference.md)。
 - 用户要逐句配音、恢复任务、返修或保存试听：读取[任务与交付](references/tasks-and-delivery.md)。
+- 用户要参考旁白风格、新音色方向、连贯表演或锁定窗口配音：读取[旁白方向与时间窗口](references/narration-direction.md)。
 - 仅讨论文本或明确仅本地时遵循该范围；不因缺少生成工具而停止独立准备。
 
 ## 3. 制作边界

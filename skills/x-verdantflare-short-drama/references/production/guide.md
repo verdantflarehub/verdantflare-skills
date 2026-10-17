@@ -5,6 +5,7 @@
 | 当前任务 | 执行入口 |
 | --- | --- |
 | 新短剧立项、全流程顺序和跨阶段输入输出 | [短剧端到端制作模板](series-workflow-template.md)；正式项目 ID 与本地引用分开记录 |
+| 多版本宣传片、批次计划、素材盘点与粗剪交接 | [执行方案](execution-planning.md)；收敛最新要求，复用授权，逐项核对真实动作与时间窗口 |
 | 完整剧本包创作、修订或配套设定补齐 | [完整剧本 Skill](../writing/guide.md)；六类文字文档、版本索引和审核记录先于下游设计交接 |
 | 剧本或人物小传的锁稿前审核与返修 | [剧本审核 Skill](../review/guide.md)；发现与人工决定绑定具体版本 |
 | 从单场剧本提取有原文证据的人物、道具与动作 | [Local Scene Breakdown Skill](../local-breakdown/guide.md)；人工核对后再规划 |

@@ -1,6 +1,8 @@
 ---
 name: verdantflare-video
 description: 通过 Studio Video MCP 生成、恢复和下载视频，支持 H3、SD2、Wan 及 Seedance 2.5 Draft × Higgsfield 的 R2V／ref2va 多图与视频参考生成。
+metadata:
+  version: "0.4.2"
 ---
 
 # VerdantFlare Video
@@ -26,6 +28,7 @@ H3 模型支持六种画幅，Omni Reference 还有 Auto；渠道适配器里的
 - Grok：先读取 [Grok 调用](references/grok.md)，通过同一 Studio Video MCP 显式选择 `route=grok`；不要套用 H3 的参考数量、24 FPS 或提示词标签。
 - Higgsfield：读取 [会员渠道与官方 Skills 适配](references/higgsfield.md)，通过同一 Studio Video MCP 显式选择 `route=higgsfield`。Seedance 2.5 Draft 的 R2V／ref2va 使用 `model=seedance_2_5_draft`、480p、4–15 秒、最多 4 图＋1 视频，不替换为普通 2.5 或首尾帧。官方 CLI 封装在本 Skill 私有运行时，仅供管理员授权维护；成员生成、查询及结果通过 Studio，会员凭据留在服务器。
 - 已有任务沿原任务记录的模型与渠道恢复，不按当前默认值重新生成。
+- 有剧情动作、连续运镜、跨镜物体或剪辑选段要求时，按[叙事动作验收](references/shot-acceptance.md)检查实际动作和可用区间，不能用首尾构图或技术成功代替动态验收。
 - H3-Sing 可选 `postprocess.interpolate.profile=rife_2x`（CLI `--interpolate`），默认关闭；已有视频使用同一 Video MCP 的 `video.interpolate`。开启时等待 `delivery.status` 终态，交付 `delivery.final_artifact_id`，保留原片。插帧失败只对原片明确重试，不重跑成功的生成，详见调用与校验说明。
 - 每次创建任务都显式传入当前项目的 `project_id`、已解析的 `route` 和固定幂等键；不能依赖服务端猜测项目或渠道。
 - 中央Artifact的 `ContentRef` 与Video原生引用按宿主适配流程转换；不直接替换ID，不把受控下载路径当成匿名公网素材URL。
