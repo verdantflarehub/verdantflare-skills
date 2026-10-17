@@ -12,6 +12,8 @@
 
 ## 2. 打开与取文件
 
+当前目录已有 `.vf/project.json` 与 `.vf/local.json` 时，先只读核对其 project_id、connection_alias 与 base_revision_id，再用原绑定检查服务最新状态。不根据目录名、旧示例或同名搜索结果替换它；服务失败不重建绑定、不新建替代项目，不手写客户端元数据。
+
 本地目录需先存在；显式传服务 project_id、用户选定目录及连接别名。
 别名只标识连接，不替代项目或存储 ID。
 

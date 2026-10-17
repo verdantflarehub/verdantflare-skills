@@ -5,7 +5,7 @@ description: Upload, read, download and verify immutable content versions throug
 
 # VerdantFlare Artifact
 
-AI 短剧任务形成阶段成果后默认同步到原 Studio 项目，沿用真实 project_id；用户指定仅本地或只读讨论时遵循其范围。候选、返修与最终结果保留固定版本、修改原因、来源设定和任务记录，按当前 Project / Artifact 契约提交并回读修订；只上传或本地保存不算已同步。响应未知先对账恢复，不重复收费生成。同步不自动批准、选用或发布 World。
+已绑定 Studio 项目中的创作、素材修改或查询，自动完成必要上传或下载，沿用真实 project_id；写入任务继续完成 Project 提交、业务关联与回读，用户无需额外提示传输或检查。明确仅本地、只讨论或只上传时遵循其范围。响应未知先对账恢复，不重复收费生成；同步不自动批准、选用或发布 World。
 
 ## 1. 入口与范围
 
@@ -13,7 +13,7 @@ AI 短剧任务形成阶段成果后默认同步到原 Studio 项目，沿用真
 使用 `STUDIO_MCP_URL`、`STUDIO_MCP_BEARER_TOKEN`；Bearer 由服务端解析真实身份，不额外登录或提交用户/组织头。
 
 Artifact 管内容版本；上传成功不等于已加入 Project。
-只上传时返回 ContentRef，用户要求加入项目时显式提交 Project；AI 短剧阶段同步按上述默认归档范围执行。生成服务原生 Artifact 不能直接当中央 ContentRef。
+明确只上传时返回 ContentRef；已绑定项目的创作任务自动交接 Project 完成归档及角色关联，不等待用户再说“加入项目”。生成服务原生 Artifact 不能直接当中央 ContentRef。
 
 ## 2. 写入
 
@@ -37,6 +37,6 @@ write_id 及声明在发送前固定，不含凭据。内容变化用新版本�
 响应未知按原 write_id/upload_id 恢复；prepared 不代表字节完整，未提交上传可完整重传，不能宣传分块断点续传。
 本地文件变更或摘要不符时停止原上传，保留记录并核对，不复用原 ID 改声明。
 
-用户明确要求工程归档时，将服务返回的 ContentRef 交给 Project 提交并回读修订。
+已绑定项目的创作成果默认将服务返回的 ContentRef 交给 Project 提交并回读，角色展示及查询需要的关联由 Project 流程核验。查询时从最新项目取得固定引用，按需下载并向用户展示，不要求用户手动下载；查询不产生业务写入。明确删除候选时交给 Project 清理该候选及引用，不在 Artifact 层物理删除共享字节。
 `studio-workspace import/save-files` 会同时提交项目，不能用来执行“只上传”任务。
 保留、释放、删除和跨环境迁移不属于隐含收尾操作。
