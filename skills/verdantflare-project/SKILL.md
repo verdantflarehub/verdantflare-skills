@@ -2,7 +2,7 @@
 name: verdantflare-project
 description: Create, open, save and recover VerdantFlare Studio projects through Studio MCP. Use automatically for material creation, edits, queries and deletions in an already bound Studio creative project, including transfer and association checks; not for generic software planning or Git repositories.
 metadata:
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # VerdantFlare Project
@@ -27,7 +27,9 @@ MCP Token 即用户调用授权，由 Studio 解析为真实用户并按其业�
 4. 发送前持久保存原请求及稳定 `commit_id`。用 `expected_revision_id` 提交，正文和相关选用在同一修订更新。请求文件不含凭据。
 5. 回读返回的固定修订，核对修改文件及失效选用；涉及文件交付时核对实际内容。仅本地保存或上传完成不能报告项目已归档。
 
-素材增删改查按[修订与恢复](references/revisions.md#5-创作中的素材增删改查)处理。已有绑定、上下文及服务可查的信息自行取得，不让用户提供技术 ID 或执行同步命令。创作和查询前读取最新项目内容，按需下载，保护本地未提交修改。角色页使用的领域内容与文件必须一致；助手经 MCP 回读角色页消费的领域文档与文件引用完成核验，不打开浏览器，也不把技术验收交给用户。
+涉及“只有名称、内容不显示、位置不对”或视频阶段交付时，按[页面内容关联](references/display-associations.md)核对实际分类的消费字段、MIME、当前版本与页面入口。候选可预览与正式选用分开；不得因为尚未终审而故意不绑定已交付的候选预览。
+
+素材增删改查按[修订与恢复](references/revisions.md#5-创作中的素材增删改查)处理。已有绑定、上下文及服务可查的信息自行取得，不让用户提供技术 ID 或执行同步命令。创作和查询前读取最新项目内容，按需下载，保护本地未提交修改。角色页使用的领域内容与文件必须一致；普通素材同步经 MCP 回读页面消费的领域文档与文件引用，无需打开浏览器，也不把技术验收交给用户。明确的前端修复／页面验收任务另按宿主规范验证真实呈现。
 
 Blender 的实例 `project.save` 已完成服务内上传与项目提交，取得结果后回读即可，不在客户端重复提交同一检查点。
 
