@@ -10,7 +10,7 @@
 | --- | --- |
 | `x-verdantflare-short-drama` | [0.2.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/x-verdantflare-short-drama-v0.2.0) |
 | `verdantflare-video` | [0.4.2](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-video-v0.4.2) |
-| `verdantflare-music` | [0.5.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-music-v0.5.0) |
+| `verdantflare-music` | [0.6.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-music-v0.6.0) |
 | `verdantflare-speech` | [0.3.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-speech-v0.3.0) |
 | `verdantflare-project` | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-project-v0.1.0) |
 | `verdantflare-artifact` | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-artifact-v0.1.0) |
@@ -49,6 +49,8 @@ Blender 0.1.5 的首次工程恢复已通过干净工作副本、真实内容服
 
 ## verdantflare-music
 
+0.6.0 增加现代日系电子流行制作分支、中文歌词与编曲审核，以及通过实际能力发现使用独立修音、人声效果、合成器与预混。参考资料学习不等同逐曲听审，当前服务能力由 Studio Schema 决定。
+
 `verdantflare-music` 是从一句灵感推进到最终母带交付的 Codex Skill。它负责编制词曲企划、调用 VerdantFlare Music 制作工具，并通过五个人工审核点管理候选、分轨、个人音色、音色转换和母带结果。
 
 本轮发布的[影视器乐配乐分支](skills/verdantflare-music/references/picture-scoring.md)按画面、旁白与实测长度编排，不套用完整歌曲的人声制作流程。
@@ -57,12 +59,12 @@ Blender 0.1.5 的首次工程恢复已通过干净工作副本、真实内容服
 
 ### 安装命令
 
-当前版本：`verdantflare-music-v0.5.0`
+当前版本：`verdantflare-music-v0.6.0`
 
 在 Codex 中执行：
 
 ```text
-使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-music-v0.5.0/skills/verdantflare-music 安装 Skill。
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-music-v0.6.0/skills/verdantflare-music 安装 Skill。
 ```
 
 ### 使用 Skill

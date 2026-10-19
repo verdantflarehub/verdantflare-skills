@@ -2,7 +2,7 @@
 name: verdantflare-music
 description: 使用 VerdantFlare Music 创作歌曲或影视器乐配乐、翻唱、换声、母带及局部重绘，也用于已有音乐项目续作与技能研发优化。
 metadata:
-  version: "0.5.0"
+  version: "0.6.0"
 ---
 
 # VerdantFlare Music
@@ -65,6 +65,7 @@ Project、Artifact 和 World 的归属遵循[共同接入规则](https://github.
 - 英式摇滚：通用歌词 / [编曲](references/编曲-英式摇滚-审核规范.md)
 - 乡村音乐：通用歌词 / [编曲](references/编曲-乡村音乐-审核规范.md)
 - 现代电子：通用歌词 / [编曲](references/编曲-现代电子-审核规范.md)
+- 现代 J-pop／日系电子流行（含摇滚融合、轻细电子女声）：[制作与返工](references/jpop-electronic-production.md)、[歌词](references/歌词-现代日系电子流行-审核规范.md) / [编曲](references/编曲-现代日系电子流行-审核规范.md)；不因动画用途自动走燃系。
 - 日式二次元燃系：通用歌词 / [编曲](references/编曲-日式二次元燃系-审核规范.md)
 - City Pop / Funk：[歌词](references/歌词-City%20Pop与Funk-审核规范.md) / [编曲](references/编曲-City%20Pop与Funk-审核规范.md)
 - 独立流行 / Dream Pop：[歌词](references/歌词-独立流行与Dream%20Pop-审核规范.md) / [编曲](references/编曲-独立流行与Dream%20Pop-审核规范.md)

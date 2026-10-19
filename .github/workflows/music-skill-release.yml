@@ -1,0 +1,35 @@
+name: Publish Music Skill
+on:
+  push:
+    branches: [release]
+    paths:
+      - skills/verdantflare-music/**
+      - .github/workflows/music-skill-release.yml
+permissions:
+  contents: write
+concurrency:
+  group: music-skill-release
+  cancel-in-progress: false
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package immutable skill
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^  version: "\([0-9.]*\)"/\1/p' skills/verdantflare-music/SKILL.md)
+          test -n "$version"
+          tag="verdantflare-music-v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo 'Refusing to replace an existing skill release' >&2
+            exit 1
+          fi
+          mkdir -p dist
+          git archive --format=zip --prefix=verdantflare-music/ HEAD:skills/verdantflare-music > "dist/$tag.zip"
+          (cd dist && sha256sum "$tag.zip" > SHA256SUMS)
+          printf '%s\n' 'Adds modern electronic J-pop production routing, Mandarin lyric and arrangement review, and capability-driven independent vocal/synth/premix workflows. Reference catalog research is distinguished from listening review. Service availability must be discovered through Studio.' > dist/notes.md
+          gh release create "$tag" "dist/$tag.zip" dist/SHA256SUMS --target "$GITHUB_SHA" --title "VerdantFlare Music $version" --notes-file dist/notes.md
