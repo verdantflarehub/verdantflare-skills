@@ -44,6 +44,8 @@
 
 `music.redraw` 是独立能力：旧版没有工具或真实条件编辑后端时不得把整曲重生成称为局部重绘。用户已明确选择旧版服务时沿用该选择，不为升级或部署打断当前可完成的制作。
 
+Music3 的 `scaled_to_zero` 或 `waiting_gpu_lease` 且带 `wake_on_task` 时，预检不启动 GPU。直接调用已批准的 `music.generate`，由 Music MCP 排队、扩容并等待就绪。不要把这两种原因写成服务故障，也不要自行改副本。
+
 实际预检返回 `status=blocked` 时：
 
 1. 不启动依赖该条件的收费或不可逆步骤。
