@@ -1,0 +1,4 @@
+interface:
+  display_name: "参考拆解与成果复用"
+  short_description: "拆解参考，通过 MCP 独立保存、读取和复用分模型提示词资产"
+  default_prompt: "使用 $verdantflare-reference-learning 读取我选定的数字世界拆解成果，提取适合目标模型的提示词，保留来源、变量和验证状态。"

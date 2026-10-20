@@ -17,6 +17,16 @@
 
 使用 `$skill-installer` 从对应标签的 `skills/<技能名称>` 安装。已有目录先备份再升级；不覆盖个人配置或项目素材。Speech 0.3.0 包含参考登记、实验性声谱融合及音色设计路由；Music 0.5.0 包含配乐计划检查。VoxCPM2 尚未完成 GPU 验证或开放 Studio 调用，音乐生成以实时预检为准。
 
+**参考拆解与成果复用**
+
+[`verdantflare-reference-learning`](skills/verdantflare-reference-learning/SKILL.md) 提供完整分析、已有拆解方法学习、通过 Studio MCP 读取固定成果和模型提示词适配的统一入口。提示词按创作意图、目标任务与模型版本组织，已有成果可直接读取，无需操作原型页面。
+
+当前交付是源码与操作说明，尚未安装或发布；增加按实际能力使用独立 World 草稿、登记及恢复的[操作入口](skills/verdantflare-reference-learning/references/world-save.md)，包内包含中央格式投影和离线结构检查器。运行时先发现工具及 Schema，不将源码或隔离测试等同在线能力；完整视频分析、生产交接和真实 Studio 闭环仍需实际验证。源码不内置全媒体分析服务，知识资产保存也不自动安装或更新技能。
+
+```text
+使用 $verdantflare-reference-learning，读取我指定的数字世界资产固定版本，提取 H3 视频提示词正文和必要参考。只读取，不生成视频。
+```
+
 ## 工作区新增研发技能
 
 Project、Artifact、Blender 三项基础技能已实现并完成本地及 5090 真实调用验证。Project与Artifact本轮首次发布0.1.0；Blender仍为未发布开发版：

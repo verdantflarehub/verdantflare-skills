@@ -12,7 +12,7 @@ MCP 响应检查 error、isError、structuredContent 和业务状态，不只检
 ## 2. 准备与上传
 
 先将原请求和来源文件的 size、SHA-256、MIME 保存在明确的恢复记录中，凭据除外。
-write_id 为固定的小写 UUIDv7，外部 source 为 `{kind: user_import或user_edit, project_id: 真实ID}`。
+write_id 为固定的小写 UUIDv7，外部 source 的 kind 为 user_import 或 user_edit；项目操作用真实 project_id，已支持的独立 World 操作用真实 world_draft_id，二者恰选一个。上传前检查当前 Schema，旧服务缺草稿来源时不伪造项目、不提交未知字段。
 
 调用 artifact.write mode=prepare，参数带 write_id、source、mime、size、sha256。
 替换既有内容身份时仅在任务明确且有权时带 artifact_id；不覆盖旧 version_id。
@@ -39,10 +39,10 @@ store_id 是存储实例 ID，不是 URL 或连接别名。
 ## 4. 受控下载
 
 artifact.read mode=download 输入固定 content_ref。
-若采用项目授权路径，access 同时包含 project_id、project_revision_id；资产路径同时包含 asset_id、asset_version_id，不混搭。
+若采用项目授权路径，access 同时包含 project_id、project_revision_id；资产路径同时包含 asset_id、asset_version_id；已支持的 World 草稿路径同时包含 world_draft_id、world_draft_revision_id。三种作用域不混搭；按资产读到来源指针不代表有权读取来源草稿。
 
 结果给出 version 与 content_path。只接受同一 Studio 的 `/v2/artifacts/{version_id}/content`，查询中的 store_id、artifact_id 必须对应 ContentRef。
-额外查询仅可为服务返回的完整项目修订或资产版本访问路径，不添加身份头或任意上游地址。
+额外查询仅可为服务返回的完整项目修订、资产版本或已支持的草稿修订访问路径，不添加身份头或任意上游地址。
 
 下载到新临时文件，按流计算 SHA-256 和总字节数。禁止重定向及跨域凭据转发；拒绝超出任务/服务上限的响应。
 核验与 version 一致后，以不覆盖已有目标的方式保存；存在不同内容时保留两份或报告冲突。
@@ -57,4 +57,4 @@ artifact.read mode=download 输入固定 content_ref。
 Image/Video 等原生结果须经对应服务适配为中央内容；或在用户明确导入时以 user_import 保存，保留原任务记录。
 不伪造 task_output/original_ref，也不把中央 version_id 传给要求原生 source_artifact_id 的工具。
 
-上传只得到内容版本。将该版本加入 Project 要另做显式提交并回读修订，权限撤销或未就绪时准确报告，不能自动公开文件。
+上传只得到内容版本。将该版本加入 Project 或 World 草稿要交回原业务流程提交并回读固定修订；资产登记是独立操作。权限撤销或未就绪时准确报告，不能自动公开文件。

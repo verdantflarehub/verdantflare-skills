@@ -17,3 +17,5 @@
 | 已批准歌曲的 30 秒高潮 MV | [Music MV Skill](https://github.com/verdantflarehub/verdantflare-skills/blob/3c5a282fc4e8c30bda3bbfeef173f43d543bf93d/skills/verdantflare-music-mv/SKILL.md) |
 
 交付前期方案时输出 `treatment.md`、`plan.json`、资产需求和待决事项；运行 Director 校验器。剧本审核的 P0/P1 只阻断受影响的锁稿、Shot 和生成任务，不妨碍无依赖部分的整理。实际制作时逐阶段交付候选及引用、任务 ID 和检查结果，不把候选写为获批成片。视频调用只通过 Video MCP，模型、route、输入模式和时长以当前宿主能力及 Video Skill 为准。
+
+主要角色设计、扩展与生成须交付[独立资产及评分卡](character-consistency-package.md)：人物、面部角度、Look、身体状态、服装状态、表情和微表情分别成图、分别审核；总板不替代锁定身份用的单图。

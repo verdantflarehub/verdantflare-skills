@@ -22,6 +22,8 @@ metadata:
 | 导演方案、分镜、相机和时间线 | [导演](references/directing/guide.md) |
 | 资产候选、镜头制作与验片 | [制作](references/production/guide.md) |
 | 单镜动作、情绪、对白表演 | [表演](references/performance/guide.md) |
+| 主要角色资产分拆、评分状态与一致性参考包 | [角色一致性包](references/production/character-consistency-package.md) |
+| 角色卡微表情、克制情绪与表情僵硬返修 | [微表情](references/performance/microexpressions.md) |
 | 参考声线、独立对白、旁白与单句返修 | [对白交接](references/performance/dialogue.md) |
 | 明确要求本机 Ollama 提取原文事实 | [本机拆解](references/local-breakdown/guide.md) |
 | 品牌片、产品广告的声明与制作适配 | [广告适配](references/commercial/guide.md) |
@@ -47,7 +49,7 @@ metadata:
 
 本工作流按用户确定的制作标准，为每个场景、全部镜头与复杂道具交付 Blender 白模。进入空间设计或镜头制作时读取[白模规范](references/production/blender-whitebox.md)。仅写剧本或制作人物身份图不强制先完成建模；已有白模按固定版本复用，每镜定位相机与帧范围，不能把预览图当成可编辑工程。
 
-场景照片、正反打、人物站位、关键帧确认和视频返修遵循[场景—关键帧—视频规范](references/production/scene-keyframe-video.md)。白模约束空间，正式照片承载材质与陈设，关键帧明确动作和表情目标；视频仍须动态验片。
+场景照片、正反打、人物站位、关键帧确认和视频返修遵循[场景—关键帧—视频规范](references/production/scene-keyframe-video.md)。Blender 默认只固定完整空间、人物关键位置／朝向、接触锚点与摄影机运镜；正式关键帧锁定身份、状态和动作起落，视频模型完成自然连续动作与表情。精细骨骼动画和逐帧肢体预演不是生成前置要求；只有明确需要精确动作控制且模型实际支持时才追加。白模不保证生成结果严格遵守几何，视频仍须动态验片。
 
 ### 3.2 Studio 阶段归档
 
