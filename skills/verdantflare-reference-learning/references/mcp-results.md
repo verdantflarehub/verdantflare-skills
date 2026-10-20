@@ -10,7 +10,7 @@
 
 ## 2. 从资产到正文
 
-1. 用户给出固定 `asset_id` 和 `asset_version_id` 时直接读取。仅给名称或分类时，`world.list` 使用实际支持的 `asset_type`、`subject`、`cursor`、`limit`，按 `next_cursor` 分页；它不是全文搜索，不发送虚构的 `query` 参数。分类值遵循实际资产，不能因没有 `prompt` 分类就判断没有提示词。
+1. 用户给出固定 `asset_id` 和 `asset_version_id` 时直接读取。仅给名称或分类时，`world.list` 使用实际支持的 `asset_type`、`subject`、`cursor`、`limit`，按 `next_cursor` 分页；若实际 Schema 提供 `domain`、`q`、`relation`，可按领域、名称／标签和来源关系组合筛选；旧服务没有这些字段时只使用其已发现字段。`domain=knowledge` 包含知识和提示词；领域不等于精确 `asset_type`。`q` 按空白分词、每词匹配名称或标签，不搜索成果正文、模型或样例；不发送虚构的 `query` 参数。`relation` 仅支持实际关系 `curated_in`／`produced_in`，不能据此推定著作权或全部来源类型。分类值遵循实际资产，不能因没有 `prompt` 分类就判断没有提示词。
 2. 从候选识别用户目标；同名歧义会影响使用时再集中确认。将选中项的 `head_asset_version_id` 固定为本次 `asset_version_id`，后续不偷偷跟随最新版本。
 3. 调用 `world.get({asset_id, asset_version_id})`，检查返回的身份与版本。读 manifest 中的 `files[]`：`file_id`、`path`、`role`、`content_ref`；文件名只是定位线索，必须读取正文才能判断实际用途。
    清单版本 2 的 `domain_documents` 通过 `document_type` 和 `file_id` 指向类型化正文，`reference-learning` 文档内含多类成果；按该入口与所选文件读取。版本 1 的旧 Markdown／表格仍可直接消费，不伪造领域入口，也不把未知清单版本当已兼容。
@@ -29,7 +29,7 @@
 
 区分分析正文、提示词、方法、风格与工程清单，提取本次用途需要的部分。提示词选型按[模型提示词资产](model-prompts.md)。当前机器契约不强制所有知识文件拥有同一种领域 JSON；旧 Markdown／表格可以人工解析为本次工作内容，不能反写原件或臆造结构化字段已经存在。
 
-返回实际正文或可访问本地文件，同时保留固定资产版本、文件引用、适用范围及未满足条件。只返回标题和摘要不算“取到了提示词”。用户只要求读取时，到此完成，不进行原片分析或媒体生成。
+返回实际正文或可访问本地文件，同时保留固定资产版本、文件引用、适用范围及未满足条件。只返回标题和摘要不算“取到了提示词”。用户只要求读取时，到此完成，不进行原片分析或媒体生成，也不创建或要求绑定项目。
 
 尚未登记的成果也可立即使用：实际支持 `world.draft` 时，从 `mode=get` 返回固定草稿修订，以 `access:{world_draft_id,world_draft_revision_id}` 读取该修订明确包含的文件。它与资产权限互斥；资产的来源字段不授权回读原私人草稿。仅收录列表使用 `world.draft` 的 `mode=list,purpose=collection`，不混入 `world.list`。创建与保存见[独立保存](world-save.md)。
 
