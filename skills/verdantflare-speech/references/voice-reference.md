@@ -18,24 +18,27 @@ IndexTTS2 0.1.3 已验证的参考范围：PCM16／PCM24 单声道 WAV，16／22
 
 确需单声道转换、选段或重采样时另存派生文件，记录来源、精确选段和处理。不覆盖原件，不静默截断长录音，不默认降噪、归一化或做生成式增强。双声道合并后核对相位抵消、峰值和可懂度。
 
-## 3. 可复用声线配置
+## 3. 可复用声线配置与 World 声线资产
 
-需要把新录音实际登记为可调用声线时，执行[新声线登记与试音](new-voice.md)。其中配置准备脚本可做确定性核验，但只有固定修订 `speech.voices` 回读才证明登记成功。
+Speech 0.2.0 支持两类互斥的声线源：
 
-声线配置是版本化领域文件，不要求先有独立声音模型数据库。保存真实可得的信息：
+1. **World `reference-voice` 资产（`world_voice`）**：跨项目复用的正式声线资产（包含 `reference-voice.json`、`reference.wav`、`audition.wav` 与引擎验证绑定）。当项目修订的 `asset_refs` 已固定引用该资产版本时，`speech.voices` 会列出 `voice_source: "world"` 条目；调用 `speech.create` 时直接传入 `world_voice: {"asset_id": ..., "version_id": ...}`。服务端自动校验引擎绑定（`service_id: "speech"`, `result: "passed"`）与参考音频字节摘要，不读取授权证明附件（`consent.evidence_path`）。
+2. **项目内候选配置（`voice_profile`）**：角色试制、选角或单项目声线保存在项目修订 `speech/voices/<voice_id>/profile.json`。需要把新录音实际登记为可调用声线时，执行[新声线登记与试音](new-voice.md)。其中配置准备脚本可做确定性核验，但只有固定修订 `speech.voices` 回读才证明登记成功。
 
-- 声线标签、原项目及来源／使用范围。
+声线配置是版本化领域文件，保存真实可得的信息：
+
+- 声线标签、角色（`speaker`）、原项目及来源／使用范围。
 - 原件和有效参考的文件、大小、摘要、实际处理与固定 ContentRef；未上传的引用保留缺项。
 - 实际模型、运行时版本及模型清单摘要，不能把计划版本写成已运行。
 - 实际朗读文字或未知状态、试听任务与质量结论、候选或已选状态。
 
-每次生成固定此配置和参考。换参考或选段另建版本；运行时升级记录新的实际绑定，旧配置和任务保留。仅改台词无需重录参考。没有训练过程、权重包和加载证据时，不创建虚假训练 run 或 World voice-model。
+每次生成固定此配置或 World 资产版本，并在 `generation.json` 中记录 `voice_source` 与 `input_digest`。换参考或升级声线版本后，通过比对已选 take 的 `generation.json` 可自动检出过期已选 take。仅改台词无需重录参考。没有训练过程、权重包和加载证据时，不创建虚假训练 run 或 World voice-model。
 
 用户要求结合两个参考时，先按[旁白方向](narration-direction.md)区分借鉴表演与融合音色；不把单参考配置或本地派生音频描述为后端已支持多声线融合。
 
-当前 Speech 可发现配置的项目路径为 `speech/voices/<voice_id>/profile.json`。配置与参考 WAV 必须同时属于生成时指定的项目修订；原件、详细处理和来源记录可另存领域文件，不把未声明字段塞入服务配置。
+当前项目候选配置的路径为 `speech/voices/<voice_id>/profile.json`。配置与参考 WAV 必须同时属于生成时指定的项目修订；原件、详细处理和来源记录可另存领域文件，不把未声明字段塞入服务配置。
 
-配置字段为 `schema_version: 1`、稳定小写 `voice_id`、`label`、`engine: indextts2`、实际 `model_manifest_sha256`、`reference.content_ref`、`reference.sha256`、`candidate_state` 和 `listening_review`。模型摘要从实际能力读取并核对，不能抄示例值。未听审使用 `candidate`／`pending`；`selected` 或 `approved` 只引用真实选择和听审。保存后使用 `speech.voices` 回读，生成时传入该文件的完整 ContentRef。
+配置字段为 `schema_version: 1`、稳定小写 `voice_id`、`label`、可选 `speaker`、`engine: indextts2`、实际 `model_manifest_sha256`、`reference.content_ref`、`reference.sha256`、`candidate_state` 和 `listening_review`。模型摘要从实际能力读取并核对，不能抄示例值。未听审使用 `candidate`／`pending`；`selected` 或 `approved` 只引用真实选择和听审。保存后使用 `speech.voices` 回读，生成时传入 `voice_profile`（完整 ContentRef）或 `world_voice`（二选一互斥）。
 
 既有 Mengsk 等 RVC `.pth/.index` 是音色转换模型，不能直接用作 IndexTTS2 文本生成权重。可复用用途明确的原始说话录音；“先生成再 RVC 换声”需要独立请求与验证，不能悄悄增加转换步骤。
 
