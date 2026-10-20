@@ -20,7 +20,7 @@
 
 调用 `music.redraw` 时提供：项目 ID、源歌曲 Artifact ID、起止秒数、重绘说明、区间歌词、实际语言（vocal_language，日语为 ja）、不可覆盖的递增修订号、seed、交叉淡化秒数、保留模式与编辑强度。返回完整歌曲 `Demo_Redraw_<修订号>.wav`，不是仅有区间的片段。
 
-先回读实际工具 Schema；Music MCP 0.12.0 起使用 `music.conditioning_check` 检查 ACE 的 caption 192-token 和格式化歌词 1800-token 预算。超限应精简可听目标，不能让后端静默截掉尾部要求；此限制不用于 Music3。旧部署未开放检查或语言字段时应报告版本缺口，不编造参数成功。ACE 只编辑既有区间，不用于新增主歌或填满整曲。
+先回读实际工具 Schema；Music MCP 0.12.0 起使用 `music.conditioning_check` 检查 ACE 的 caption 192-token 和格式化歌词 1800-token 预算。0.12.1 起检查返回结构化 valid；必须确认 valid=true，调用成功但 valid=false 仍不能提交编辑。超限应依据实际计数精简可听目标，不能让后端静默截掉尾部要求；此限制不用于 Music3。旧部署未开放检查或语言字段时应报告版本缺口，不编造参数成功。ACE 只编辑既有区间，不用于新增主歌或填满整曲。
 
 - `preservation_mode=conservative`：修尾音、接缝或轻微演唱问题，优先保留原旋律和配器。
 - `preservation_mode=balanced`：默认，允许在目标区间内调整演唱或编曲。
