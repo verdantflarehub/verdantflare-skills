@@ -10,7 +10,7 @@
 | --- | --- |
 | `x-verdantflare-short-drama` | [0.2.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/x-verdantflare-short-drama-v0.2.0) |
 | `verdantflare-video` | [0.4.2](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-video-v0.4.2) |
-| `verdantflare-music` | [0.6.1](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-music-v0.6.1) |
+| `verdantflare-music` | [0.6.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-music-v0.6.0) |
 | `verdantflare-speech` | [0.3.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-speech-v0.3.0) |
 | `verdantflare-project` | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-project-v0.1.0) |
 | `verdantflare-artifact` | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-artifact-v0.1.0) |
