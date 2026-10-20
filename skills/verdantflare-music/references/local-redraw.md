@@ -14,11 +14,13 @@
 - `workflow.preflight(workflow="redraw", require_local_redraw=true)` 返回 `ready`。
 - 源文件为单声道或立体声 16-bit／24-bit 整数 PCM WAV（须确认当前服务支持）；版权、人声授权以及 ACE-Step 模型许可范围已确认。
 
-当前 Music3 文本生成接口不接受参考音频、续写或区间条件，不能用 `music.generate` 冒充局部重绘。真实重绘使用 ACE-Step 1.5 `repaint`：上传完整源歌曲，使用 `chunk_mask_mode=explicit` 指定区间，并同时启用 latent 与 WAV 边界融合。后端未配置时应在创作前说明不可用，并提供保留现有版本、切换候选或整曲重生成等选择。
+当前 Music3 文本生成接口不接受参考音频、续写或区间条件，不能用 `music.generate` 冒充局部重绘。真实重绘使用 ACE-Step 1.5 `repaint`：上传完整源歌曲，使用 `chunk_mask_mode=explicit` 指定区间，后端的 latent／WAV 融合由 preservation_mode 决定，MCP 的 crossfade_seconds 控制最终 PCM 局部融合；两者不是同一个参数。aggressive 会关闭后端源注入与融合，不能把提交的秒数当作实际后端效果。后端未配置时应在创作前说明不可用，并提供保留现有版本、切换候选或整曲重生成等选择。
 
 ## 工具调用与产物
 
-调用 `music.redraw` 时提供：项目 ID、源歌曲 Artifact ID、起止秒数、重绘说明、区间歌词、不可覆盖的递增修订号、seed、交叉淡化秒数、保留模式与编辑强度。返回完整歌曲 `Demo_Redraw_<修订号>.wav`，不是仅有区间的片段。
+调用 `music.redraw` 时提供：项目 ID、源歌曲 Artifact ID、起止秒数、重绘说明、区间歌词、实际语言（vocal_language，日语为 ja）、不可覆盖的递增修订号、seed、交叉淡化秒数、保留模式与编辑强度。返回完整歌曲 `Demo_Redraw_<修订号>.wav`，不是仅有区间的片段。
+
+先回读实际工具 Schema；Music MCP 0.12.0 起使用 `music.conditioning_check` 检查 ACE 的 caption 192-token 和格式化歌词 1800-token 预算。超限应精简可听目标，不能让后端静默截掉尾部要求；此限制不用于 Music3。旧部署未开放检查或语言字段时应报告版本缺口，不编造参数成功。ACE 只编辑既有区间，不用于新增主歌或填满整曲。
 
 - `preservation_mode=conservative`：修尾音、接缝或轻微演唱问题，优先保留原旋律和配器。
 - `preservation_mode=balanced`：默认，允许在目标区间内调整演唱或编曲。
