@@ -21,8 +21,8 @@
    - 执行受控 `bpy` 场景搭建与多机位预演脚本时，先将脚本提交到 Studio 项目，再调用 `script.run_project`（可指定 `source_project_id`、`script_path`、`output_subdir`、`load_blend_as_active`）并通过 `operation.get` 轮询完成；
    - 服务缺失时交付明确建模说明与覆盖表，标未建模，不用占位文件冒充 `.blend`。
 4. 从真实工程输出预览：场景平面／透视、道具结构、每镜相机画面；有运镜时输出覆盖镜头时长的相机预演（`.mp4`）及必要关键画面；人物代理可静止或仅示意关键位移，不要求完整骨骼动画。固定机位用关键位置图，复杂通路按需补路线预演，并注明代理运动仅用于空间核对。
-5. 调用 `scene.inspect_file`（传入 `asset_id="exports/<subdir>/<name>.blend"`）在新进程无头重开固定工程，核验单位制、分辨率、帧率、帧范围、前缀分类计数、全部摄像机焦距／位置／旋转／关键帧列表及关键对象世界包围盒尺寸；需要切换为实例活动场景时调用 `scene.open_file`。保存实际检查证据，未执行检查标待验。
-6. 调用 `project.export_assets`（共用实例向分篇项目归档时指定 `target_project_id`）将 `.blend`、多机位预演 `.mp4`、空间说明 `.json` 一次性归档至目标 Studio 项目，通过 `operation.get` 获取固定 `revision_id` 与 `content_ref` 并从中央 Project／Artifact 回读核验；再将宿主真实支持的图像／视频参考交给后续生成。不能因为有 `.blend` 就宣称视频模型能读取工程或相机轨迹。
+5. 调用 `scene.inspect_file`（传入 `asset_id="exports/<subdir>/<name>.blend"`）在新进程无头重开固定工程，核验单位制、分辨率、帧率、帧范围、前缀分类计数、全部摄像机焦距／位置／旋转／关键帧列表及关键对象世界包围盒尺寸；需要切换为实例活动场景时调用 `scene.open_file`。同时对全部预演视频（`.mp4`）执行完整解码（核验帧数、时长、分辨率）并逐机位抽帧检查画面主体可见、未被人物替身圆柱或天花板／墙体遮挡。保存实际检查证据，未执行检查标待验。
+6. 调用 `project.export_assets`（共用实例向分篇项目归档时指定 `target_project_id` 并携带 `batch_operation_id` 记录来源溯源）将 `.blend`、多机位预演 `.mp4`、空间说明 `.json` 一次性归档至目标 Studio 项目，通过 `operation.get` 获取固定 `revision_id`、`provenance` 与 `content_ref` 并从中央 Project／Artifact 回读核验；闭环结束后调用 `session.close` 释放实例编辑租约，再将宿主真实支持的图像／视频参考交给后续生成。不能因为有 `.blend` 就宣称视频模型能读取工程或相机轨迹。
 
 ### 2.1 空间与运镜辅助、模型连续表演
 

@@ -8,11 +8,11 @@
 现行实例入口使用 JSON MCP，不假定 GET/SSE 或 Mcp-Session-Id 可用；传输连接不是编辑会话。
 
 session.open 输入 project_id、mode（read/edit），项目须与实例已绑定项目一致。
-返回 editing_session_id、instance_id、project_id、generation、mode、expires_at，保存这些实际值，不从别名推算实例 ID。
+返回 editing_session_id、instance_id、project_id、generation、mode、lease_ttl_seconds（默认 1800 秒，即 30 分钟）、expires_at，保存这些实际值，不从别名推算实例 ID。
 技能不通过修改绑定绕过 PROJECT_OR_MODE_DENIED 或 WORKING_COPY_PROJECT_MISMATCH。
 
 只读任务申请 read。edit 失败为 INSTANCE_EDIT_LEASE_HELD 时，保留请求范围并报告占用，不关闭现有 GUI 或其他会话。
-session.close 只释放本次 editing_session_id，不停止 Blender。
+注意：`script.run_project`、`scene.inspect_file`、`scene.open_file` 与 `project.export_assets` 执行及完成时均保持当前编辑租约并自动顺延 30 分钟，不会自动释放会话；单次任务或批处理闭环结束时必须调用 `session.close` 释放本次 editing_session_id（不停止 Blender）。
 
 ## 2. 写操作与结果未知
 
