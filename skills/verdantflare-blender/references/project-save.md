@@ -1,10 +1,11 @@
 # Blender 工程归档
 
-## 1. 两种保存
+## 1. 两种保存与跨项目批量归档
 
 scene.save 写实例持久工作区，仅证明实例内保存。
-project.save 才生成不可变 `.blend` 检查点，经 Artifact 写入并提交 Project 修订。
-此流程由 Blender 应用服务执行，客户端不再另做一次上传或 Project commit。
+project.save 生成当前活动场景的不可变 `.blend` 检查点，经 Artifact 写入并提交实例绑定 Project 的修订。
+project.export_assets（v0.1.13 新增）支持将实例工作区 `exports/` 或 `project/` 下的多个导出文件（`.blend` 中模、`.mp4` 机位预演、`.json` 场景元数据、`.glb` 等）一次性上传至 Artifact，并在 `target_project_id` 指定的 Studio 项目（默认会话绑定项目，支持跨项目指定调用者拥有写权限的分篇项目）上原子提交单个新修订，不改变实例本身的 `project_id` 绑定。
+上述流程均由 Blender 应用服务执行，客户端不再另做一次上传或 Project commit。
 
 当前归档单位是单个 `.blend`。贴图等用户资源须由制作者在 Blender 中打包；
 未打包的贴图、链接库等外部依赖，即使当前路径可读，也不能作为可移植工程归档。
@@ -22,6 +23,8 @@ scene_version 来自本次场景读回或已完成操作，不使用固定常量
 
 保存使用会话工作副本基线，不因远端 head 前进就把旧场景强制基于新 head 提交。
 冲突保留检查点、原 operation_id 和提交信息；明确处理差异后再继续，不覆盖别人的修订。
+
+跨项目或多文件归档时，在实例 MCP 调用 `project.export_assets`，传入 `editing_session_id`、`idempotency_key`、`target_project_id`（可选，跨项目归档必填）、`files`（`[{asset_id, project_path}]` 列表）及 `summary`。同样通过 `operation.get` 轮询直至 `completed`，从 `result` 读取 `target_project_id`、`revision_id` 与每个文件的固定 `content_ref`、`size`、`sha256`。
 
 ## 3. 中央回读
 
