@@ -52,8 +52,11 @@
 
 ---
 
-## 阶段 6：逐镜质检、Picture Lock 与交付
+## 阶段 6：分级评估、逐镜质检、Picture Lock 与交付
 
+0. **生成后内容分级评估（K09 强制步骤）**：
+   - 在提取展示接触表、写入单元/项目 `review.md` 或执行 `project.commit` 之前，对新生成的图像、视频 Shot 或音频产物按 [生成后内容分级评估步骤](content-rating-step.md) 与 [18+ 评估规范（rubric v1.0）](content-rating-rubric.md) 完成分级评估并调用对应 `*.rate_content` 提交结果（`general` 与 `nsfw` 均提交）；
+   - 判定为 `nsfw` 的产物在 `review.md` 与摘要中只写“已隐藏产物 N 个”，不展示预览、接触表或 `ContentRef`，不进入 Picture Lock 拼接，也不同步到 Studio 项目或登记到 World。
 1. **单元级逐镜质检（单元 `review.md`）**：
    - 提取 1 秒 1 帧的接触表（contact sheet）与关键帧，与 `output/baseline/` 历史基线横向对比；
    - 在 Shot Gate 检查身份、表演、动作连续性、背景视差与节奏；在单元 `review.md` 中就地追加审核决定。

@@ -11,6 +11,7 @@
 | 局部重绘 | `image.inpaint` | 主参考与遮罩引用；形状和尺寸按当前契约核对 |
 | 状态 | `image.status` | 用原始 `task_id` 查询 |
 | 结果 | `image.result` | 完成后取得原生Artifact、摘要及下载信息 |
+| 内容分级标记 | `image.rate_content` | 生成后提交 `general` / `nsfw` 评估 JSON（只加标记、不提供撤销） |
 
 历史 `image.generate`、`image.list` 仅在宿主实际注册并明确语义时使用。当前不假定存在 `artifact.import`，也不向网关发送文档中未注册的别名。
 

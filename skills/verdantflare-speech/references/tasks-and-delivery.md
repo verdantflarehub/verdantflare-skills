@@ -32,6 +32,7 @@
 3. `speech.create` 传入 `project_id`、`revision_id`、`world_voice` 或 `voice_profile`、稳定 `utterance_id`、完整 `text`、`language: "zh-CN"`、固定 `idempotency_key`，以及可选同修订 `script_ref`、`lexicon_ref`、`shot_window_seconds` 和至多一种情绪输入。
 4. 保存业务 `task_id`，用 `speech.status(project_id, task_id)` 查询；`runtime_task_id` 是内部原任务来源，不替代业务任务 ID。`phase: loading_model` 或 `error.code: model_load_timeout` 表示 GPU 按需唤醒冷启动中，继续轮询原任务，不换键重提。
 5. 成功后调用 `speech.result(project_id, task_id)`，取得 `original.wav`、`editing.wav`、`report.json`、`generation.json` 四份中央 ContentRef；使用 `artifact.read` 获取受控下载路径并校验。
+6. **生成后内容分级评估（K09 强制步骤）**：在交付摘要与第 5 节项目归档前，按[生成后内容分级评估步骤](content-rating-step.md)与[18+ 评估规范（rubric v1.0）](content-rating-rubric.md)评估转写文本（`report.json` 的 `asr`）、台词、正向提示词与可识别非语言声音（缺失转写时在 `reasons` 中注明 `"未转写音频"`），并调用 `speech.rate_content` 提交分级结果（`general` 与 `nsfw` 均须提交；超时用相同内容幂等重试，不重新推理）。若判为 `nsfw`，摘要只写“N 个产物已标记为 NSFW 并隐藏”，不展示试听、`ContentRef` 或台词原文，且跳过第 5 节 Project 归档与 World 登记。
 
 提交前保存固定输入、声线版本和稳定幂等键。收到任务后先持久保存原 `task_id`／`runtime_task_id`，再轮询；请求 ID、模型版本和任务 ID 使用各自真实返回值。
 

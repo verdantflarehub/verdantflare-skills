@@ -4,7 +4,7 @@
 
 ## 1. 工具发现与创建
 
-现有网关注册 `video.create`、`video.status`、`video.result`。历史 `video.generate` 只有在当前宿主实际注册且语义明确时才使用，不能向网关发送未注册别名。工具注册、渠道已配置、推理就绪、引用可读是不同检查。
+现有网关注册 `video.create`、`video.status`、`video.result`、`video.rate_content`。历史 `video.generate` 只有在当前宿主实际注册且语义明确时才使用，不能向网关发送未注册别名。工具注册、渠道已配置、推理就绪、引用可读是不同检查。
 
 对齐版本还注册 `video.capabilities`、`video.preflight`、`video.import_prepare/import_chunk/import_status/import_commit` 与兼容入口 `video.import`。先发现再调用；代码中新增工具不代表当前部署已升级。`artifact.import` 是旧 Video 内部名称，Studio 按域路由会将 `artifact.*` 发往中央 Artifact，不能作为 Video 导入入口。
 
@@ -66,7 +66,7 @@ Singularity 生成前调用 `video.preflight`，使用与 create 相同的生成
 
 `video.status` 的失败信息仅在脱敏后进入记录，不输出签名URL、内部路径或供应商原始响应。只对成功任务调用 `video.result`，保存原生Artifact、输入摘要、模型/渠道、Runtime版本及媒体元数据；下载按Studio受控内容路由，不把 `/mcp` 当下载根地址。
 
-原生结果返回不代表中央Project归档已完成。有输出适配时用可信来源登记；没有时可在授权范围内通过现有工作副本客户端显式导入校验后的文件为 `user_import`，保留原生任务、Artifact和摘要映射，不伪造 `task_output`。
+原生结果返回不代表中央Project归档已完成。在交付摘要展示与中央Project归档前，必须先按 [生成后内容分级评估步骤](content-rating-step.md) 与 [18+ 评估规范（rubric v1.0）](content-rating-rubric.md) 在本机临时目录完成抽帧评估（至少每 2 秒 1 帧、全片至少 8 帧，另补切镜关键帧；评估后清理临时帧并在 `reasons` 中记录抽帧数），调用 `video.rate_content` 提交分级结果（`general` 与 `nsfw` 均须提交；超时幂等重试，不重新生成）。判为 `nsfw` 的视频不在摘要中展示预览、链接、`ContentRef` 或提示词全文，也不执行 Project 归档或 World 登记。对判为 `general` 的产物，有输出适配时用可信来源登记；没有时可在授权范围内通过现有工作副本客户端显式导入校验后的文件为 `user_import`，保留原生任务、Artifact和摘要映射，不伪造 `task_output`。
 
 Project提交保存文件、`run_refs`、Prompt和审核记录。MD作为普通文件，`domain_documents` 只用于服务支持的领域JSON。技术验收通过仍是候选；不自动选用或注册World。
 

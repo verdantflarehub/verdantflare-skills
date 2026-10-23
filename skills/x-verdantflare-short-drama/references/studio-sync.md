@@ -8,6 +8,8 @@
 
 明确列出本阶段交付文件，不扫描整个目录替用户选取数据。正文、人物小传、地点与场次、道具、服装 Look、逐镜连续性、场景时间天气与光源开关、灯光方案，以及生成的图片、声音、配乐、白模工程、镜头和交付均按实际产出保存；未制作内容记录缺口，不创建假成果。
 
+所有经 Image、Speech、Music、Video 生成的新媒体产物，在同步到 Studio 项目之前必须先按[生成后内容分级评估步骤](content-rating-step.md)与[18+ 评估规范（rubric v1.0）](content-rating-rubric.md)完成评估并调用对应 `*.rate_content` 提交分级结果。判定为 `nsfw` 的产物**不同步到 Studio 项目（不写入 `project.commit` 及 `project-content`），也不登记到 World**，在阶段记录中只写“已隐藏产物 N 个”，由用户决定是否改写提示词后重新生成。
+
 保留稳定对象 ID，区分同一素材的状态与多次生成版本。每版记录修改原因、来源设定、实际任务与输出引用；引用固定文件、素材及资产版本。保存人物身份与造型分工、场景状态和光照，镜头引用不可随“最新版本”漂移。旧结果不覆盖，失败尝试与返修原因保留为记录，不能冒充有效媒体。
 
 通过当前 Studio tools/list 发现 Project / Artifact 契约。文本可用 project.commit 的小文本写入；媒体先经 Artifact 受控传输获得中央 ContentRef，原生生成服务 ID 不能直接替换中央引用。生成服务已完成 Project 提交时回读该修订，避免重复写入。Blender 的实例 project.save 使用实例入口。

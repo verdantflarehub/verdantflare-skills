@@ -25,6 +25,7 @@ metadata:
 | 主要角色资产分拆、评分状态与一致性参考包 | [角色一致性包](references/production/character-consistency-package.md) |
 | 角色卡微表情、克制情绪与表情僵硬返修 | [微表情](references/performance/microexpressions.md) |
 | 参考声线、独立对白、旁白与单句返修 | [对白交接](references/performance/dialogue.md) |
+| 生成后 18+ 内容分级评估与标记 | [评估步骤](references/content-rating-step.md)、[评估规范](references/content-rating-rubric.md) |
 | 明确要求本机 Ollama 提取原文事实 | [本机拆解](references/local-breakdown/guide.md) |
 | 品牌片、产品广告的声明与制作适配 | [广告适配](references/commercial/guide.md) |
 
@@ -51,9 +52,11 @@ metadata:
 
 场景照片、正反打、人物站位、关键帧确认和视频返修遵循[场景—关键帧—视频规范](references/production/scene-keyframe-video.md)。Blender 默认只固定完整空间、人物关键位置／朝向、接触锚点与摄影机运镜；正式关键帧锁定身份、状态和动作起落，视频模型完成自然连续动作与表情。精细骨骼动画和逐帧肢体预演不是生成前置要求；只有明确需要精确动作控制且模型实际支持时才追加。白模不保证生成结果严格遵守几何，视频仍须动态验片。
 
-### 3.2 Studio 阶段归档
+### 3.2 Studio 阶段归档与生成后内容分级评估
 
 AI 短剧项目内容默认同步到同一 Studio 项目，读取[阶段同步与恢复](references/studio-sync.md)。用户明确要求仅本地、只讨论或仅审阅而不产生项目成果时遵循该范围。写作、返修、素材候选、白模、镜头与交付分别在形成可保存版本后归档；同步候选无需等待创作选版。
+
+调用 Image、Speech、Music、Video 生成新媒体产物后，在交付摘要展示与 Studio 项目同步前，必须先按[评估步骤](references/content-rating-step.md)与[评估规范](references/content-rating-rubric.md)完成 18+ 内容分级评估并调用对应域的 `*.rate_content`（`general` 与 `nsfw` 均须提交）。判定为 `nsfw` 的产物严禁同步到 Studio 项目或登记到 World，在阶段记录与交付摘要中只写“已隐藏产物 N 个”，不展示预览、链接、`ContentRef` 或提示词全文，由用户决定是否改写提示词后重新生成。
 
 ### 3.3 制作准备与用户授权
 

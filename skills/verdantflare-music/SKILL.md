@@ -44,6 +44,7 @@ Project、Artifact 和 World 的归属遵循[共同接入规则](https://github.
 | 编写原创企划                                 | [全局规范](references/全局-审核规范.md)、[歌词规范](references/歌词-审核规范.md)、[编曲规范](references/编曲-审核规范.md)，再按下方曲风路由 |
 | 输入输出、命名、目录或质量检查               | [交付契约](references/artifacts.md)                                                                                                         |
 | 原始人声准备或训练                           | [人声准备](references/voice-preparation.md)                                                                                                 |
+| 生成后 18+ 内容分级评估与标记                | [评估步骤](references/content-rating-step.md)、[评估规范](references/content-rating-rubric.md)                                               |
 | 候选选择、批准、终审或恢复审核记录           | [审核门](references/review-gates.md)                                                                                                        |
 | 配置问题                                     | [环境说明](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-music-v0.4.1/skills/ENVIRONMENT.md)                                                                                                               |
 
@@ -80,5 +81,7 @@ Project、Artifact 和 World 的归属遵循[共同接入规则](https://github.
 通过已配置的 Music MCP 和受控 Artifact 执行；宿主未注入工具时可使用该 MCP 的标准客户端，不直连供应商。训练使用有权处理且已批准的材料，已批准模型直接复用。只在确需用户听审或新增授权的地方暂停；候选选定后，分轨技术检查通过即可继续已批准模型的转换，不单独索取分轨批准。
 
 保留已认可演唱而重做伴奏时，先读[局部重绘](references/local-redraw.md)末节的音乐一致性约束；帧长与哈希通过不能代替和声、拍点、乐句核验及实际合听。
+
+生成后内容分级评估（K09 强制步骤）：每次生成、翻唱、局部重绘、音色转换或母带取得新音频产物后、在进入审核门展示、交付摘要或 Project/World 同步之前，必须按[评估步骤](references/content-rating-step.md)与[评估规范](references/content-rating-rubric.md)评估歌词、正向提示词、标题与转写文本/声音（缺少转写能力或纯器乐时只依据文本资料判定，并在 `reasons` 中注明 `"未转写音频"`），并调用 `music.rate_content` 提交分级结果（`general` 与 `nsfw` 均须提交，`rubric_version` 取自规范副本文首；不确定即标 `nsfw`；提交超时用相同内容幂等重试，不重新生成候选）。判定为 `nsfw` 的产物在摘要与审核记录中只写“N 个产物已标记为 NSFW 并隐藏”，不展示试听、下载链接、`ContentRef`、歌词或提示词全文，也不同步到 Studio 项目或登记到 World。
 
 制作状态只写入 [制作审核记录与资产清单](references/artifacts.md)：追加关键用户决定、版本、任务和 Artifact ID，不为每次工具调用另建报告。收费生成与重做受已批准数量/预算约束，不覆盖旧资产或伪造 LRC。按 [审核门](references/review-gates.md) 只执行当前任务适用的人工审核；工具成功不能代替音质终审。

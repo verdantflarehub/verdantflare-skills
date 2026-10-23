@@ -18,10 +18,13 @@ AI 短剧任务形成阶段成果后默认同步到原 Studio 项目，沿用真
 | 人物四视图、服装、角色卡、参考网格        | [角色资产](references/character-assets.md)；需要生图时再读 [Image Skill](../verdantflare-image/SKILL.md) |
 | 到达审核点、收到批准或候选选择            | [审核门](references/review-gates.md)                                                                     |
 | 执行已冻结视频生成单元                    | [H3 Skill](../verdantflare-video/SKILL.md)                                                               |
+| 生成后 18+ 内容分级评估与标记             | [评估步骤](references/content-rating-step.md)、[评估规范](references/content-rating-rubric.md)           |
 | 确实需要制作或修复歌曲                    | [Music Skill](../verdantflare-music/SKILL.md)                                                            |
 | 配置问题                                  | [环境说明](../ENVIRONMENT.md)                                                                            |
 
 人物身份、故事/分镜、渲染批次、Shot、Picture Lock/Release 审核按具体资产版本记录；既有批准可复用，不能伪造新的艺术批准。未到门禁前自主完成草案、确定性组装、检查和技术修复。MCP 能力缺失不自动换模型，也不操作 GPU/部署。
+
+生成后内容分级评估（K09 强制步骤）：凡经 Studio MCP 生成新媒体产物（角色视图、服装人台、分镜格、视频 Shot 或歌曲候选），取得产物后、在写入 `review.md`、展示交付摘要或同步到 Project/World 之前，必须按[评估步骤](references/content-rating-step.md)与[评估规范](references/content-rating-rubric.md)完成评估（视频须在本机临时目录按至少每 2 秒 1 帧且全片不少于 8 帧加切镜关键帧抽帧，评估后删除临时帧并在 `reasons` 中记录抽帧数），并调用对应域的 `*.rate_content` 提交分级结果（`general` 与 `nsfw` 均须提交）。判定为 `nsfw` 的产物在摘要与 `review.md` 中只写“已隐藏产物 N 个”，不展示预览、接触表、`ContentRef` 或提示词全文，也不同步到 Studio 项目或登记到 World。
 
 输入清单记录不可变资产与哈希，保留来源和批准版本。候选失败时只重做相关阶段，收费尝试遵循已批准预算；诊断素材和用户资产不作为临时垃圾自动删除。
 
