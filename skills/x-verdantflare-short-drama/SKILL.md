@@ -47,7 +47,7 @@ metadata:
 
 ### 3.1 短剧白模制作要求
 
-本工作流按用户确定的制作标准，为每个场景、全部镜头与复杂道具交付 Blender 白模。进入空间设计或镜头制作时读取[白模规范](references/production/blender-whitebox.md)。仅写剧本或制作人物身份图不强制先完成建模；已有白模按固定版本复用，每镜定位相机与帧范围，不能把预览图当成可编辑工程。
+本工作流按用户确定的制作标准，为每个场景、全部镜头与复杂道具交付 Blender 白模。进入空间设计或镜头制作时读取[白模规范](references/production/blender-whitebox.md)。仅写剧本或制作人物身份图不强制先完成建模；已有白模按固定版本复用，每镜定位相机与帧范围，不能把预览图当成可编辑工程。当场景白模或精模需供网页片场查看器（`viewer`）三维审片与核对机位时，按[白模规范第 2.2 节](references/production/blender-whitebox.md#22-片场包set-package-v10导出与机位对齐校验)导出 `sets/<package_id>/`（含 `set.json`、`scene.glb`、`poster.png`、`cameras/CAM_*.png`），并通过 `validate_set_package.py` 与 `check_camera_alignment.py` 校验后归档为 Project 固定修订。
 
 场景照片、正反打、人物站位、关键帧确认和视频返修遵循[场景—关键帧—视频规范](references/production/scene-keyframe-video.md)。Blender 默认只固定完整空间、人物关键位置／朝向、接触锚点与摄影机运镜；正式关键帧锁定身份、状态和动作起落，视频模型完成自然连续动作与表情。精细骨骼动画和逐帧肢体预演不是生成前置要求；只有明确需要精确动作控制且模型实际支持时才追加。白模不保证生成结果严格遵守几何，视频仍须动态验片。
 

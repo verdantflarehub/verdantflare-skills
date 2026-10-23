@@ -30,6 +30,7 @@ GUI 或其他编辑者占用（`INSTANCE_EDIT_LEASE_HELD`）时报告，不抢�
 - 使用 `script.run_project` 从已授权 Studio 项目（`source_project_id`，默认会话项目）拉取受控 `bpy` 脚本（如 `blender/scripts/saw_set_v1.py`），在 `/workspace/exports/<output_subdir>/` 隔离运行批处理建模与多机位预演渲染（单实例最大并发 1，单任务超时 `timeout_seconds` 默认 300s／上限 600s，导出目录受文件数与容量配额约束），输出 `.blend`、`.mp4`、`.json` 与 `build.log`，可按需指定 `load_blend_as_active` 将生成的 `.blend` 加载为当前活动场景；返回 `running` 时通过 `operation.get` 轮询直至 `completed`。注意：批处理完成后编辑租约保持有效，不会自动释放。
 - 使用 `scene.inspect_file` 对当前活动场景或指定工作区 `.blend`（`asset_id`，如 `exports/<subdir>/xxx.blend`）执行深度结构核验，读取单位制、分辨率、帧率、帧范围、前缀分类计数、全部摄像机参数（焦距、传感器宽度、位置、旋转、关键帧列表）、标签与关键对象世界包围盒尺寸。
 - 使用 `scene.open_file` 在保留当前活动场景检查点的前提下，将工作区受控 `.blend` 加载为当前活动场景并递增 `scene_version`。
+- 需要导出供 Studio 网页片场查看器（`viewer`）使用的 **Set Package v1.0**（`set.json` + `scene.glb` + `poster.png` + `cameras/CAM_*.png`）时，经 `script.run_project` 运行通用导出器 `scripts/set-package/blender_export_set_package.py`，再通过 `project.export_assets` 归档至目标项目 `sets/<package_id>/` 目录，回读后执行 `python scripts/set-package/validate_set_package.py <pkg_dir>` 与 `python scripts/set-package/check_camera_alignment.py` 完成契约与机位对齐核验（详见[工程归档](references/project-save.md#5-三维片场包-set-package-v10-导出与校验)）。
 
 ## 3. 保存、跨项目归档与验证
 

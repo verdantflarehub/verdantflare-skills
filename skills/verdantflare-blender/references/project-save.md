@@ -51,3 +51,13 @@ PROJECT_FILE_INVALID 表示恢复预检无法读取工程；保留原文件并�
 
 交付记录实例、固定修订、ContentRef、字节与摘要核验结果。
 可继续编辑必须另做实际打开及对象、变换、外部资产依赖检查；仅 `.blend` 后缀或哈希不能证明工程可恢复。
+
+## 5. 三维片场包（Set Package v1.0）导出与校验
+
+当任务需要将 `.blend` 片场导出为 Studio 网页片场查看器（`viewer`）可直接加载的 **Set Package v1.0** 时，按以下步骤执行：
+
+1. **运行无头导出器**：确保目标 `.blend` 已通过 `scene.inspect_file` 核验，随后通过 `script.run_project` 在实例 `/workspace/exports/<subdir>/` 运行 `scripts/set-package/blender_export_set_package.py`，产出 `scene.glb`（+Y Up，1.0m，静态同材质网格合并后节点数 $\le 180$）、`set.json`（Schema `1.0`）、`poster.png` 与 `cameras/CAM_*.png`。
+2. **归档固定修订**：调用 `project.export_assets` 将上述文件写入目标项目 `sets/<package_id>/` 路径下（其中 `set.json` 的 `role` 设为 `set_package` 或 `metadata`，`scene.glb` 的 `role` 设为 `model`），记录返回的固定 `revision_id` 并在 `finally` 中调用 `session.close`。
+3. **执行包校验器与机位对齐检查**：从中央 Project/Artifact 回读下载至本地目录后，运行：
+   - `python scripts/set-package/validate_set_package.py <package_dir>`（验证无 `.blend`/`.py` 源文件混入、文件数 $\le 32$、`scene.glb` $\le 25\text{ MiB}$、节点数 $\le 180$、`fov_y_deg` 换算误差 $\le 0.05^\circ$、SHA-256 100% 匹配）；
+   - `python scripts/set-package/check_camera_alignment.py --package-dir <package_dir> --output <alignment.json>`（验证网页 Y-up 相机与 Blender 渲染参考图对齐）。

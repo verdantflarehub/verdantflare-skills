@@ -38,6 +38,14 @@
 
 实际生成视频仍需检查身份、人数、持物手、动作自然度、时间与因果、接触穿模、路线、运镜和跨镜接画。空间错修白模或关键帧，表演僵硬修动作节拍和模型输入，避免以加密白模骨骼帧替代视频表演返修。空间检查通过不等于视频已通过。
 
+### 2.2 片场包（Set Package v1.0）导出与机位对齐校验
+
+当短剧或宣传片场景需要在 Studio 网页片场查看器（`viewer`）中进行三维环绕、第一人称漫游与实拍机位校对时，在完成 `.blend` 场景与多机位预演后追加片场包导出与校验步骤：
+
+1. **导出片场包**：通过 `script.run_project` 调用 `scripts/set-package/blender_export_set_package.py`，从定稿 `.blend` 导出 `scene.glb`（+Y Up，1.0m 比例尺，节点数 $\le 180$）、`set.json`（Schema `1.0`，含出生点、可走碰撞盒、全部机位光学参数与灯光预设）、`poster.png` 及各机位参考图 `cameras/CAM_*.png`。
+2. **归档至 Project 固定修订**：调用 `project.export_assets` 将片场包文件归档至目标项目 `sets/<package_id>/` 目录（严禁混入 `.blend`、`.blend1`、`.py`），取得固定 `revision_id` 并在 `finally` 中调用 `session.close` 释放实例编辑租约。
+3. **运行包校验与机位对齐检查**：从中央 Project/Artifact 回读下载后，运行 `python scripts/set-package/validate_set_package.py <package_dir>` 与 `python scripts/set-package/check_camera_alignment.py --package-dir <package_dir> --output <report.json>`，确认包体积、节点数、SHA-256 哈希与机位投影误差全部符合契约，方可在短剧页通过“在片场查看器中打开”（`navigation.openApp` 锁定固定 `revision_id`）交付审片。
+
 ## 3. 每镜覆盖表模板
 
 每个镜头／段落记录一项：
