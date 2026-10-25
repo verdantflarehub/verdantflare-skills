@@ -28,7 +28,7 @@ Google 渠道（`engine="gemini"`）Nano Banana 系列生图与最多 6 张参�
 
 Grok 生成与单图编辑读取 [Grok 调用](references/grok.md)，以 `image.capabilities` 的实际模型为准；现有 REST CLI 不用于 Grok，使用 Studio MCP。
 
-MOSS-Image 自托管文生图（`engine="moss-image"`）读取 [MOSS-Image 调用](references/moss-image.md)，经同一 Studio Image MCP 调用，面向中英文密集文字海报与原生 JSON 版式控制（`layout` 采用 `yxyx` 与 `abs_centralized` 坐标空间，`items` 最多 32 项）；支持 `width` / `height`（16 的整数倍，总像素 0.25M–4M，默认 1024×1024）、`steps` / `guidance` / `seed` 与独立 `negative_prompt`。该引擎不经渠道应用，不传 `channel_account_id`、`budget_limit`、`prefer_4k`、`reference_images`、`mask` 或编辑/局部重绘参数（传入会以 `INVALID_ARGUMENT` 拒绝）。
+MOSS-Image 自托管文生图（`engine="moss-image"`）读取 [MOSS-Image 调用](references/moss-image.md)，经同一 Studio Image MCP 调用，面向中英文密集文字海报与原生 JSON 版式控制（`layout` 采用 `yxyx` 与 `abs_centralized` 坐标空间，`items` 最多 32 项）；支持 `width` / `height`（16 的整数倍，总像素不超过 2M，默认 1024×1024）、`steps` / `guidance` / `seed`、独立 `negative_prompt` 与 1～3 张实验性参考图。参考图不保证人物身份一致，角色 IP 一致性出图不选 `moss-image`。该引擎不经渠道应用，不传 `channel_account_id`、`budget_limit`、`prefer_4k`、`mask` 或局部重绘参数（传入会以 `INVALID_ARGUMENT` 拒绝）。
 
 使用真实Studio会话发现实际工具；现有网关提供 `image.create/edit/inpaint/status/result/rate_content`，不假定历史 `image.generate` 或 `image.list` 已注册。旧共享媒体令牌不能访问Project/Artifact，认证恢复见 [环境说明](../ENVIRONMENT.md)。
 
