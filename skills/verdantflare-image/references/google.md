@@ -23,6 +23,9 @@ Google 渠道图像模型遵循 **`display_name`（展示名）与 `model_id`（
 - **渠道与预算参数**：
   - `channel_account_id`（可选）：指定 Google 渠道账户，省略时使用渠道默认账户。
   - `budget_limit`（可选）：单任务美元预算上限（十进制正数字符串，如 `"0.20"`）；宿主网关未自动注入时显式传入。
+- **写实人物参考提示词**（仅适用于 Studio 已登记的 AI 角色或已获授权的形象）：
+  - 优先调用 `image.edit`（主参考图走 `source_artifact_id`），用英文自然语言描述场景、服装与角色外观特征，人物身份交由参考图传达；不写“严格复制参考图面部身份”一类祈使句。
+  - 上游返回安全拦截或未出图时如实向用户报告 `reason_code`（如 `image_safety`、`prohibited_content`、`no_image_returned`），不自动换幂等键重提，也不反复改写措辞试探过滤边界；仍需出图时改用其他已授权渠道或调整创作内容。
 - **显式拒绝的边界**：
   - Google 渠道当前声明 `max_Reference_masks: 0`，**不支持遮罩局部重绘**（不调用 `image.inpaint`，不传 `mask_artifact_id` 或 `mask`）。
   - 不传 `moss-image` 专用的 `layout`、`steps`、`guidance` 参数；不将自适应原生尺寸伪造或插值冒充为 4K。
