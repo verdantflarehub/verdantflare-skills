@@ -33,6 +33,8 @@
 
 ## 未发布
 
+- `verdantflare-image` 同步 Google 渠道（`engine="gemini"`）Nano Banana 全系列模型目录与 [Google 图像调用参考](skills/verdantflare-image/references/google.md)：明确展示名（`Nano Banana 2.1` / `Nano Banana Pro` / `Nano Banana 2` / `Nano Banana 2 Lite` / `Nano Banana`）与请求 `model_id`（默认 `gemini-nano-banana-2.1`，以及 `gemini-3-pro-image`、`gemini-3.1-flash-image`、`gemini-3.1-flash-lite-image`、`gemini-2.5-flash-image`）的映射、1–6 张参考图编辑与 7 种画幅比例（`1:1`、`2:3`、`3:2`、`3:4`、`4:3`、`9:16`、`16:9`）约束。
+
 
 
 

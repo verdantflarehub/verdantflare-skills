@@ -58,7 +58,7 @@ class MockImageServerHandler(BaseHTTPRequestHandler):
                         "project_id": TEST_PROJECT_ID,
                         "status": status,
                         "engine": "gemini",
-                        "model": "gemini-3.1-flash-image",
+                        "model": "gemini-nano-banana-2.1",
                         "prompt_preview": "test prompt",
                         "duration_seconds": 3.5,
                         "artifact_id": artifact_id,
@@ -136,9 +136,22 @@ class TestVerdantflareImage(unittest.TestCase):
         self.assertTrue((SKILL_DIR / "SKILL.md").is_file())
         self.assertTrue((SKILL_DIR / "agents" / "openai.yaml").is_file())
         self.assertTrue((SKILL_DIR / "references" / "contracts.md").is_file())
+        self.assertTrue((SKILL_DIR / "references" / "google.md").is_file())
+        self.assertTrue((SKILL_DIR / "references" / "grok.md").is_file())
+        self.assertTrue((SKILL_DIR / "references" / "moss-image.md").is_file())
         self.assertTrue((SKILL_DIR / "references" / "visual-specs.md").is_file())
         self.assertTrue((SKILL_DIR / "references" / "workflow.md").is_file())
         self.assertTrue((SKILL_DIR / "scripts" / "image_client.py").is_file())
+
+        google_ref = (SKILL_DIR / "references" / "google.md").read_text(encoding="utf-8")
+        for model_id in (
+            "gemini-nano-banana-2.1",
+            "gemini-3-pro-image",
+            "gemini-3.1-flash-image",
+            "gemini-3.1-flash-lite-image",
+            "gemini-2.5-flash-image",
+        ):
+            self.assertIn(model_id, google_ref)
 
         # 确保旧废弃技能已彻底删除
         old_skill = ROOT_DIR / "skills" / "verdantflare-image-codex"
@@ -203,6 +216,27 @@ class TestVerdantflareImage(unittest.TestCase):
             self.assertEqual(len(MockImageServerHandler.received_tasks), 1)
             self.assertEqual(MockImageServerHandler.received_tasks[0]["engine"], "codex")
             self.assertEqual(MockImageServerHandler.received_tasks[0]["model"], "gpt-image-2.5-sunburst")
+
+            ret_gemini = image_client.cmd_generate(
+                argparse.Namespace(
+                    prompt="test gemini nano banana prompt",
+                    engine="gemini",
+                    model="",
+                    aspect_ratio="3:2",
+                    resolution="2k",
+                    quality="high",
+                    project_id=TEST_PROJECT_ID,
+                    idempotency_key="unit-02",
+                    wait=False,
+                    timeout=10.0,
+                    output="",
+                )
+            )
+            self.assertEqual(ret_gemini, 0)
+            self.assertEqual(len(MockImageServerHandler.received_tasks), 2)
+            self.assertEqual(MockImageServerHandler.received_tasks[1]["engine"], "gemini")
+            self.assertEqual(MockImageServerHandler.received_tasks[1]["model"], "gemini-nano-banana-2.1")
+            self.assertEqual(MockImageServerHandler.received_tasks[1]["aspect_ratio"], "3:2")
 
 
 if __name__ == "__main__":

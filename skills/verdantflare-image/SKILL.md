@@ -14,6 +14,7 @@ Project 归属、换电脑恢复、Artifact 保存及 World 固定资产引用�
 | 当前操作                               | 按需读取                                                                                        |
 | -------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | 构造生成、编辑、遮罩或导入请求         | [调用契约](references/contracts.md) 的对应工具章节                                              |
+| Google Nano Banana 生图与多参考编辑    | [Google 图像调用](references/google.md)                                                         |
 | MOSS-Image 文字海报与 JSON 版式文生图  | [MOSS-Image 调用](references/moss-image.md)                                                     |
 | 角色四视图、服装三视图、分镜或场景规格 | [视觉规格](references/visual-specs.md) 对应资产类型                                             |
 | 提交、轮询、恢复、下载与归档           | [执行流程](references/workflow.md)                                                              |
@@ -21,7 +22,9 @@ Project 归属、换电脑恢复、Artifact 保存及 World 固定资产引用�
 | 使用本地客户端                         | [CLI](references/cli.md)；参数不确定时运行 `--help`                                             |
 | 连接或配置问题                         | [环境说明](../ENVIRONMENT.md)                                                                   |
 
-默认 codex / `gpt-image-2.5-sunburst`；用户明确选择优先，模型支持以宿主能力和调用契约为准。不绕过 MCP/受控客户端直连供应商。
+默认 codex / `gpt-image-2.5-sunburst`；选择 Google 渠道（`engine="gemini"`）时默认 `gemini-nano-banana-2.1`（展示名 `Nano Banana 2.1`）；用户明确选择优先，模型支持以宿主能力和调用契约为准。不绕过 MCP/受控客户端直连供应商。
+
+Google 渠道（`engine="gemini"`）Nano Banana 系列生图与最多 6 张参考图编辑读取 [Google 图像调用](references/google.md)，区分卡片展示名（`Nano Banana 2.1` / `Nano Banana Pro` / `Nano Banana 2` / `Nano Banana 2 Lite` / `Nano Banana`）与请求 `model` 编码（`gemini-nano-banana-2.1` / `gemini-3-pro-image` / `gemini-3.1-flash-image` / `gemini-3.1-flash-lite-image` / `gemini-2.5-flash-image`），不支持遮罩局部重绘（`max_Reference_masks=0`）。
 
 Grok 生成与单图编辑读取 [Grok 调用](references/grok.md)，以 `image.capabilities` 的实际模型为准；现有 REST CLI 不用于 Grok，使用 Studio MCP。
 
