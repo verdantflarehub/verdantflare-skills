@@ -1,5 +1,6 @@
 """Delegate the adapted official workflow to the user's canonical Video Skill."""
 import os
+import ast
 from pathlib import Path
 import subprocess
 import sys
@@ -18,8 +19,16 @@ def resolve():
         client = root / "skills/verdantflare-video/scripts/video_client.py"
         skill = root / "skills/verdantflare-video/SKILL.md"
         if client.is_file() and skill.is_file():
-            return client
-    raise ValueError("Install verdantflare-video v0.4.0 or newer, or set VERDANTFLARE_SKILLS_ROOT to your updated skills repository")
+            try:
+                tree = ast.parse(client.read_text(encoding="utf-8-sig"))
+            except (OSError, UnicodeError, SyntaxError):
+                continue
+            if any(isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant)
+                   and node.value.value == "channel-capabilities-v1"
+                   and any(isinstance(target, ast.Name) and target.id == "STUDIO_VIDEO_CLIENT_CONTRACT" for target in node.targets)
+                   for node in tree.body):
+                return client
+    raise ValueError("Install the Studio MCP edition of verdantflare-video v0.5.0 or newer, or set VERDANTFLARE_SKILLS_ROOT to it; the public API edition is incompatible")
 
 
 def arguments(args):

@@ -5,7 +5,7 @@
 1. 确认真实Studio会话，发现当前创建、状态、结果工具。现有网关为 `video.create/status/result`；管理工具缺失或403先按 [环境说明](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-video-v0.4.0/skills/ENVIRONMENT.md) 排查旧共享令牌。
 2. 创建或打开当前Project，读取已保存的Generation Unit。核实模型、当前渠道配置与就绪状态、时长、画幅和输入模式；不从旧文档猜默认渠道。
 3. 按 [调用说明](video-mcp.md) 将授权的本地/World输入归档，并适配为Video可读取的同项目引用。只拿到中央ContentRef或Image原生ID时，不能声称Video输入已经齐备。
-4. Singularity 调用 `video.preflight` 确认实际输出网格与参考编号，再固定 Prompt、引用顺序和输入摘要。相同单元版本的不同输入应新建版本，不能覆盖旧摘要。
+4. 实际注册 `video.preflight` 时调用并确认参数、素材和报价；Singularity 另核对实际输出网格与参考编号。`can_submit=false` 保留具体原因并停止。再固定 Prompt、引用顺序和输入摘要；相同单元版本的不同输入应新建版本，不能覆盖旧摘要。
 5. 保存不可变 `attempt_id`、幂等键及请求；准备完成后才进入提交阶段。工具或引用适配缺失时不直连Runtime，独立本地工作继续。
 
 ## 2. 提交与恢复
@@ -24,13 +24,17 @@
 `scripts/video_client.py` 的调用边界：
 
 - `check`：分页发现工具，优先 `video.create`；读取 capabilities 的宿主默认渠道和适配器限制，不提交生成，不把 configured 当就绪。
-- `generate`：默认 H3，经 Studio 创建；显式 route 优先，否则解析宿主默认。Singularity 自动预检并把结果保存在 Attempt，不静默改画幅或换渠道。
+- `generate`：经 Studio 创建，显式模型／渠道优先，否则解析宿主明确默认；精确匹配能力行和工具 Schema。模型、模式、画幅、时长和分辨率不使用固定白名单；默认值只取已声明能力或匹配工具 Schema，声明不一致就停止。已注册预检时自动调用并保存结果，不静默改画幅或换渠道。
 - `import`：本地 `--file` 或中央 `--content-ref-file` 优先走分块协议，支持图像、视频和音频；相同来源、文件名、用途、摘要生成固定导入键。中断后重跑同一命令查询并续传，commit 丢失响应时复用同一导入身份。`--purpose` 记录用途，允许来源 `--source-url` 仍走兼容入口。
 - `status` / `result`：查询原 Video 任务，确认返回格式兼容。
 - `resume`：按路由或任务 ID 识别 MCP／旧 SD2 记录，不能改变原渠道。
 - `list` / `recover`：历史 SD2 查询恢复入口。
 
-旧宿主没有 `video.capabilities` 时须显式指定已核实渠道；没有分块工具时只保留原 3 MiB 图片兼容入口，大图和音视频报告接入版本缺口。新 SD2 由宿主工具处理，不进入历史直连分支。
+旧宿主没有 `video.capabilities` 或创建输入 Schema 时停止新生成，状态／结果恢复仍使用原任务。没有分块工具时只保留原 3 MiB 图片兼容入口，大图和音视频报告接入版本缺口。新 SD2 通过动态能力匹配的 Studio 分支处理，不进入历史直连分支。
+
+可显式传 `--model`、`--mode`、`--resolution`、`--ratio`、`--duration`；参考重复传 `--image-ref`／`--video-ref`／`--audio-ref ARTIFACT_ID=PURPOSE`。`--budget-limit` 是服务声明币种中的正数预算上限，`--channel-account-id` 选择已有授权账号；只有实际创建及预检 Schema 声明这些字段时才传递。Higgsfield 的 `--price-ceiling` 单独表示 Credits 上限，不与其他渠道币种预算换算。预算不是估价或实际结算，不因未知价格而填零。图片、音视频数量由匹配能力行约束，文件格式、字节、时长与像素的最终校验由服务端导入和模型预检执行。
+
+CLI 的 MCP 失败输出结构化 `error`，保留 `code`、安全 `message`、`source`、`retryable` 与可用的 `accepted`／领域任务 ID。`accepted=false` 保存为拒绝；没有明确受理状态仍保存为未知。`retryable=true` 不授权再次 create。
 
 中央引用文件保存 `{"content_ref":{"store_id":"<固定ID>","artifact_id":"<固定ID>","version_id":"<固定ID>"}}`；经Project/World读取时另附完整 `access`（项目ID+修订ID或资产ID+版本ID）。所有ID使用服务返回的UUIDv7。示例：
 

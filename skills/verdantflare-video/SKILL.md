@@ -1,8 +1,8 @@
 ---
 name: verdantflare-video
-description: 通过 Studio Video MCP 生成、恢复和下载视频，支持 H3、SD2、Wan 及 Seedance 2.5 Draft × Higgsfield 的 R2V／ref2va 多图与视频参考生成。
+description: 通过 Studio Video MCP 的真实动态渠道生成、恢复和下载视频，按已注册能力使用 H3、SD2、Grok、Google 与 Higgsfield 模型；核实参数、素材限制和报价并保留具体服务错误。
 metadata:
-  version: "0.4.2"
+  version: "0.5.0"
 ---
 
 # VerdantFlare Video
@@ -19,7 +19,7 @@ H3 Ref2VA 使用业务模型 `minimax-h3-ref2va`；`route` 单独指定推理渠
 
 先用真实Studio会话发现工具，按 [MCP调用说明](references/video-mcp.md) 解析当前注册名（现有网关为 `video.create/status/result/rate_content`）与参数。遇到403或管理工具不可见，按 [环境说明](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-video-v0.4.0/skills/ENVIRONMENT.md) 检查是否误用了旧共享媒体令牌；不立即推断Video服务不可用。
 
-`scripts/video_client.py` 的新生成统一走 Studio：发现 `video.create`（兼容已注册的 `video.generate`），通过 `video.capabilities` 解析默认渠道和适配器限制。素材优先通过 `video.import_prepare/import_chunk/import_status/import_commit` 可恢复导入，兼容旧 `video.import` 小图片入口。Singularity 用 `video.preflight` 返回实际画布、时长和参考编号；预检通过不代表 GPU 实测通过。没有能力工具的旧宿主须显式指定已核实的渠道。历史 SD2 仅保留恢复兼容，新 SD2 使用宿主 MCP 工具。具体命令见 [执行流程](references/workflow.md)。
+`scripts/video_client.py` 的新生成统一走 Studio：分页发现 `video.create`（兼容已注册的 `video.generate`）及输入 Schema，通过 `video.capabilities` 精确匹配渠道＋模型（含 `models[]` 别名）＋模式。没有能力声明、声明冲突或缺少参数 Schema 时停止创建。素材优先通过分块工具可恢复导入，兼容旧 `video.import` 小图片入口；导入成功不等于满足当前模型的参考限制。已注册 `video.preflight` 时在创建前调用，`can_submit=false` 必须停止。预检不等于生成实测。具体参数、预算与恢复见 [执行流程](references/workflow.md)。本版本与同名公共 API 版 Skill 的认证和参数不同，不能混用。
 
 H3 模型支持六种画幅，Omni Reference 还有 Auto；渠道适配器里的竖屏硬编码是接入缺口，不能据此宣称模型只支持9:16。模型规格、当前代码接入范围、实时配置和GPU实测必须分别说明。
 
@@ -27,6 +27,7 @@ H3 模型支持六种画幅，Omni Reference 还有 Auto；渠道适配器里的
 - 生成后 18+ 内容分级评估（K09 强制步骤）：每次取得新生成的视频产物后、在交付摘要展示与 Project/World 同步之前，必须按 [评估步骤](references/content-rating-step.md) 与 [评估规范](references/content-rating-rubric.md) 在本机临时目录抽帧（至少每 2 秒 1 帧、全片至少 8 帧，另补镜头切换处关键帧；评估后删除临时帧文件，并在 `reasons` 中记录抽帧数量），结合连续帧序列、音轨、正向提示词与标题完成判定，调用 `video.rate_content` 提交分级结果（`general` 与 `nsfw` 均须提交，`rubric_version` 取自规范副本文首；不确定即标 `nsfw`；超时用相同内容幂等重试，不重新生成）。判定为 `nsfw` 的产物在摘要中只写“N 个产物已标记为 NSFW 并隐藏”，不展示预览、联系表、链接、`ContentRef` 或提示词全文，也不同步到 Studio 项目或登记到 World。
 - SD2：读取 [SD2 工作流](references/sd2-workflow.md)。
 - Grok：先读取 [Grok 调用](references/grok.md)，通过同一 Studio Video MCP 显式选择 `route=grok`；不要套用 H3 的参考数量、24 FPS 或提示词标签。
+- Google：读取 [Google 调用](references/google.md)，按实际注册的新模型与别名选择；退役模型返回 `model_retired` 时保留原错误，不自动切换收费模型。
 - Higgsfield：读取 [会员渠道与官方 Skills 适配](references/higgsfield.md)，通过同一 Studio Video MCP 显式选择 `route=higgsfield`。Seedance 2.5 Draft 的 R2V／ref2va 使用 `model=seedance_2_5_draft`、480p、4–15 秒、最多 4 图＋1 视频，不替换为普通 2.5 或首尾帧。官方 CLI 封装在本 Skill 私有运行时，仅供管理员授权维护；成员生成、查询及结果通过 Studio，会员凭据留在服务器。
 - 已有任务沿原任务记录的模型与渠道恢复，不按当前默认值重新生成。
 - 有剧情动作、连续运镜、跨镜物体或剪辑选段要求时，按[叙事动作验收](references/shot-acceptance.md)检查实际动作和可用区间，不能用首尾构图或技术成功代替动态验收。

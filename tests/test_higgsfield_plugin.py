@@ -18,7 +18,7 @@ class InstalledPluginTest(unittest.TestCase):
             root = Path(directory)
             client = root / "client/skills/verdantflare-video/scripts/video_client.py"
             client.parent.mkdir(parents=True)
-            client.write_text("# installed client", encoding="utf-8")
+            client.write_text('STUDIO_VIDEO_CLIENT_CONTRACT = "channel-capabilities-v1"', encoding="utf-8")
             client.parent.parent.joinpath("SKILL.md").write_text("installed skill", encoding="utf-8")
             cached = root / "cache/plugin/scripts/video.py"
             with patch.dict(os.environ, {"CODEX_HOME": str(root / "client")}, clear=True), \
@@ -33,6 +33,15 @@ class InstalledPluginTest(unittest.TestCase):
         self.assertEqual(plugin.arguments(args), args + ["--route", "higgsfield"])
         with self.assertRaises(ValueError):
             plugin.arguments(args + ["--route=other"])
+
+    def test_public_api_edition_is_rejected_without_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            client = Path(directory) / "skills/verdantflare-video/scripts/video_client.py"
+            client.parent.mkdir(parents=True)
+            client.write_text("raise RuntimeError('must not execute')", encoding="utf-8")
+            client.parent.parent.joinpath("SKILL.md").write_text("public API skill", encoding="utf-8")
+            with patch.dict(os.environ, {"VERDANTFLARE_SKILLS_ROOT": directory}), self.assertRaisesRegex(ValueError, "public API edition is incompatible"):
+                plugin.resolve()
 
     def test_explicit_missing_repository_is_not_silently_overridden(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -10,6 +10,8 @@ from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "skills/verdantflare-video/scripts"
 sys.path.insert(0, str(SCRIPTS))
+sys.path.insert(0, str(SCRIPTS.parent / "tests"))
+from mcp_fixture import schemas
 import video_client as client
 import higgsfield as admin
 
@@ -19,7 +21,7 @@ class HiggsfieldSkillTest(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.config = client.MCPConfig("https://studio.example.invalid/mcp", "synthetic-session", Path(self.temp.name))
         self.calls = []
-        self.inventory = {"create_tool": "video.create", "tools": ["video.create", "video.preflight"], "capabilities": {
+        self.inventory = {"create_tool": "video.create", "schemas": schemas(), "tools": ["video.create", "video.preflight"], "capabilities": {
             "routes": [{"route": "higgsfield", "model": "seedance_2_5", "configured": True, "enabled": True,
                         "duration_seconds": {"minimum": 4, "maximum": 15}, "aspect_ratios": ["16:9"],
                         "resolutions": ["720p"], "modes": ["text_to_video"]},

@@ -6,11 +6,13 @@ from __future__ import annotations
 import argparse
 import base64
 import datetime as dt
+from decimal import Decimal, InvalidOperation
 import email.utils
 import hashlib
 import hmac
 import ipaddress
 import json
+import math
 import os
 import random
 import re
@@ -30,6 +32,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from config import Config, ConfigError, ensure_mc, load_config
+from channel_contract import declared_default, select_route, tool_schema, validate_capability, validate_tool
 from load_env import load_env
 from task_store import (
     BusyTaskError,
@@ -57,9 +60,7 @@ DOWNLOAD_TIMEOUT_SECONDS = 10 * 60
 MEDIA_READINESS_DELAYS_SECONDS = (0, 1, 2, 4)
 UPLOAD_HARD_TTL_SECONDS = 7 * 24 * 60 * 60
 ALLOWED_RATIOS = {"16:9", "9:16", "1:1", "4:3", "3:4"}
-FAL_MODEL = "minimax-h3-ref2va"
-FAL_ROUTE = "fal"
-FAL_ALLOWED_RATIOS = {"adaptive", "21:9", *ALLOWED_RATIOS}
+STUDIO_VIDEO_CLIENT_CONTRACT = "channel-capabilities-v1"
 PROJECT_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 MCP_TASK_ID_PATTERN = re.compile(r"video_task_[0-9a-f]{32}")
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
@@ -77,6 +78,44 @@ MIME_TYPES = {
 
 class ClientError(RuntimeError):
     """A user-safe client error."""
+
+
+class MCPToolError(ClientError):
+    """A structured service error; retryable never means repeat create."""
+
+    def __init__(self, error: dict[str, Any]):
+        self.error = safe_mcp_error(error)
+        super().__init__(f"{self.error['code']}: {self.error['message']}")
+
+
+def safe_mcp_error(error: dict[str, Any]) -> dict[str, Any]:
+    def identifier(key, fallback):
+        value = error.get(key)
+        return value if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", value) else fallback
+    message = error.get("message")
+    result = {"code": identifier("code", "mcp_tool_error"),
+              "message": redact_message(message) if isinstance(message, str) else "Video MCP rejected the request",
+              "source": identifier("source", "video"), "retryable": error.get("retryable") is True}
+    if "accepted" in error and (error["accepted"] is None or type(error["accepted"]) is bool):
+        result["accepted"] = error["accepted"]
+    task_id = error.get("task_id") or error.get("video_task_id")
+    if isinstance(task_id, str) and MCP_TASK_ID_PATTERN.fullmatch(task_id):
+        result["task_id"] = task_id
+    return result
+
+
+def _rpc_error(body: Any) -> dict[str, Any] | None:
+    if not isinstance(body, dict):
+        return None
+    error = body.get("error")
+    if isinstance(error, dict):
+        data = error.get("data")
+        if isinstance(data, dict):
+            return _rpc_error(data) or (data if isinstance(data.get("code"), str) else None)
+        if isinstance(error.get("code"), str):
+            return error
+    diagnostic = body.get("diagnostic")
+    return diagnostic if isinstance(diagnostic, dict) else None
 
 
 class PollInterrupted(Exception):
@@ -189,6 +228,12 @@ def _mcp_json_request(config: MCPConfig, method: str, params: dict[str, Any]) ->
     except ClientError:
         raise
     except urllib.error.HTTPError as exc:
+        try:
+            error = _rpc_error(json.loads(exc.read(2 * 1024 * 1024).decode("utf-8")))
+        except (ValueError, OSError):
+            error = None
+        if error:
+            raise MCPToolError(error) from exc
         raise ClientError(f"Video MCP returned HTTP {exc.code}") from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise ClientError("Video MCP is unavailable") from exc
@@ -201,6 +246,8 @@ def _mcp_json_request(config: MCPConfig, method: str, params: dict[str, Any]) ->
     if not isinstance(body, dict) or body.get("id") != request_id:
         raise ClientError("Video MCP returned a mismatched response")
     if body.get("error") is not None:
+        if error := _rpc_error(body):
+            raise MCPToolError(error)
         raise ClientError("Video MCP rejected the JSON-RPC request")
     result = body.get("result")
     if not isinstance(result, dict):
@@ -210,22 +257,32 @@ def _mcp_json_request(config: MCPConfig, method: str, params: dict[str, Any]) ->
 
 def call_mcp_tool(config: MCPConfig, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     result = _mcp_json_request(config, "tools/call", {"name": name, "arguments": arguments})
-    if result.get("isError"):
-        raise ClientError(f"Video MCP tool {name} failed")
     structured = result.get("structuredContent")
-    if isinstance(structured, dict):
-        return structured
     content = result.get("content")
-    if isinstance(content, list) and content and isinstance(content[0], dict):
-        text = content[0].get("text")
-        if isinstance(text, str):
+    textual = None
+    if isinstance(content, list):
+        for block in content:
+            if not isinstance(block, dict) or not isinstance(block.get("text"), str):
+                continue
             try:
-                value = json.loads(text)
-            except json.JSONDecodeError as exc:
-                raise ClientError(f"Video MCP tool {name} returned invalid content") from exc
-            if isinstance(value, dict):
-                return value
-    raise ClientError(f"Video MCP tool {name} returned no structured content")
+                textual = json.loads(block["text"])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(textual, dict):
+                break
+    value = structured if isinstance(structured, dict) else textual
+    if not isinstance(value, dict):
+        raise ClientError(f"Video MCP tool {name} returned no structured content")
+    error = _rpc_error(value)
+    if error:
+        if isinstance(structured, dict) and isinstance(textual, dict) and _rpc_error(textual) != error:
+            raise ProtocolError("Video MCP structured and text errors disagree")
+        if result.get("isError"):
+            raise MCPToolError(error)
+        return {**value, "error": safe_mcp_error(error)}
+    if result.get("isError"):
+        raise ProtocolError(f"Video MCP tool {name} returned an error without a diagnostic")
+    return value
 
 
 def check_mcp_tools(config: MCPConfig) -> dict[str, Any]:
@@ -255,7 +312,7 @@ def check_mcp_tools(config: MCPConfig) -> dict[str, Any]:
     if missing:
         raise ClientError("Video MCP is missing required tools: " + ", ".join(missing))
     capabilities = call_mcp_tool(config, "video.capabilities", {}) if "video.capabilities" in names else None
-    return {"status": "ok", "create_tool": create_tool, "tools": sorted(names), "capabilities": capabilities,
+    return {"status": "ok", "create_tool": create_tool, "tools": sorted(names), "schemas": schemas, "capabilities": capabilities,
             "create_supports_title": 'title' in schemas.get(create_tool, {}).get('properties', {})}
 
 
@@ -270,16 +327,12 @@ def _mcp_reference(value: str) -> dict[str, str]:
     return {"artifact_id": artifact_id, "purpose": purpose}
 
 
-def _mcp_references(args: argparse.Namespace, *, allow_empty: bool = False) -> dict[str, list[dict[str, str]]]:
+def _mcp_references(args: argparse.Namespace) -> dict[str, list[dict[str, str]]]:
     references = {
         "images": [_mcp_reference(value) for value in args.image_ref],
         "videos": [_mcp_reference(value) for value in args.video_ref],
         "audios": [_mcp_reference(value) for value in args.audio_ref],
     }
-    if len(references["images"]) > 9 or len(references["videos"]) > 3 or len(references["audios"]) > 3:
-        raise ClientError("H3 supports at most 9 images, 3 videos, and 3 audio references")
-    if not any(references.values()) and not allow_empty:
-        raise ClientError("H3 requires at least one reference")
     return references
 
 
@@ -318,8 +371,6 @@ def _save_mcp_attempt(path: Path, value: dict[str, Any]) -> None:
 
 
 def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
-    if args.model and args.model not in {FAL_MODEL, "grok-imagine-video", "grok-imagine-video-1.5", "seedance_2_5", "seedance_2_5_draft", "grok_video_v15_lite", "wan3_0"}:
-        raise ClientError("Selected model requires the host MCP tools")
     if any((args.image, args.image_url, args.video, args.video_url, args.audio, args.audio_url)):
         raise ClientError("MCP generation accepts Video project Artifacts only; import inputs first and use --*-ref")
     if args.output or args.watermark or not args.generate_audio:
@@ -337,70 +388,71 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
     prompt = args.prompt.strip()
     if not prompt:
         raise ClientError("prompt must not be empty")
-    duration = 5 if args.duration is None else args.duration
     inventory = check_mcp_tools(config)
     capabilities = inventory["capabilities"] or {}
-    route = args.route or capabilities.get("default_route")
-    if not isinstance(route, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", route):
-        raise ClientError("Host default route is unavailable; explicitly select a verified --route")
-    if route == "higgsfield" and not args.model:
-        raise ClientError("Host capabilities do not declare a Higgsfield model default; explicitly select --model; no generation submitted")
-    references = _mcp_references(args, allow_empty=route in {"grok", "higgsfield"})
-    ratio = args.ratio or ("adaptive" if route == "fal" else "16:9")
-    if not (1 if route == "grok" else 2 if route == "higgsfield" else 4) <= duration <= 15:
-        raise ClientError("Duration exceeds the selected adapter limits")
-    if ratio not in FAL_ALLOWED_RATIOS:
-        raise ClientError(f"unsupported H3 ratio: {ratio}")
-    if route not in {"fal", "h3-singularity", "grok", "higgsfield"} and not references["images"] and not references["videos"]:
-        raise ClientError("Local H3 routes require an image or video reference")
-    if route in {"fal", "h3-vdn", "h3-singularity"} and sum(map(len, references.values())) > 12:
-        raise ClientError("Selected route accepts at most 12 references")
-    if capabilities:
-        selected_model = args.model
-        selected = next((r for r in capabilities.get("routes", []) if r.get("route") == route and
-                         (route != "higgsfield" or r.get("model") == selected_model)), None)
-        if not selected or not selected.get("configured"):
-            raise ClientError(f"Selected route {route} is not configured; no generation submitted")
-        limits = selected["duration_seconds"]
-        if ratio not in selected["aspect_ratios"] or not limits["minimum"] <= duration <= limits["maximum"]:
-            raise ClientError(f"Selected route {route} adapter does not accept {duration}s {ratio}; this is an adapter limit, not a model limit; no generation submitted")
+    try:
+        route, model, selected = select_route(capabilities, args.route, args.model)
+        schema = tool_schema(inventory, inventory["create_tool"])
+    except ValueError as exc:
+        raise ClientError(str(exc)) from exc
+    references = _mcp_references(args)
     request = {
         "project_id": project_id,
         "idempotency_key": idempotency_key,
-        "model": args.model or (selected["model"] if route in {"grok", "higgsfield"} and capabilities else FAL_MODEL),
+        "model": model,
         "route": route,
         "prompt": prompt,
-        "duration_seconds": duration,
-        "aspect_ratio": ratio,
         "references": references,
     }
+    mode = getattr(args, "mode", None)
+    if mode is None and selected.get("modes"):
+        if not any(references.values()):
+            mode = "text_to_video"
+        elif (len(references["images"]) == 1 and references["images"][0]["purpose"] == "first_frame"
+              and not references["videos"] and not references["audios"] and "image_to_video" in selected["modes"]):
+            mode = "image_to_video"
+        else:
+            mode = "reference_to_video"
+    if mode is not None:
+        request["mode"] = mode
+    for field, argument, limit in (("duration_seconds", "duration", "duration_seconds"),
+                                    ("aspect_ratio", "ratio", "aspect_ratios"),
+                                    ("resolution", "resolution", "resolutions")):
+        value = getattr(args, argument, None)
+        if value is None and not (field == "aspect_ratio" and mode == "image_to_video"):
+            value = declared_default(selected, schema, field, limit)
+        if value is not None:
+            request[field] = value
+    budget = getattr(args, "budget_limit", None)
+    if budget is not None:
+        try:
+            amount = Decimal(budget)
+        except InvalidOperation:
+            amount = Decimal("NaN")
+        if not amount.is_finite() or amount <= 0:
+            raise ClientError("--budget-limit must be a positive finite decimal amount")
+        request["budget_limit"] = format(amount, "f")
+    account = getattr(args, "channel_account_id", None)
+    if account is not None:
+        if not account or len(account) > 128 or any(ord(char) < 0x20 or ord(char) == 127 for char in account):
+            raise ClientError("--channel-account-id is invalid")
+        request["channel_account_id"] = account
+    ceiling = getattr(args, "price_ceiling", None)
+    if ceiling is not None:
+        if route != "higgsfield" or not math.isfinite(ceiling) or ceiling < 0:
+            raise ClientError("--price-ceiling is a finite nonnegative Higgsfield Credits ceiling; other channels use --budget-limit")
+        request["price_ceiling"] = ceiling
     if getattr(args, "interpolate", False):
         interpolation = capabilities.get("postprocess", {}).get("interpolate", {})
         if route != "h3-singularity" or not interpolation.get("configured") or interpolation.get("readiness") != "ready":
             raise ClientError("--interpolate requires a ready H3-Sing rife_2x capability")
         request["postprocess"] = {"interpolate": {"profile": "rife_2x"}}
-    if route in {"grok", "higgsfield"}:
-        if not capabilities or not selected.get("enabled"):
-            raise ClientError("Selected provider must be enabled in host capabilities")
-        mixed_ref = route == "higgsfield" and "reference_to_video" in selected.get("modes", [])
-        if mixed_ref:
-            limits = selected.get("reference_limits", {})
-            if (any(len(references[k]) > limits.get(k, 0) for k in ("images", "videos", "audios")) or
-                    any(r["purpose"] in {"first_frame", "last_frame"} for r in references["images"])):
-                raise ClientError("Reference inputs exceed host limits or mix first/last frames")
-            request["mode"] = "reference_to_video" if references["images"] or references["videos"] else "text_to_video"
-        else:
-            if references["videos"] or references["audios"] or len(references["images"]) > 1 or any(r["purpose"] != "first_frame" for r in references["images"]):
-                raise ClientError("Selected provider accepts one first_frame image or no references")
-            request["mode"] = "image_to_video" if references["images"] else "text_to_video"
-        request["resolution"] = getattr(args, "resolution", None) or ("480p" if request["model"] == "seedance_2_5_draft" else "720p")
-        if route == "higgsfield":
-            if request["mode"] not in selected.get("modes", []) or request["resolution"] not in selected.get("resolutions", []):
-                raise ClientError("Selected Higgsfield model does not support this mode or resolution")
-        if not mixed_ref and references["images"] and args.ratio is None:
-            request.pop("aspect_ratio")
-    elif getattr(args, "resolution", None):
-        raise ClientError("--resolution requires a supported internet video route")
+    naming = {'title': args.title} if getattr(args, 'title', None) is not None and inventory.get('create_supports_title') else {}
+    try:
+        validate_capability(request, selected)
+        validate_tool(inventory, inventory["create_tool"], {**request, **naming})
+    except ValueError as exc:
+        raise ClientError(str(exc)) from exc
     attempt = {
         "schema_version": 1,
         "state": "submitting",
@@ -416,18 +468,30 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
         if previous.get("video_task_id"):
             return {**previous["response"], "attempt_path": str(path)}
         raise ClientError("Submission is unresolved; retain the original attempt and reconcile it before retrying")
-    if route in {"h3-singularity", "higgsfield"}:
-        if "video.preflight" not in inventory["tools"]:
-            raise ClientError("Selected route requires the deployed video.preflight adapter")
-        attempt["preflight"] = call_mcp_tool(config, "video.preflight", {k: v for k, v in request.items() if k != "idempotency_key"})
+    if "video.preflight" not in inventory["tools"] and route in {"h3-singularity", "higgsfield"}:
+        raise ClientError("Selected route requires the deployed video.preflight adapter")
+    if "video.preflight" in inventory["tools"]:
+        preflight = {k: v for k, v in request.items() if k != "idempotency_key"}
+        try:
+            validate_tool(inventory, "video.preflight", preflight)
+        except ValueError as exc:
+            raise ClientError(str(exc)) from exc
+        attempt["preflight"] = call_mcp_tool(config, "video.preflight", preflight)
+        quote = attempt["preflight"]
+        if quote.get("can_submit") is False:
+            reason = quote.get("blocked_reason") or quote.get("reason_code") or "preflight_blocked"
+            error = quote.get("error") or {"code": reason, "message": quote.get("message") or str(reason),
+                                            "source": route, "retryable": False, "accepted": False}
+            raise MCPToolError(error if isinstance(error, dict) else {"code": "preflight_blocked", "message": str(error), "accepted": False})
     _save_mcp_attempt(path, attempt)
     try:
-        naming = {'title': args.title} if getattr(args, 'title', None) is not None and inventory.get('create_supports_title') else {}
         result = call_mcp_tool(config, inventory["create_tool"], {**request, **naming})
         if getattr(args, 'title', None) is not None and not inventory.get('create_supports_title'):
             result = {**result, 'title_warning': 'host_does_not_support_title; requested title was not saved'}
-    except Exception:
-        attempt["state"] = "submission_unknown"
+    except Exception as exc:
+        attempt["state"] = "rejected" if isinstance(exc, MCPToolError) and exc.error.get("accepted") is False else "submission_unknown"
+        if isinstance(exc, MCPToolError):
+            attempt["error"] = exc.error
         attempt["updated_at"] = utc_now()
         _save_mcp_attempt(path, attempt)
         raise
@@ -575,10 +639,17 @@ def _download_content_ref(config: MCPConfig, document: dict[str, Any], destinati
 
 
 def _chunk_import(config: MCPConfig, *, project_id: str, filename: str, digest: str,
-                  path: Path, purpose: str, source_ref=None) -> dict[str, Any]:
+                  path: Path, purpose: str, source_ref=None, limits=None) -> dict[str, Any]:
+    limits = limits or {}
+    file_max = limits.get("max_file_bytes", MAX_DOWNLOAD_BYTES)
+    chunk_max = limits.get("max_chunk_bytes", 512 * 1024)
+    if type(file_max) is not int or file_max <= 0 or type(chunk_max) is not int or chunk_max <= 0:
+        raise ClientError("Host import limits are invalid")
+    file_max = min(file_max, MAX_DOWNLOAD_BYTES)
+    chunk_max = min(chunk_max, 512 * 1024)
     size = path.stat().st_size
-    if not 0 < size <= MAX_DOWNLOAD_BYTES:
-        raise ClientError("Chunk import requires 1 byte to 1 GiB")
+    if not 0 < size <= file_max:
+        raise ClientError(f"Import size exceeds the host/client transport limit of {file_max} bytes")
     with path.open("rb") as stream:
         checksum = hashlib.file_digest(stream, "sha256").hexdigest()
     if checksum != digest:
@@ -597,12 +668,12 @@ def _chunk_import(config: MCPConfig, *, project_id: str, filename: str, digest: 
     with path.open("rb") as stream:
         while status.get("status") != "committed":
             offset, block_size = status.get("offset"), status.get("chunk_max_bytes")
-            if type(offset) is not int or not 0 <= offset <= size or type(block_size) is not int or not 0 < block_size <= 512 * 1024:
+            if type(offset) is not int or not 0 <= offset <= size or type(block_size) is not int or block_size <= 0:
                 raise ClientError("Import returned invalid upload bounds")
             if offset == size:
                 break
             stream.seek(offset)
-            content = stream.read(min(block_size, size - offset))
+            content = stream.read(min(block_size, chunk_max, size - offset))
             if not content:
                 raise ClientError("Import source changed during upload")
             status = call_mcp_tool(config, "video.import_chunk", {**args, "offset": offset,
@@ -625,6 +696,7 @@ def import_mcp_artifact(config: MCPConfig, args: argparse.Namespace) -> dict[str
     if not SHA256_PATTERN.fullmatch(digest):
         raise ClientError("sha256 must contain exactly 64 hexadecimal characters")
     inventory = check_mcp_tools(config)
+    import_limits = (inventory.get("capabilities") or {}).get("chunk_import", {})
     chunked = {"video.import_prepare", "video.import_chunk", "video.import_status", "video.import_commit"} <= set(inventory["tools"])
     if not chunked and "video.import" not in inventory["tools"]:
         raise ClientError("Host has no video.import adapter; artifact.import is not a central ContentRef adapter")
@@ -644,7 +716,7 @@ def import_mcp_artifact(config: MCPConfig, args: argparse.Namespace) -> dict[str
                 local = Path(directory) / "source.bin"
                 _, ref = _download_content_ref(config, document, local)
                 result = _chunk_import(config, project_id=project_id, filename=args.filename, digest=digest,
-                    path=local, purpose=getattr(args, "purpose", "reference"), source_ref=ref)
+                    path=local, purpose=getattr(args, "purpose", "reference"), source_ref=ref, limits=import_limits)
         else:
             content, ref = _download_content_ref(config, document)
             if hashlib.sha256(content).hexdigest() != digest:
@@ -653,7 +725,7 @@ def import_mcp_artifact(config: MCPConfig, args: argparse.Namespace) -> dict[str
     elif args.file:
         if chunked:
             result = _chunk_import(config, project_id=project_id, filename=args.filename, digest=digest,
-                path=Path(args.file), purpose=getattr(args, "purpose", "reference"))
+                path=Path(args.file), purpose=getattr(args, "purpose", "reference"), limits=import_limits)
         else:
             with Path(args.file).open("rb") as source:
                 content = source.read(MAX_IMAGE_BYTES + 1)
@@ -701,10 +773,13 @@ def _parse_utc(value: Any) -> dt.datetime | None:
 
 
 def redact_message(message: str) -> str:
+    message = re.sub(r"(?i)https?://[^\s<>\"']+", "[redacted URL]", message)
     message = re.sub(r"Bearer\s+\S+", "Bearer [redacted]", message, flags=re.IGNORECASE)
+    message = re.sub(r'''(?i)(["']?(?:api[_-]?key|access[_-]?key|secret[_-]?key|authorization|token|password|cookie|secret)["']?\s*[:=]\s*)["']?[^\s,;"']+["']?''', r"\1[redacted]", message)
     message = re.sub(r"(?i)(api[_-]?key|access[_-]?key|secret[_-]?key|authorization)=?\s*[^\s,;]+", r"\1=[redacted]", message)
-    message = re.sub(r"(https?://)[^/@\s]+@", r"\1[redacted]@", message)
-    message = re.sub(r"(https?://[^\s?]+)\?[^\s]+", r"\1?[redacted]", message)
+    message = re.sub(r"(?i)(token|password|cookie|secret)\s*[:=]\s*[^\s,;]+", r"\1=[redacted]", message)
+    message = re.sub(r"(?:[A-Za-z]:[\\/]|/(?:home|root|tmp|var|srv|app|run|etc|Users)/)[^\s,;]+", "[redacted path]", message)
+    message = re.sub(r"[\x00-\x1f\x7f]", " ", message)
     return message[:500]
 
 
@@ -1868,7 +1943,6 @@ def make_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument(
         "--model",
         default=None,
-        choices=("verdantflare-sd2", FAL_MODEL, "grok-imagine-video", "grok-imagine-video-1.5", "seedance_2_5", "seedance_2_5_draft", "grok_video_v15_lite", "wan3_0"),
         help="Video via Studio MCP; omitted resolves from the selected host route",
     )
     generate_parser.add_argument("--route", help="explicit configured route, otherwise use the host default")
@@ -1879,8 +1953,12 @@ def make_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--title", help="Readable task title; separate from immutable generation inputs")
     generate_parser.add_argument("--output")
     generate_parser.add_argument("--duration", type=int)
-    generate_parser.add_argument("--resolution", choices=("480p", "720p"))
-    generate_parser.add_argument("--ratio", choices=sorted(FAL_ALLOWED_RATIOS))
+    generate_parser.add_argument("--resolution", help="must match the selected route/model capabilities and tool schema")
+    generate_parser.add_argument("--ratio", help="must match the selected route/model aspect ratios")
+    generate_parser.add_argument("--mode", help="registered operation, otherwise inferred from reference purpose")
+    generate_parser.add_argument("--budget-limit", help="explicit positive budget ceiling in the channel's declared currency")
+    generate_parser.add_argument("--channel-account-id", help="authorized channel account; omitted uses service selection")
+    generate_parser.add_argument("--price-ceiling", type=float, help="Higgsfield Credits ceiling only; do not convert from currency budgets")
     generate_parser.add_argument("--image", action="append", default=[])
     generate_parser.add_argument("--image-url", action="append", default=[])
     generate_parser.add_argument("--audio", action="append", default=[])
@@ -1928,8 +2006,6 @@ def main() -> int:
             print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
         if args.command == "generate":
-            if args.model == "verdantflare-sd2":
-                raise ClientError("New SD2 generation must use the host MCP tools; legacy direct generation is disabled")
             value = generate_mcp(load_mcp_config(), args)
             print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
@@ -1953,7 +2029,8 @@ def main() -> int:
             return recover(config, args.client_request_id)
         return generate(config, args)
     except (BusyTaskError, ConfigError, ClientError, OSError) as exc:
-        print(f"VerdantFlare Video failed: {redact_message(str(exc))}", file=os.sys.stderr)
+        print(json.dumps({"error": exc.error}, ensure_ascii=False) if isinstance(exc, MCPToolError)
+              else f"VerdantFlare Video failed: {redact_message(str(exc))}", file=os.sys.stderr)
         return 1
 
 
