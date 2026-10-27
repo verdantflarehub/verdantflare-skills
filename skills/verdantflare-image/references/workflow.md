@@ -6,7 +6,7 @@
 
 1. 通过 [环境说明](../../ENVIRONMENT.md) 确认真实Studio会话、工具名和权限。旧共享令牌可见媒体工具但看不到Project时，先恢复已有授权会话。
 2. 从当前项目上下文取得 `project_id`；需要新项目时调用 `project.create`，不从目录名造ID。通过现有工作副本客户端打开项目，检查已有任务与候选，避免重复生成。
-3. 本地输入受控导入当前Project；World输入解析固定 `asset_id + asset_version_id`。按 [调用说明](contracts.md) 将中央ContentRef适配为Image可读引用，校验同项目归属和内容摘要。
+3. 本地输入受控导入当前Project；World输入解析固定 `asset_id + asset_version_id`。按 [调用说明](contracts.md) 用 `image.import` 系列工具导入为Image原生引用，核对返回的 SHA-256 与本地一致，并在任务记录登记中央ContentRef与原生ID的映射。
 4. 按 [视觉规格](visual-specs.md) 确定目标画幅、尺寸、构图与参考职责。区分原图已提供的身份/服装信息和需要新设计的部分；参考不足不等于不能独立准备Prompt。
 5. 保存本次Prompt、参数、输入映射与固定幂等键。默认模型按入口说明，用户明确选择优先；实际字段和枚举以当前宿主为准。
 
