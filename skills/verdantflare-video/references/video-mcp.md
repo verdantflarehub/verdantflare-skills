@@ -31,6 +31,8 @@
 
 输入模式按 [H3输入模式](input-modes.md)；时长、画幅、参考数量和音频支持同时满足网关与所选渠道要求。静态Schema与匹配部署版本的能力说明不一致时，记录并核实差异，不仅凭历史枚举断言模型不支持，也不绕过网关校验尝试收费提交。
 
+有效能力行的 `parameter_schema` 还会收紧字段约束；参考数量使用 `reference_limits` 并合并当前模式 `by_mode`，同时满足 `minimum_total`、`total` 和 `required_media_any_of`。`defaults.by_mode` 只作用于对应模式，`can_submit=false` 的注册组合不提交。字节数、格式、分辨率与解码时长需要真实素材验证，不由 Artifact ID 推断。
+
 H3模型规格包含21:9、16:9、4:3、1:1、3:4、9:16，Omni支持Auto。`video.capabilities.model_specification` 表示模型规格；`routes[].aspect_ratios` / `duration_seconds` 且 `limit_scope=adapter` 表示当前适配器实际接受范围。若后者仍为9:16，应记录“本地多画幅适配缺口”，不能改写模型规格或降低用户目标。`configured=true` 只确认配置可解析，`readiness=not_checked` 表示没有探测GPU，不承诺推理成功。
 
 ## 2. 渠道解析

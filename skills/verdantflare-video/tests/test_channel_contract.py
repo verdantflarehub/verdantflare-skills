@@ -123,6 +123,41 @@ class DynamicChannelTests(unittest.TestCase):
                 digest=hashlib.sha256(source.read_bytes()).hexdigest(), purpose="motion", limits={"max_file_bytes": 2})
         calls.assert_not_called()
 
+    def test_effective_schema_rejects_prompt_before_preflight(self):
+        row = self.inventory['capabilities']['routes'][0]
+        row['parameter_schema'] = {'type': 'object', 'properties': {'prompt': {'type': 'string', 'maxLength': 3}}}
+        with patch.object(client, 'call_mcp_tool') as calls, self.assertRaisesRegex(client.ClientError, 'capability.prompt'):
+            client.generate_mcp(self.config, self.args('--image-ref', 'a=identity'))
+        calls.assert_not_called()
+
+    def test_registry_disallows_selection_before_preflight(self):
+        self.inventory['capabilities']['routes'][0]['can_submit'] = False
+        with patch.object(client, 'call_mcp_tool') as calls, self.assertRaises(client.ClientError):
+            client.generate_mcp(self.config, self.args('--image-ref', 'a=identity'))
+        calls.assert_not_called()
+
+    def test_effective_reference_limits_merge_current_mode(self):
+        row = self.inventory['capabilities']['routes'][0]
+        row['modes'] = ['reference_to_video']
+        row['reference_limits'] = {'images': 9, 'videos': 3, 'audios': 3, 'total': 12,
+            'minimum_total': 1, 'required_media_any_of': ['images', 'videos'],
+            'by_mode': {'reference_to_video': {'images': 2, 'videos': 1, 'audios': 1, 'total': 3}}}
+        for extra in ([], ['--audio-ref', 'a=sound'], ['--image-ref', 'a=identity', '--image-ref', 'b=identity', '--image-ref', 'c=identity']):
+            with self.subTest(extra=extra), patch.object(client, 'call_mcp_tool') as calls, self.assertRaises(client.ClientError):
+                client.generate_mcp(self.config, self.args('--mode', 'reference_to_video', *extra))
+            calls.assert_not_called()
+        request = self.submit(self.args('--image-ref', 'a=identity', '--image-ref', 'b=costume', '--audio-ref', 'c=sound'))
+        self.assertEqual(request['mode'], 'reference_to_video')
+        self.assertEqual(len(request['references']['images']), 2)
+
+    def test_mode_default_is_applied_to_text_generation_only(self):
+        self.google()
+        row = self.inventory['capabilities']['routes'][0]
+        row['defaults'] = {'resolution': '720p', 'by_mode': {'text_to_video': {'aspect_ratio': '16:9'}}}
+        request = self.submit(self.args('--route', 'google', '--model', 'omni-preview', '--duration', '4'))
+        self.assertEqual(request['aspect_ratio'], '16:9')
+        self.assertEqual(request['resolution'], '720p')
+
 
 class ErrorPropagationTests(unittest.TestCase):
     def test_structured_and_text_error_keep_safe_specific_reason(self):

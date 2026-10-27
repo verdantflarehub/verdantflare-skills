@@ -413,6 +413,8 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
             mode = "image_to_video"
         else:
             mode = "reference_to_video"
+    if mode is None:
+        mode = selected.get('defaults', {}).get('mode')
     if mode is not None:
         request["mode"] = mode
     for field, argument, limit in (("duration_seconds", "duration", "duration_seconds"),
@@ -420,7 +422,7 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
                                     ("resolution", "resolution", "resolutions")):
         value = getattr(args, argument, None)
         if value is None and not (field == "aspect_ratio" and mode == "image_to_video"):
-            value = declared_default(selected, schema, field, limit)
+            value = declared_default(selected, schema, field, limit, mode)
         if value is not None:
             request[field] = value
     budget = getattr(args, "budget_limit", None)

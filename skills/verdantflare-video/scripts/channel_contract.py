@@ -93,13 +93,16 @@ def select_route(capabilities: dict, route: str | None, model: str | None) -> tu
     if len(matching) != 1:
         raise ValueError("Host must declare exactly one matching route/model; explicitly select --model; no generation submitted")
     selected = matching[0]
-    if selected.get("configured") is not True or selected.get("enabled") is False:
+    if selected.get("configured") is not True or selected.get("enabled") is False or selected.get('can_submit') is False:
         raise ValueError("Selected route/model is not configured or enabled; no generation submitted")
     return route, model, selected
 
 
-def declared_default(selected: dict, schema: dict, field: str, limit: str | None = None):
+def declared_default(selected: dict, schema: dict, field: str, limit: str | None = None, mode: str | None = None):
     defaults = selected.get("defaults", {})
+    mode_defaults = defaults.get('by_mode', {}).get(mode, {})
+    if field in mode_defaults:
+        return mode_defaults[field]
     if field in defaults:
         return defaults[field]
     declaration = selected.get(limit or field)
@@ -122,6 +125,7 @@ def validate_capability(request: dict, selected: dict) -> None:
             raise ValueError(f"Selected route/model {field} is not supported by host capabilities")
     references = request["references"]
     ref_limits = selected.get("reference_limits") or {}
+    ref_limits = {**ref_limits, **ref_limits.get('by_mode', {}).get(request.get('mode'), {})}
     for kind, items in references.items():
         limit = ref_limits.get(kind)
         if type(limit) is int and len(items) > limit:
@@ -129,10 +133,13 @@ def validate_capability(request: dict, selected: dict) -> None:
         if isinstance(limit, dict) and not limit.get("minimum", 0) <= len(items) <= limit.get("maximum", float("inf")):
             raise ValueError(f"Selected route/model {kind} count exceeds host capabilities")
     total = sum(map(len, references.values()))
-    minimum = ref_limits.get("minimum", ref_limits.get("min_total", 0))
+    minimum = ref_limits.get("minimum_total", ref_limits.get("minimum", ref_limits.get("min_total", 0)))
     maximum = ref_limits.get("total", ref_limits.get("max_total", float("inf")))
     if not minimum <= total <= maximum:
         raise ValueError("Selected route/model total reference count exceeds host capabilities")
+    required = ref_limits.get('required_media_any_of', [])
+    if required and not any(references.get(kind) for kind in required):
+        raise ValueError("Selected route/model requires one of its declared media kinds")
     mode = request.get("mode")
     if mode == "text_to_video" and total:
         raise ValueError("text_to_video does not accept references")
@@ -141,3 +148,5 @@ def validate_capability(request: dict, selected: dict) -> None:
         raise ValueError("image_to_video requires exactly one first_frame image")
     if mode == "reference_to_video" and (not total or any(item["purpose"] in {"first_frame", "last_frame"} for item in references["images"])):
         raise ValueError("reference_to_video requires reference inputs without first_frame/last_frame semantics")
+    if isinstance(selected.get('parameter_schema'), dict):
+        validate_schema(request, selected['parameter_schema'], 'capability')
