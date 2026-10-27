@@ -8,7 +8,7 @@
 ## 1. 共同规则
 
 1. 新任务使用 Studio 提供的 `project_id`。新建项目时由 `project.create` 生成小写 UUIDv7；Skill 只传递已打开的 ID，不自行生成、拼接或使用 `default`、`creator/name` 这类别名。
-2. 生成、导入、训练和转换的结果先归属于来源 Project。工具返回的任务 ID、`ContentRef`、媒体元数据和错误状态写入项目的 MD 审核记录；文件归属、选用关系和任务引用由服务维护的 `.vf/project.json` 投影登记。生成服务返回的原生Artifact不自动等于中央Artifact：按宿主适配保存并记录原生ID、中央固定版本及SHA-256映射，不从ID字符串猜归属。
+2. 生成、导入、训练和转换的结果先按各媒体技能的 `references/content-rating-step.md` 与 `references/content-rating-rubric.md`（`rubric v1.0`）完成生成后 18+ 内容分级评估并调用对应 `*.rate_content`（`general` 与 `nsfw` 均须提交）。判定为 `nsfw` 的产物不在摘要中展示，也不同步到来源 Project 或登记到 World。判定为 `general` 的结果归属于来源 Project：工具返回的任务 ID、`ContentRef`、媒体元数据和错误状态写入项目的 MD 审核记录；文件归属、选用关系和任务引用由服务维护的 `.vf/project.json` 投影登记。生成服务返回的原生Artifact不自动等于中央Artifact：按宿主适配保存并记录原生ID、中央固定版本及SHA-256映射，不从ID字符串猜归属。
 3. 本地目录是工作副本。MD/媒体经 Project 提交，`.vf/project.json` 是客户端维护的服务清单投影，不手写或上传为业务文件；`.vf/local.json` 只记录本机打开状态。已绑定项目的创作任务自动完成本轮必要上传、按需下载、业务关联及回读，无需用户同步提醒；具体操作读取[Project技能](../verdantflare-project/SKILL.md)。不扫描上传整个目录，不把任务期间同步声称为无人运行的后台文件监控。
 4. 需要复用的结果必须由用户或上层流程显式执行 `world.register`。来源 Project、来源修订和原始 Artifact 保留；World 资产只包含明确选定的固定文件。注册不会自动把整个项目、未选候选、训练录音或私有审核资料公开出来。
 5. 使用 World 资产前先以 `asset_id + asset_version_id` 调用 `world.get`，检查授权并解析该固定版本的文件，再把具体 `ContentRef` 作为本次任务输入。不得使用 `latest`、展示名、临时下载 URL 或未解析的 World ID 直接提交。

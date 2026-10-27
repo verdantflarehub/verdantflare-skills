@@ -1,10 +1,11 @@
 # Blender 工程归档
 
-## 1. 两种保存
+## 1. 两种保存与跨项目批量归档
 
 scene.save 写实例持久工作区，仅证明实例内保存。
-project.save 才生成不可变 `.blend` 检查点，经 Artifact 写入并提交 Project 修订。
-此流程由 Blender 应用服务执行，客户端不再另做一次上传或 Project commit。
+project.save 生成当前活动场景的不可变 `.blend` 检查点，经 Artifact 写入并提交实例绑定 Project 的修订。
+project.export_assets（v0.1.14 含来源溯源）支持将实例工作区 `exports/` 或 `project/` 下的多个导出文件（`.blend` 中模、`.mp4` 机位预演、`.json` 场景元数据、`.glb` 等）一次性上传至 Artifact，并在 `target_project_id` 指定的 Studio 项目（默认会话绑定项目，支持跨项目指定调用者拥有写权限的分篇项目）上原子提交单个新修订，同时记录来源实例、源脚本项目／修订与批处理 `batch_operation_id`，不改变实例本身的 `project_id` 绑定。
+上述流程均由 Blender 应用服务执行，客户端不再另做一次上传或 Project commit。
 
 当前归档单位是单个 `.blend`。贴图等用户资源须由制作者在 Blender 中打包；
 未打包的贴图、链接库等外部依赖，即使当前路径可读，也不能作为可移植工程归档。
@@ -22,6 +23,8 @@ scene_version 来自本次场景读回或已完成操作，不使用固定常量
 
 保存使用会话工作副本基线，不因远端 head 前进就把旧场景强制基于新 head 提交。
 冲突保留检查点、原 operation_id 和提交信息；明确处理差异后再继续，不覆盖别人的修订。
+
+跨项目或多文件归档时，在实例 MCP 调用 `project.export_assets`，传入 `editing_session_id`、`idempotency_key`、`target_project_id`（可选，跨项目归档必填）、`batch_operation_id`（可选，关联前序 `script.run_project` 操作 ID 以生成完整来源溯源）、`provenance_path`（可选，如 `blender/provenance.json`，将溯源清单同步写入目标 Project）、`files`（`[{asset_id, project_path, role}]` 列表）及 `commit_message`。同样通过 `operation.get` 轮询直至 `completed`，从 `result` 读取 `target_project_id`、`revision_id`、`provenance` 与每个文件的固定 `content_ref`、`size`、`sha256`。归档完成后如无后续写操作，立即调用 `session.close` 释放编辑租约。
 
 ## 3. 中央回读
 
@@ -48,3 +51,13 @@ PROJECT_FILE_INVALID 表示恢复预检无法读取工程；保留原文件并�
 
 交付记录实例、固定修订、ContentRef、字节与摘要核验结果。
 可继续编辑必须另做实际打开及对象、变换、外部资产依赖检查；仅 `.blend` 后缀或哈希不能证明工程可恢复。
+
+## 5. 三维片场包（Set Package v1.0）导出与校验
+
+当任务需要将 `.blend` 片场导出为 Studio 网页片场查看器（`viewer`）可直接加载的 **Set Package v1.0** 时，按以下步骤执行：
+
+1. **运行无头导出器**：确保目标 `.blend` 已通过 `scene.inspect_file` 核验，随后通过 `script.run_project` 在实例 `/workspace/exports/<subdir>/` 运行 `scripts/set-package/blender_export_set_package.py`，产出 `scene.glb`（+Y Up，1.0m，静态同材质网格合并后节点数 $\le 180$）、`set.json`（Schema `1.0`）、`poster.png` 与 `cameras/CAM_*.png`。
+2. **归档固定修订**：调用 `project.export_assets` 将上述文件写入目标项目 `sets/<package_id>/` 路径下（其中 `set.json` 的 `role` 设为 `set_package` 或 `metadata`，`scene.glb` 的 `role` 设为 `model`），记录返回的固定 `revision_id` 并在 `finally` 中调用 `session.close`。
+3. **执行包校验器与机位对齐检查**：从中央 Project/Artifact 回读下载至本地目录后，运行：
+   - `python scripts/set-package/validate_set_package.py <package_dir>`（验证无 `.blend`/`.py` 源文件混入、文件数 $\le 32$、`scene.glb` $\le 25\text{ MiB}$、节点数 $\le 180$、`fov_y_deg` 换算误差 $\le 0.05^\circ$、SHA-256 100% 匹配）；
+   - `python scripts/set-package/check_camera_alignment.py --package-dir <package_dir> --output <alignment.json>`（验证网页 Y-up 相机与 Blender 渲染参考图对齐）。

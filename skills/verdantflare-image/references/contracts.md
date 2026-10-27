@@ -11,6 +11,7 @@
 | 局部重绘 | `image.inpaint` | 主参考与遮罩引用；形状和尺寸按当前契约核对 |
 | 状态 | `image.status` | 用原始 `task_id` 查询 |
 | 结果 | `image.result` | 完成后取得原生Artifact、摘要及下载信息 |
+| 内容分级标记 | `image.rate_content` | 生成后提交 `general` / `nsfw` 评估 JSON（只加标记、不提供撤销） |
 
 历史 `image.generate`、`image.list` 仅在宿主实际注册并明确语义时使用。当前不假定存在 `artifact.import`，也不向网关发送文档中未注册的别名。
 
@@ -31,6 +32,8 @@
 ```
 
 这是 `image.create` 的示意参数；可选字段只在当前实现支持时传入。`resolution` 是请求规格，不能证明返回图片已经达到该尺寸；下载后解码核验。`quality` 使用宿主支持的枚举，不把历史 `hd`、`xhigh`、`max` 宣称为所有模型的通用值。
+
+选择 Google 渠道（`engine="gemini"`）时，`model` 传真实模型编码（默认 `"gemini-nano-banana-2.1"`，另可选 `"gemini-3-pro-image"`、`"gemini-3.1-flash-image"`、`"gemini-3.1-flash-lite-image"`、`"gemini-2.5-flash-image"`），画幅支持 `1:1`、`2:3`、`3:2`、`3:4`、`4:3`、`9:16`、`16:9`，可按需传 `channel_account_id` 与 `budget_limit`，详见 [Google 图像调用](google.md)。
 
 编辑在相同项目、幂等上下文下传入 `source_artifact_id`、可选 `reference_artifact_ids` 和编辑Prompt。说明每张图保留面容、服装、场景中的哪些内容，明确允许修改什么。`image.edit` 与 `image.create` 的尺寸字段可能不同，不能把 `aspect_ratio`、`resolution`、`size` 无条件互换；从当前Schema或匹配部署版本的接口说明确认。
 

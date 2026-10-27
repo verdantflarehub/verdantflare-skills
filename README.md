@@ -142,7 +142,7 @@ Higgsfield 专用插件现为 **0.1.2**，在本仓库 marketplace 更新；依�
 
 ## verdantflare-image
 
-[`verdantflare-image`](skills/verdantflare-image/SKILL.md) 生成、编辑与局部重绘图像候选。默认采用 `codex` / `gpt-image-2.5-sunburst`，也可按用户选择和宿主能力使用其他已接入模型。输出须验证实际尺寸、字节数及SHA-256，再归档到当前Project；技术成功不代替创作审核。
+[`verdantflare-image`](skills/verdantflare-image/SKILL.md) 生成、编辑与局部重绘图像候选。默认采用 `codex` / `gpt-image-2.5-sunburst`；选择 Google 渠道（`engine="gemini"`）时默认 `gemini-nano-banana-2.1`（`Nano Banana 2.1`，另支持 `Nano Banana Pro` / `gemini-3-pro-image`、`Nano Banana 2` / `gemini-3.1-flash-image`、`Nano Banana 2 Lite` / `gemini-3.1-flash-lite-image` 与兼容底座 `Nano Banana` / `gemini-2.5-flash-image`，详见 [Google 图像调用](skills/verdantflare-image/references/google.md)），也可按用户选择和宿主能力使用 Grok 或自托管 `moss-image`。输出须验证实际尺寸、字节数及SHA-256，完成 K09 内容分级评估后再归档到当前Project；技术成功不代替创作审核。
 
 ### 安装与使用
 
