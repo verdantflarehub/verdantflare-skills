@@ -17,10 +17,13 @@ Project 归属、换电脑恢复、Artifact 保存及 World 固定资产引用�
 | Google Nano Banana 生图与多参考编辑    | [Google 图像调用](references/google.md)                                                         |
 | MOSS-Image 文字海报与 JSON 版式文生图  | [MOSS-Image 调用](references/moss-image.md)                                                     |
 | 角色四视图、服装三视图、分镜或场景规格 | [视觉规格](references/visual-specs.md) 对应资产类型                                             |
+| 角色五视图合成板                       | [五视图 2＋3 规格](references/visual-specs.md#6-角色五视图合成板)                               |
 | 提交、轮询、恢复、下载与归档           | [执行流程](references/workflow.md)                                                              |
 | 生成后 18+ 内容分级评估与标记          | [评估步骤](references/content-rating-step.md)、[评估规范](references/content-rating-rubric.md) |
 | 使用本地客户端                         | [CLI](references/cli.md)；参数不确定时运行 `--help`                                             |
 | 连接或配置问题                         | [环境说明](../ENVIRONMENT.md)                                                                   |
+
+用户要求五视图或项目明确选用时，采用上排两张脸部特写、下排颈部至鞋正侧背的 2＋3 模式；原有四视图和三视图按各自用途继续适用。
 
 默认 codex / `gpt-image-2.5-sunburst`；选择 Google 渠道（`engine="gemini"`）时默认 `gemini-nano-banana-2.1`（展示名 `Nano Banana 2.1`）；用户明确选择优先，模型支持以宿主能力和调用契约为准。不绕过 MCP/受控客户端直连供应商。
 
