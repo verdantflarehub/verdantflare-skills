@@ -32,16 +32,15 @@
 ## 4. 规范版本与 `video.rate_content` 调用
 
 - **规范版本**：`rubric_version` 固定取自同目录 [content-rating-rubric.md](content-rating-rubric.md) 文首声明的版本号（当前为 `"rubric v1.0"`），不得自行编造版本号。
-- **调用参数**：向 `video.rate_content` 传入 `task_id` 或 `content_ref`（二选一）及评估字段：
+- **调用参数**：先发现当前 `tools/list`。现行 `video.rate_content` 接收 `version_id`、`rating`、`reason`、`rubric_version` 和可选的 `project_id`。此工具的 `version_id` 使用 Video 原生 `art_*` 产物 ID，或已完成的 `video_task_*` 任务 ID（服务解析到最终产物）；不能传中央 Artifact 的 `ContentRef.version_id`。将评估 JSON 的 `reasons` 合并为单个 `reason` 字符串，保留抽帧数量和音轨判断；评估模型与时间保留在本地评估记录，不作为工具未声明的参数发送。
 
 ```json
 {
-  "task_id": "<视频任务ID>",
+  "version_id": "<Video 原生产物 ID 或已完成任务 ID>",
+  "project_id": "<实际项目 ID>",
   "rating": "general",
   "rubric_version": "rubric v1.0",
-  "evaluator_model": "<执行评估的模型标识>",
-  "reasons": ["已抽取 10 帧（含切镜关键帧），未触发类别", "未转写音频"],
-  "evaluated_at": "2026-10-24T00:00:00Z"
+  "reason": "已抽取 10 帧（含切镜关键帧），未触发类别；未转写音频"
 }
 ```
 
