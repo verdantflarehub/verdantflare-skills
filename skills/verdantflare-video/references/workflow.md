@@ -34,7 +34,7 @@
 
 可显式传 `--model`、`--mode`、`--resolution`、`--ratio`、`--duration`；参考重复传 `--image-ref`／`--video-ref`／`--audio-ref ARTIFACT_ID=PURPOSE`。`--budget-limit` 是服务声明币种中的正数预算上限，`--channel-account-id` 选择已有授权账号；只有实际创建及预检 Schema 声明这些字段时才传递。Higgsfield 的 `--price-ceiling` 单独表示 Credits 上限，不与其他渠道币种预算换算。预算不是估价或实际结算，不因未知价格而填零。图片、音视频数量由匹配能力行约束，文件格式、字节、时长与像素的最终校验由服务端导入和模型预检执行。
 
-CLI 的 MCP 失败输出结构化 `error`，保留 `code`、安全 `message`、`source`、`retryable` 与可用的 `accepted`／领域任务 ID。`accepted=false` 保存为拒绝；没有明确受理状态仍保存为未知。`retryable=true` 不授权再次 create。
+CLI 的 MCP 失败输出结构化 `error`，保留 `code`、安全 `message`、`source`、`retryable` 与可用的 `http_status`、`accepted`／领域任务 ID。`accepted=false` 保存为拒绝；没有明确受理状态仍保存为未知。`retryable=true` 不授权再次 create。
 
 中央引用文件保存 `{"content_ref":{"store_id":"<固定ID>","artifact_id":"<固定ID>","version_id":"<固定ID>"}}`；经Project/World读取时另附完整 `access`（项目ID+修订ID或资产ID+版本ID）。所有ID使用服务返回的UUIDv7。示例：
 
@@ -49,6 +49,8 @@ python scripts/video_client.py generate --project-id <项目ID> --idempotency-ke
 ## 4. 结果、分级评估、归档与重试
 
 按 [媒体校验](validation.md) 完成下载、完整解码、摘要核验、逐秒联系表与完整回放。媒体技术可用不代表身份、表演和摄影连续性通过。
+
+`result <原任务ID> --output <目标.mp4>` 支持中央固定 `content_ref` 和既有 Video 原生产物。后者必须返回成功状态、任务／项目／产物身份、固定 SHA-256 和字节数，且路径精确匹配 `/artifacts/<artifact_id>/content`；脚本只向配置的 Studio 同源发送原会话认证，拒绝重定向，并核对 MIME、字节数、摘要和解码。缺少元数据时报告服务版本缺口，恢复原任务，不制造中央引用或重新生成。已有不同文件保留；同内容复用仍重新鉴权。
 
 **生成后内容分级评估（K09 强制步骤）**：下载校验完成后、在交付摘要展示与 Project 归档前，必须按 [生成后内容分级评估步骤](content-rating-step.md) 与 [18+ 评估规范（rubric v1.0）](content-rating-rubric.md) 在本机临时目录抽帧（至少每 2 秒 1 帧、全片至少 8 帧，另补镜头切换处关键帧；评估后删除临时帧文件，并在 `reasons` 中记录抽帧数量），结合连续帧序列、音轨、正向提示词与标题判定，调用 `video.rate_content` 提交分级结果（`general` 与 `nsfw` 均须提交；超时用相同内容幂等重试，不重新生成）。若判为 `nsfw`，交付摘要只写“N 个产物已标记为 NSFW 并隐藏”，不展示预览、联系表、`ContentRef` 或提示词全文，且不同步到 Studio 项目或登记到 World。
 

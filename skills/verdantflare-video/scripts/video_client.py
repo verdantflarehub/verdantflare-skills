@@ -98,6 +98,8 @@ def safe_mcp_error(error: dict[str, Any]) -> dict[str, Any]:
               "source": identifier("source", "video"), "retryable": error.get("retryable") is True}
     if "accepted" in error and (error["accepted"] is None or type(error["accepted"]) is bool):
         result["accepted"] = error["accepted"]
+    if type(error.get("http_status")) is int and 100 <= error["http_status"] <= 599:
+        result["http_status"] = error["http_status"]
     task_id = error.get("task_id") or error.get("video_task_id")
     if isinstance(task_id, str) and MCP_TASK_ID_PATTERN.fullmatch(task_id):
         result["task_id"] = task_id
@@ -520,7 +522,7 @@ def download_mcp_result(config: MCPConfig, result: dict[str, Any], output: str) 
     """Download a native fixed Artifact without overwriting a different local file."""
     media = result.get("media", {})
     digest, size = media.get("sha256"), media.get("size")
-    if (result.get("status") != "succeeded" or not result.get("content_ref") or
+    if (result.get("status") != "succeeded" or
             not isinstance(digest, str) or not SHA256_PATTERN.fullmatch(digest) or
             type(size) is not int or not 0 < size <= MAX_DOWNLOAD_BYTES):
         raise ClientError("A completed native Artifact with verified media is required")
@@ -536,7 +538,10 @@ def download_mcp_result(config: MCPConfig, result: dict[str, Any], output: str) 
     # Authorize even when reusing an existing matching download.
     with tempfile.TemporaryDirectory(prefix=".video-download-", dir=destination.parent) as directory:
         staged = Path(directory) / "video.mp4"
-        _download_content_ref(config, result, staged)
+        if result.get("content_ref"):
+            _download_content_ref(config, result, staged)
+        else:
+            _download_native_result(config, result, staged)
         if not matches(staged):
             raise ClientError("Downloaded Artifact does not match Video media")
         _validate_downloaded_video(staged)
@@ -547,6 +552,44 @@ def download_mcp_result(config: MCPConfig, result: dict[str, Any], output: str) 
             if destination.is_symlink() or not matches(destination):
                 raise ClientError("Output exists with different content") from None
     return {**result, "download": {"verified": True, "sha256": digest, "size": size}}
+
+
+def _download_native_result(config: MCPConfig, result: dict[str, Any], destination: Path) -> None:
+    """Use the existing Studio native-media proxy without inventing a ContentRef."""
+    artifact_id = result.get("artifact_id")
+    task_id = result.get("video_task_id") or result.get("task_id")
+    if (not isinstance(artifact_id, str) or not re.fullmatch(r"art_[0-9a-f]{32}", artifact_id)
+            or not isinstance(task_id, str) or not MCP_TASK_ID_PATTERN.fullmatch(task_id)
+            or not isinstance(result.get("project_id"), str) or not PROJECT_ID_PATTERN.fullmatch(result["project_id"])):
+        raise ClientError("Native video result is missing its fixed task, project or Artifact identity")
+    path = "/artifacts/" + artifact_id + "/content"
+    if result.get("download_path") != path:
+        raise ClientError("Native video download path does not match its Artifact")
+    endpoint = urllib.parse.urlsplit(_validate_mcp_url(config.url))
+    url = urllib.parse.urlunsplit((endpoint.scheme, endpoint.netloc, path, "", ""))
+    expected = result["media"]["size"]
+    request = urllib.request.Request(url, headers={"Authorization": "Bearer " + config.token,
+        "Accept": "video/mp4", "User-Agent": "VerdantFlare-VideoClient/1.0"})
+    started = time.monotonic()
+    try:
+        with _mcp_opener().open(request, timeout=120) as response:
+            if (response.status != 200 or response.headers.get("Content-Encoding")
+                    or response.headers.get("Content-Type", "").split(";", 1)[0] != "video/mp4"
+                    or response.headers.get("Content-Length") != str(expected)):
+                raise ClientError("Native video response metadata does not match the result")
+            count = 0
+            with destination.open("xb") as stream:
+                while chunk := response.read(min(1024 * 1024, expected - count + 1)):
+                    count += len(chunk)
+                    if count > expected or time.monotonic() - started > DOWNLOAD_TIMEOUT_SECONDS:
+                        raise ClientError("Native video download exceeds its declared bounds")
+                    stream.write(chunk)
+            if count != expected:
+                raise ClientError("Native video download is incomplete")
+    except urllib.error.HTTPError as exc:
+        raise ClientError(f"Studio native video download returned HTTP {exc.code}") from None
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise ClientError("Studio native video download is unavailable") from None
 
 
 def resume_mcp(config: MCPConfig, task_id: str, poll_interval: float, timeout: float) -> dict[str, Any]:
