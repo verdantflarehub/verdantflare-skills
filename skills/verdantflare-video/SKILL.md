@@ -2,7 +2,7 @@
 name: verdantflare-video
 description: 通过 Studio Video MCP 的真实动态渠道生成、恢复和下载视频，按已注册能力使用 H3、SD2、Grok、Google 与 Higgsfield 模型；核实参数、素材限制和报价并保留具体服务错误。
 metadata:
-  version: "0.5.3"
+  version: "0.5.4"
 ---
 
 # VerdantFlare Video
