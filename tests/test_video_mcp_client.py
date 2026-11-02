@@ -11,6 +11,8 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/verdantflare-video/scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/verdantflare-video/tests"))
+from mcp_fixture import schemas, fal_inventory
 import video_client as client
 
 REF = {key: f"01900000-0000-7000-8000-{index:012d}" for index, key in enumerate(
@@ -39,12 +41,12 @@ class Gateway(BaseHTTPRequestHandler):
         rpc = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         if rpc["method"] == "tools/list":
             tools = ["video.create", "video.status", "video.result", "video.import", "video.capabilities", "artifact.read"]
-            result = {"tools": [{"name": name} for name in tools]}
+            result = {"tools": [{"name": name, "inputSchema": schemas().get(name, {})} for name in tools]}
         else:
             name, args = rpc["params"]["name"], rpc["params"]["arguments"]
             self.server.tool_calls.append((name, args))
             if name == "video.capabilities":
-                data = {"default_route": "h3-sol", "routes": [{"route": "h3-sol", "configured": True,
+                data = {"default_route": "h3-sol", "default_model": "minimax-h3-ref2va", "routes": [{"route": "h3-sol", "model": "minimax-h3-ref2va", "configured": True,
                     "duration_seconds": {"minimum": 5, "maximum": 15}, "aspect_ratios": ["9:16"]}]}
             elif name == "artifact.read":
                 data = {"version": {**REF, "mime": "image/png", "size": len(PAYLOAD), "sha256": DIGEST},
@@ -114,7 +116,7 @@ class VideoClientContractTest(unittest.TestCase):
         self.assertNotIn("test-session", Path(first["attempt_path"]).read_text())
 
     def test_unsupported_landscape_rejected_before_submission(self):
-        with self.assertRaisesRegex(client.ClientError, "adapter does not accept 15s 16:9"):
+        with self.assertRaisesRegex(client.ClientError, "aspect_ratio is not supported"):
             client.generate_mcp(self.config, self.generate_args("--ratio", "16:9"))
         self.assertFalse(any(name == "video.create" for name, _ in self.server.tool_calls))
         self.assertFalse((self.root / "mcp-attempts").exists())
@@ -122,7 +124,7 @@ class VideoClientContractTest(unittest.TestCase):
     def test_wan_mixed_refs_keep_order_and_run_quote_before_one_create(self):
         args = self.generate_args("--route", "higgsfield", "--model", "wan3_0", "--resolution", "480p",
             "--image-ref", "art_" + "c" * 32 + "=wardrobe", "--video-ref", "art_" + "d" * 32 + "=motion")
-        inventory = {"tools": ["video.preflight"], "create_tool": "video.create", "capabilities": {"routes": [{
+        inventory = {"tools": ["video.preflight"], "schemas": schemas(), "create_tool": "video.create", "capabilities": {"routes": [{
             "route": "higgsfield", "model": "wan3_0", "enabled": True, "configured": True,
             "duration_seconds": {"minimum": 2, "maximum": 30}, "aspect_ratios": ["9:16"],
             "modes": ["reference_to_video"], "resolutions": ["480p"],
@@ -184,10 +186,10 @@ class VideoClientContractTest(unittest.TestCase):
             self.assertEqual(client.main(), 1)
 
     def test_grok_text_and_first_frame_use_host_model_without_h3_parameters(self):
-        inventory={'create_tool':'video.create','tools':['video.create'], 'capabilities':{
-            'default_route':'grok','routes':[{'route':'grok','model':'grok-imagine-video-1.5',
+        inventory={'create_tool':'video.create','schemas':schemas(),'tools':['video.create'], 'capabilities':{
+            'default_route':'grok','default_model':'grok-imagine-video-1.5','routes':[{'route':'grok','model':'grok-imagine-video-1.5',
             'enabled':True,'configured':True,'duration_seconds':{'minimum':1,'maximum':15},
-            'aspect_ratios':['16:9','9:16']}]}}
+            'aspect_ratios':['16:9','9:16'],'modes':['text_to_video','image_to_video'],'resolutions':['480p','720p']}]}}
         for mode in ['text','image']:
             args=client.make_parser().parse_args(['generate','--project-id','demo','--idempotency-key',mode,
                 '--prompt','Exact motion','--duration','1','--resolution','480p']+
@@ -260,12 +262,18 @@ class VideoTitleCompatibilityTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.config = client.MCPConfig('https://studio.invalid/mcp', 'test-token', Path(self.temp.name))
 
+    def inventory(self, title):
+        inventory = fal_inventory()
+        inventory['capabilities']['routes'][0]['route'] = 'h3-sol'
+        inventory['create_supports_title'] = title
+        return inventory
+
     def args(self, title):
         return client.make_parser().parse_args(['generate', '--project-id', 'demo', '--idempotency-key', 'shot/v1',
             '--route', 'h3-sol', '--prompt', 'Single shot', '--duration', '5', '--ratio', '9:16', '--image-ref', ARTIFACT+'=identity', '--title', title])
 
     def test_title_is_separate_and_replay_never_renames_or_resubmits(self):
-        inventory = {'create_tool':'video.create', 'tools':[], 'capabilities':None, 'create_supports_title':True}
+        inventory = self.inventory(True)
         with mock.patch.object(client, 'check_mcp_tools', return_value=inventory), mock.patch.object(client, 'call_mcp_tool', return_value={'video_task_id':TASK, 'title':'纸船'}) as call:
             first = client.generate_mcp(self.config, self.args('纸船'))
             second = client.generate_mcp(self.config, self.args('另一个标题'))
@@ -277,7 +285,7 @@ class VideoTitleCompatibilityTest(unittest.TestCase):
             self.assertEqual(second['title'], '纸船')
 
     def test_old_host_does_not_receive_unknown_title_and_reports_unsaved(self):
-        inventory = {'create_tool':'video.create', 'tools':[], 'capabilities':None}
+        inventory = self.inventory(False)
         with mock.patch.object(client, 'check_mcp_tools', return_value=inventory), mock.patch.object(client, 'call_mcp_tool', return_value={'video_task_id':TASK}) as call:
             result = client.generate_mcp(self.config, self.args('纸船'))
             self.assertNotIn('title', call.call_args.args[2])

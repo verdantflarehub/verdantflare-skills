@@ -12,6 +12,7 @@
 | 状态 | `image.status` | 用原始 `task_id` 查询 |
 | 结果 | `image.result` | 完成后取得原生Artifact、摘要及下载信息 |
 | 内容分级标记 | `image.rate_content` | 生成后提交 `general` / `nsfw` 评估 JSON（只加标记、不提供撤销） |
+| 导入输入图 | `image.import`；`image.import_prepare` / `import_chunk` / `import_status` / `import_commit` | 把本地或渲染图片写成同项目原生 Image Artifact；单次不超过 3 MiB，分片每片不超过 512 KiB，单张不超过 20 MiB |
 
 历史 `image.generate`、`image.list` 仅在宿主实际注册并明确语义时使用。当前不假定存在 `artifact.import`，也不向网关发送文档中未注册的别名。
 
@@ -42,7 +43,7 @@
 中央Artifact以 `ContentRef = store_id + artifact_id + version_id` 固定版本。现存Image服务可能使用自己的原生Artifact ID；两者不是同一引用格式，不能只取中央的 `artifact_id` 填入 `source_artifact_id`。
 
 1. 本地原图通过 `studio-workspace import` 保存到当前Project；远端/World文件先核验权限与固定版本。新内容走中央Artifact，不让客户端直接写S3。
-2. 使用宿主提供的素材适配获得Image可读取的项目内引用。当前Studio的受控兼容上传入口为 `POST /apps/image/api/artifacts/upload`，使用宿主要求的真实登录与权限，表单含 `project_id` 和 `file`；它不是中央 `artifact.write` 的替代品。
+2. 用 Image MCP 导入工具获得 Image 可读取的原生引用：PNG、JPEG、WebP，单张不超过 20 MiB、50 MP。不超过 3 MiB 用 `image.import`（`project_id`、`filename`、`expected_sha256`、`content_base64`）；更大的用 `image.import_prepare`（固定 `idempotency_key`、`size`、`sha256`、`purpose`，可选 `source_content_ref` 只作来源登记）后按返回的 `offset` 逐片 `image.import_chunk`，最后 `image.import_commit`。中断时用 `image.import_status` 读取已确认偏移续传，不换键重来。每次调用检查项目写权限；扩展名须与实际格式一致。浏览器上传入口 `POST /apps/image/api/artifacts/upload` 只认登录会话，MCP 客户端不使用。
 3. 兼容导入后记录中央ContentRef、Image原生ID、文件大小和SHA-256映射。若传输限制要求制作压缩副本，保留原图，副本单独命名、校验并登记，不能把副本哈希写成原图哈希。
 4. 只有HTTPS导入时，先确认宿主实际提供该工具及来源许可。受控下载路径不是匿名公网URL；禁止把会话令牌放入URL，或为了导入把私有素材公开上传。
 

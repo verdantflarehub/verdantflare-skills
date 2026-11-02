@@ -9,6 +9,7 @@ import urllib.request
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
+from mcp_fixture import fal_inventory
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -44,8 +45,7 @@ class FakeResponse:
 
 class VideoClientFalTests(unittest.TestCase):
     def setUp(self):
-        self.discovery = mock.patch("video_client._mcp_json_request", return_value={"tools": [
-            {"name": name} for name in ("video.generate", "video.status", "video.result")]})
+        self.discovery = mock.patch("video_client.check_mcp_tools", return_value=fal_inventory())
         self.discovery.start()
         self.addCleanup(self.discovery.stop)
 
@@ -151,7 +151,7 @@ class VideoClientFalTests(unittest.TestCase):
         self.assertIsNone(args.duration)
         self.assertIsNone(args.ratio)
 
-    def test_fal_defaults_are_locked_inside_unified_client(self):
+    def test_fal_defaults_come_from_the_selected_capability(self):
         with tempfile.TemporaryDirectory() as root, mock.patch(
             "video_client.call_mcp_tool",
             return_value={"video_task_id": "video_task_" + "c" * 32, "status": "queued"},
@@ -163,8 +163,9 @@ class VideoClientFalTests(unittest.TestCase):
         self.assertEqual(request["route"], "fal")
 
     def test_old_host_requires_explicit_route_without_capabilities(self):
-        with tempfile.TemporaryDirectory() as root, mock.patch("video_client.call_mcp_tool") as call:
-            with self.assertRaisesRegex(ClientError, "Host default route is unavailable"):
+        with tempfile.TemporaryDirectory() as root, mock.patch("video_client.call_mcp_tool") as call, mock.patch(
+            "video_client.check_mcp_tools", return_value={"capabilities": None}):
+            with self.assertRaisesRegex(ClientError, "capabilities is unavailable"):
                 generate_mcp(self.config(root), self.args(route=None))
         call.assert_not_called()
 

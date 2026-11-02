@@ -17,10 +17,13 @@ Project 归属、换电脑恢复、Artifact 保存及 World 固定资产引用�
 | Google Nano Banana 生图与多参考编辑    | [Google 图像调用](references/google.md)                                                         |
 | MOSS-Image 文字海报与 JSON 版式文生图  | [MOSS-Image 调用](references/moss-image.md)                                                     |
 | 角色四视图、服装三视图、分镜或场景规格 | [视觉规格](references/visual-specs.md) 对应资产类型                                             |
+| 角色五视图合成板                       | [五视图模式选择](references/visual-specs.md#6-角色五视图合成板)                               |
 | 提交、轮询、恢复、下载与归档           | [执行流程](references/workflow.md)                                                              |
 | 生成后 18+ 内容分级评估与标记          | [评估步骤](references/content-rating-step.md)、[评估规范](references/content-rating-rubric.md) |
 | 使用本地客户端                         | [CLI](references/cli.md)；参数不确定时运行 `--help`                                             |
 | 连接或配置问题                         | [环境说明](../ENVIRONMENT.md)                                                                   |
+
+用户或项目选用五视图时，明确指定的图格与角度优先；固定身份长相优先[三脸＋身体正背 3＋2](references/visual-specs.md#64-身份优先三脸与身体正背)，衣装造型优先[两脸＋身体正侧背 2＋3](references/visual-specs.md#61-五格布局与裁切)。3＋2 未包含身体侧视，交付须说明；原有四视图和含头全身三视图按各自用途继续适用。
 
 默认 codex / `gpt-image-2.5-sunburst`；选择 Google 渠道（`engine="gemini"`）时默认 `gemini-nano-banana-2.1`（展示名 `Nano Banana 2.1`）；用户明确选择优先，模型支持以宿主能力和调用契约为准。不绕过 MCP/受控客户端直连供应商。
 
@@ -28,7 +31,7 @@ Google 渠道（`engine="gemini"`）Nano Banana 系列生图与最多 6 张参�
 
 Grok 生成与单图编辑读取 [Grok 调用](references/grok.md)，以 `image.capabilities` 的实际模型为准；现有 REST CLI 不用于 Grok，使用 Studio MCP。
 
-MOSS-Image 自托管文生图（`engine="moss-image"`）读取 [MOSS-Image 调用](references/moss-image.md)，经同一 Studio Image MCP 调用，面向中英文密集文字海报与原生 JSON 版式控制（`layout` 采用 `yxyx` 与 `abs_centralized` 坐标空间，`items` 最多 32 项）；支持 `width` / `height`（16 的整数倍，总像素不超过 2M，默认 1024×1024）、`steps` / `guidance` / `seed`、独立 `negative_prompt` 与 1～3 张实验性参考图。参考图不保证人物身份一致，角色 IP 一致性出图不选 `moss-image`。该引擎不经渠道应用，不传 `channel_account_id`、`budget_limit`、`prefer_4k`、`mask` 或局部重绘参数（传入会以 `INVALID_ARGUMENT` 拒绝）。
+MOSS-Image 自托管文生图（`engine="moss-image"`）读取 [MOSS-Image 调用](references/moss-image.md)，经同一 Studio Image MCP 调用，面向中英文密集文字海报与原生 JSON 版式控制（`layout` 沿用现行 `meta/items` 格式与 `box_2d=[x1,y1,x2,y2]`，`items` 最多 32 项，具体坐标规则见调用说明）；支持 `width` / `height`（16 的整数倍，总像素不超过 2M，所需尺寸显式填写）、`steps` / `cfg_scale` / `seed`、独立 `negative_prompt` 与 1～3 张实验性参考图。参考图不保证人物身份一致，角色 IP 一致性出图不选 `moss-image`。该引擎不经渠道应用，不传 `channel_account_id`、`budget_limit`、`prefer_4k`、`mask` 或局部重绘参数（传入会以 `INVALID_ARGUMENT` 拒绝）。
 
 使用真实Studio会话发现实际工具；现有网关提供 `image.create/edit/inpaint/status/result/rate_content`，不假定历史 `image.generate` 或 `image.list` 已注册。旧共享媒体令牌不能访问Project/Artifact，认证恢复见 [环境说明](../ENVIRONMENT.md)。
 

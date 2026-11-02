@@ -9,7 +9,7 @@ description: 通过团队 Higgsfield 会员生成或恢复视频，包括 Seedan
 
 这是 Higgsfield Skills 0.13.0 的视频生成流程适配，不是官方全功能插件。固定来源、许可及修改范围见包根目录 SOURCE.md 和 LICENSE。只处理视频，图片、音频、Soul、营销工作流不自动转为视频调用。
 
-先读取已安装的 verdantflare-video（v0.4.0 起）及其 references/higgsfield.md。插件命令桥 scripts/video.py 自动查找 CODEX_HOME/skills、用户 .codex/skills 或 .agents/skills，以及当前项目的技能目录；也兼容 VERDANTFLARE_SKILLS_ROOT 指向已更新的自有 Skills 仓库。成员独立安装 Video Skill 即可，不需要开发工作区。缺依赖时说明缺口并保留输入，不安装全局 hf 或从插件目录寻找账号文件。
+先读取已安装的 Studio MCP 版 verdantflare-video（v0.5.0 起）及其 references/higgsfield.md。插件命令桥 scripts/video.py 自动查找 CODEX_HOME/skills、用户 .codex/skills 或 .agents/skills，以及当前项目的技能目录；也兼容 VERDANTFLARE_SKILLS_ROOT 指向已更新的自有 Skills 仓库。命令桥检查 Studio 渠道契约标识，拒绝同名公共 API 版或旧版脚本。成员独立安装兼容 Video Skill 即可，不需要开发工作区。缺依赖时说明缺口并保留输入，不安装全局 hf 或从插件目录寻找账号文件。
 
 ## 2. 生成与恢复
 

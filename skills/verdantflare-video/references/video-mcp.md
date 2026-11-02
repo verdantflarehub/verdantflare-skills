@@ -31,6 +31,8 @@
 
 输入模式按 [H3输入模式](input-modes.md)；时长、画幅、参考数量和音频支持同时满足网关与所选渠道要求。静态Schema与匹配部署版本的能力说明不一致时，记录并核实差异，不仅凭历史枚举断言模型不支持，也不绕过网关校验尝试收费提交。
 
+有效能力行的 `parameter_schema` 还会收紧字段约束；参考数量使用 `reference_limits` 并合并当前模式 `by_mode`，同时满足 `minimum_total`、`total` 和 `required_media_any_of`。`defaults.by_mode` 只作用于对应模式，`can_submit=false` 的注册组合不提交。字节数、格式、分辨率与解码时长需要真实素材验证，不由 Artifact ID 推断。
+
 H3模型规格包含21:9、16:9、4:3、1:1、3:4、9:16，Omni支持Auto。`video.capabilities.model_specification` 表示模型规格；`routes[].aspect_ratios` / `duration_seconds` 且 `limit_scope=adapter` 表示当前适配器实际接受范围。若后者仍为9:16，应记录“本地多画幅适配缺口”，不能改写模型规格或降低用户目标。`configured=true` 只确认配置可解析，`readiness=not_checked` 表示没有探测GPU，不承诺推理成功。
 
 ## 2. 渠道解析
@@ -38,7 +40,8 @@ H3模型规格包含21:9、16:9、4:3、1:1、3:4、9:16，Omni支持Auto。`vid
 - 用户指定模型/渠道时保留该选择，先核实实际映射和就绪状态；不可用时不静默切换。
 - 未指定时使用当前宿主明确配置的默认值，并把解析后的渠道写入请求。文档中的历史默认值、工具Schema默认值和列表中的第一个可用项都不能单独替代宿主配置。
 - H3原版、Sol等名称表示模型族或推理路线，不保证采用同一优化配置。实际路线、Runtime版本写入尝试记录，不凭模型名宣称运行了某个引擎。
-- fal适配器使用H3 Ref2VA；其端点、供应商凭据和供应商任务ID由服务端管理。工具存在但fal未配置时，不能由Skill读取 `FAL_KEY` 补交请求。
+- fal 可同时注册 H3 Ref2VA 与 SD2，按 `route + model` 精确匹配同一条能力；其他渠道的 `models[]` 可声明真实模型别名。不能取同渠道首行限制，也不能把模型 ID 当面向用户的简称。端点、供应商凭据和供应商任务 ID 由服务端管理，不能读取 `FAL_KEY` 补交请求。
+- 面向用户的模型名称来自当前注册记录的显示名称；CLI 的 `--model` 使用该记录对应技术标识。服务声明新名称或退役状态后同步展示，不将维护中的静态列表冒充已部署注册数据。
 - 已有任务按记录的原模型、渠道和任务ID恢复，不能以当前默认值重新生成。
 
 ## 3. 素材引用转换
@@ -65,6 +68,8 @@ Singularity 生成前调用 `video.preflight`，使用与 create 相同的生成
 创建成功后先保存服务返回的原始任务ID，再轮询。当前响应可能同时返回 `task_id` / `video_task_id`；按当前Schema传入受支持字段，保留原值，不改写成UUID。常见状态为 `queued`、`running`、`succeeded`、`failed`、`cancelled`；未知状态按协议错误处理。
 
 `video.status` 的失败信息仅在脱敏后进入记录，不输出签名URL、内部路径或供应商原始响应。只对成功任务调用 `video.result`，保存原生Artifact、输入摘要、模型/渠道、Runtime版本及媒体元数据；下载按Studio受控内容路由，不把 `/mcp` 当下载根地址。
+
+中央结果沿固定 `content_ref` 经 `artifact.read` 下载。既有原生结果使用服务端 ArtifactStore 的 `media.sha256/size`，并返回 `status=succeeded`、`project_id`、原任务及产物 ID；经同一 Studio origin 的精确 `/artifacts/<artifact_id>/content` 路径鉴权读取。不得把原生 ID 当作中央 ContentRef，不接受结果里的任意 URL 或重定向；两条路径均核对大小、摘要与完整解码，细节见[执行流程](workflow.md#4-结果分级评估归档与重试)。
 
 原生结果返回不代表中央Project归档已完成。在交付摘要展示与中央Project归档前，必须先按 [生成后内容分级评估步骤](content-rating-step.md) 与 [18+ 评估规范（rubric v1.0）](content-rating-rubric.md) 在本机临时目录完成抽帧评估（至少每 2 秒 1 帧、全片至少 8 帧，另补切镜关键帧；评估后清理临时帧并在 `reasons` 中记录抽帧数），调用 `video.rate_content` 提交分级结果（`general` 与 `nsfw` 均须提交；超时幂等重试，不重新生成）。判为 `nsfw` 的视频不在摘要中展示预览、链接、`ContentRef` 或提示词全文，也不执行 Project 归档或 World 登记。对判为 `general` 的产物，有输出适配时用可信来源登记；没有时可在授权范围内通过现有工作副本客户端显式导入校验后的文件为 `user_import`，保留原生任务、Artifact和摘要映射，不伪造 `task_output`。
 

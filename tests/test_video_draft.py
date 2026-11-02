@@ -5,12 +5,14 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/verdantflare-video/scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/verdantflare-video/tests"))
+from mcp_fixture import schemas
 import video_client as client
 
 
 class DraftReferenceTest(unittest.TestCase):
     def test_draft_uses_reference_preflight_and_recovers_one_create(self):
-        inventory = {"tools": ["video.preflight"], "create_tool": "video.create", "capabilities": {"routes": [{
+        inventory = {"tools": ["video.preflight"], "schemas": schemas(), "create_tool": "video.create", "capabilities": {"routes": [{
             "route": "higgsfield", "model": "seedance_2_5_draft", "enabled": True, "configured": True,
             "duration_seconds": {"minimum": 4, "maximum": 15}, "aspect_ratios": ["9:16"],
             "modes": ["reference_to_video"], "resolutions": ["480p"],

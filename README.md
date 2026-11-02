@@ -2,14 +2,14 @@
 
 本文描述工作区 Skill 包。每个目录都包含可被 Codex 发现和安装的 `SKILL.md` 与 `agents/openai.yaml`；工作区新增能力仍属于研发版，未自动发布到 Center Catalog 或安装到 Studio Runtime。下方版本标签是既有发布入口。当前可用技能还包括 [30 秒 MV](skills/verdantflare-music-mv/SKILL.md)。
 
-## 本轮媒体技能发布（2026-10-17）
+## 已发布媒体技能
 
 各技能使用独立不可变标签，Release附独立ZIP和SHA256SUMS。安装到当前客户端后在下一回合加载；发布不代表Center Catalog或Studio Runtime已安装，也不代替媒体听审。
 
 | 技能 | 固定版本 |
 | --- | --- |
 | `x-verdantflare-short-drama` | [0.2.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/x-verdantflare-short-drama-v0.2.0) |
-| `verdantflare-video` | [0.4.2](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-video-v0.4.2) |
+| `verdantflare-video` | [0.5.4](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-video-v0.5.4) |
 | `verdantflare-music` | [0.6.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-music-v0.6.0) |
 | `verdantflare-speech` | [0.3.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-speech-v0.3.0) |
 | `verdantflare-project` | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-project-v0.1.0) |
@@ -112,10 +112,10 @@ H3 Ref2VA业务模型为 `minimax-h3-ref2va`。现有网关创建工具为 `vide
 
 ### 安装与使用
 
-已发布版本：`verdantflare-video-v0.4.2`。固定标签不包含本地未发布更新。
+已发布版本：`verdantflare-video-v0.5.4`。该版按真实动态能力处理模型、逐模式参数与报价，保留安全错误和原任务恢复，并核对原生结果 SHA-256／大小。0.5.4 补充已实测的媒体数量、大小与解码边界；本轮真实生成使用 0.5.3，最终说明由宿主显式载入 0.5.4。固定标签不包含后续本地更新，也不表示其他客户端已自动安装。
 
 ```text
-使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.4.2/skills/verdantflare-video 安装 Skill。
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.5.4/skills/verdantflare-video 安装 Skill。
 ```
 
 ```text
