@@ -2,17 +2,17 @@
 
 本页说明Skill需要的调用语义，不替代宿主实际工具Schema或中央Project/Artifact契约。开始时使用真实Studio会话执行 `tools/list`，再选择已注册工具；认证见 [环境说明](../../ENVIRONMENT.md)。
 
-## 工具名与必需上下文
+## 1. 工具名与必需上下文
 
-| 操作 | 现有网关注册名 | 说明 |
-| --- | --- | --- |
-| 文生图 | `image.create` | 传Prompt、项目、幂等键及已支持的图像参数 |
-| 编辑 | `image.edit` | 主参考 `source_artifact_id`，可选附加参考列表 |
-| 局部重绘 | `image.inpaint` | 主参考与遮罩引用；形状和尺寸按当前契约核对 |
-| 状态 | `image.status` | 用原始 `task_id` 查询 |
-| 结果 | `image.result` | 完成后取得原生Artifact、摘要及下载信息 |
-| 内容分级标记 | `image.rate_content` | 生成后提交 `general` / `nsfw` 评估 JSON（只加标记、不提供撤销） |
-| 导入输入图 | `image.import`；`image.import_prepare` / `import_chunk` / `import_status` / `import_commit` | 把本地或渲染图片写成同项目原生 Image Artifact；单次不超过 3 MiB，分片每片不超过 512 KiB，单张不超过 20 MiB |
+| 操作与现有网关注册名 | 调用说明与参数边界 |
+| :--- | :--- |
+| 文生图：`image.create` | 传 Prompt、项目、幂等键及已支持的图像参数 |
+| 编辑：`image.edit` | 主参考 `source_artifact_id`，可选附加参考列表 |
+| 局部重绘：`image.inpaint` | 主参考与遮罩引用；形状和尺寸按当前契约核对 |
+| 状态：`image.status` | 用原始 `task_id` 查询 |
+| 结果：`image.result` | 完成后取得原生 Artifact、摘要及下载信息 |
+| 内容分级标记：`image.rate_content` | 生成后提交 `general` / `nsfw` 评估 JSON（只加标记、不提供撤销） |
+| 导入输入图：`image.import` 及 `image.import_prepare` / `import_chunk` / `import_status` / `import_commit` | 把本地或渲染图片写成同项目原生 Image Artifact；单次不超过 3 MiB，分片每片不超过 512 KiB，单张不超过 20 MiB |
 
 历史 `image.generate`、`image.list` 仅在宿主实际注册并明确语义时使用。当前不假定存在 `artifact.import`，也不向网关发送文档中未注册的别名。
 
@@ -38,7 +38,7 @@
 
 编辑在相同项目、幂等上下文下传入 `source_artifact_id`、可选 `reference_artifact_ids` 和编辑Prompt。说明每张图保留面容、服装、场景中的哪些内容，明确允许修改什么。`image.edit` 与 `image.create` 的尺寸字段可能不同，不能把 `aspect_ratio`、`resolution`、`size` 无条件互换；从当前Schema或匹配部署版本的接口说明确认。
 
-## 中央素材与Image原生引用
+## 2. 中央素材与Image原生引用
 
 中央Artifact以 `ContentRef = store_id + artifact_id + version_id` 固定版本。现存Image服务可能使用自己的原生Artifact ID；两者不是同一引用格式，不能只取中央的 `artifact_id` 填入 `source_artifact_id`。
 
@@ -47,7 +47,7 @@
 3. 兼容导入后记录中央ContentRef、Image原生ID、文件大小和SHA-256映射。若传输限制要求制作压缩副本，保留原图，副本单独命名、校验并登记，不能把副本哈希写成原图哈希。
 4. 只有HTTPS导入时，先确认宿主实际提供该工具及来源许可。受控下载路径不是匿名公网URL；禁止把会话令牌放入URL，或为了导入把私有素材公开上传。
 
-## 状态、结果与下载
+## 3. 状态、结果与下载
 
 创建成功后先保存 `task_id` 再轮询。Image原生状态通常为 `queued`、`running`、`completed`、`failed`、`canceled`；未知状态按协议差异处理，不猜成失败。
 
@@ -55,7 +55,7 @@
 
 下载通过Studio受控内容路由。现有Image宿主适配为 `/apps/image/artifacts/{artifact_id}/content`；中央文件则使用 `artifact.read(mode=download)` 返回的内容路径或工作副本 `fetch`。按当前宿主声明解析原生路径，不能把 `/image/...` 随意拼到 `/mcp` 后，也不能把Studio凭据转发给任意外域。
 
-## Project归档
+## 4. Project归档
 
 有中央原生输出适配时，使用其可信来源映射提交文件。没有该适配时，授权范围内可将已下载、校验的结果通过现有工作副本客户端显式导入，来源为 `user_import`，保留原任务ID与原生Artifact映射；不伪造 `task_output`。
 

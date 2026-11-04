@@ -9,19 +9,19 @@ description: 通过 VerdantFlare Image MCP 生成或编辑图像候选，包括�
 
 交付具有不可变 Artifact 与 SHA-256 的图像候选；不负责 MV 导演或剪辑。仅解释或修改代码时不启动生图。
 
-Project 归属、换电脑恢复、Artifact 保存及 World 固定资产引用遵循[共同接入规则](../_shared/project-world.md)。生成或导入结果先保存到当前 Project；确认可复用后，按 [World / Character 形象基线](../../../docs/design/world/character/identity.md) 显式登记固定版本。
+Project 归属、换电脑恢复、Artifact 保存及 World 固定资产引用遵循[共同接入规则](../_shared/project-world.md)。生成或导入结果先保存到当前 Project；确认可复用后，按 World / Character 形象基线（`docs/design/world/character/identity.md`）显式登记固定版本。
 
-| 当前操作                               | 按需读取                                                                                        |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| 构造生成、编辑、遮罩或导入请求         | [调用契约](references/contracts.md) 的对应工具章节                                              |
-| Google Nano Banana 生图与多参考编辑    | [Google 图像调用](references/google.md)                                                         |
-| MOSS-Image 文字海报与 JSON 版式文生图  | [MOSS-Image 调用](references/moss-image.md)                                                     |
-| 角色四视图、服装三视图、分镜或场景规格 | [视觉规格](references/visual-specs.md) 对应资产类型                                             |
-| 角色五视图合成板                       | [五视图模式选择](references/visual-specs.md#6-角色五视图合成板)                               |
-| 提交、轮询、恢复、下载与归档           | [执行流程](references/workflow.md)                                                              |
+| 当前操作                               | 按需读取                                                                                       |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| 构造生成、编辑、遮罩或导入请求         | [调用契约](references/contracts.md) 的对应工具章节                                             |
+| Google Nano Banana 生图与多参考编辑    | [Google 图像调用](references/google.md)                                                        |
+| MOSS-Image 文字海报与 JSON 版式文生图  | [MOSS-Image 调用](references/moss-image.md)                                                    |
+| 角色四视图、服装三视图、分镜或场景规格 | [视觉规格](references/visual-specs.md) 对应资产类型                                            |
+| 角色五视图合成板                       | [五视图模式选择](references/visual-specs.md#6-角色五视图合成板)                                |
+| 提交、轮询、恢复、下载与归档           | [执行流程](references/workflow.md)                                                             |
 | 生成后 18+ 内容分级评估与标记          | [评估步骤](references/content-rating-step.md)、[评估规范](references/content-rating-rubric.md) |
-| 使用本地客户端                         | [CLI](references/cli.md)；参数不确定时运行 `--help`                                             |
-| 连接或配置问题                         | [环境说明](../ENVIRONMENT.md)                                                                   |
+| 使用本地客户端                         | [CLI](references/cli.md)；参数不确定时运行 `--help`                                            |
+| 连接或配置问题                         | [环境说明](../ENVIRONMENT.md)                                                                  |
 
 用户或项目选用五视图时，明确指定的图格与角度优先；固定身份长相优先[三脸＋身体正背 3＋2](references/visual-specs.md#64-身份优先三脸与身体正背)，衣装造型优先[两脸＋身体正侧背 2＋3](references/visual-specs.md#61-五格布局与裁切)。3＋2 未包含身体侧视，交付须说明；原有四视图和含头全身三视图按各自用途继续适用。
 
@@ -35,7 +35,7 @@ MOSS-Image 自托管文生图（`engine="moss-image"`）读取 [MOSS-Image 调�
 
 使用真实Studio会话发现实际工具；现有网关提供 `image.create/edit/inpaint/status/result/rate_content`，不假定历史 `image.generate` 或 `image.list` 已注册。旧共享媒体令牌不能访问Project/Artifact，认证恢复见 [环境说明](../ENVIRONMENT.md)。
 
-中央Artifact引用与Image原生Artifact ID需要受控适配，不因同名字段就互换。附带的 `scripts/image_client.py` 仍是REST兼容客户端，不能把Studio `/mcp` 地址当其REST根地址；具体限制见 [CLI](references/cli.md)。
+中央Artifact引用与Image原生Artifact ID需要受控适配，不因同名字段就互换。附带的 `scripts/image_client.py` 已适配 Studio `/mcp` JSON-RPC 网关与受控下载路由（`/apps/image/artifacts/{artifact_id}/content`），具体用法见 [CLI](references/cli.md)。
 
 描述目标画面、必要参考职责及编辑保留项即可；四段式提示词只是模板，不要求固定标签、句式或每轮只改一个变量。
 
