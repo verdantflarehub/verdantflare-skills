@@ -16,7 +16,7 @@
 
 历史 `image.generate`、`image.list` 仅在宿主实际注册并明确语义时使用。当前不假定存在 `artifact.import`，也不向网关发送文档中未注册的别名。
 
-即使旧Schema把字段标为可选，制作任务仍显式提供服务生成的 `project_id` 和固定 `idempotency_key`。样例中的标识只解释字段，不能直接提交：
+即使旧Schema把字段标为可选，制作任务仍显式提供服务生成的 `project_id` 和固定 `idempotency_key`。**技能默认出图模型为 GPT Image 2.6**（`engine="codex"`，默认 `model="gpt-image-2.6-sunburst"`，可选高速变体 `gpt-image-2.6-flare`）。样例中的标识只解释字段，不能直接提交：
 
 ```json
 {

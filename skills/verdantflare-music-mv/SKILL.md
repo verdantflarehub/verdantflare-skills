@@ -15,7 +15,7 @@ AI 短剧任务形成阶段成果后默认同步到原 Studio 项目，沿用真
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | 企划、分段、推进、返工或恢复              | [工作流](references/workflow.md)                                                                         |
 | 项目结构、B/S/F/GU 命名、时间线或机器清单 | [契约](references/contracts.md)                                                                          |
-| 人物四视图、服装、角色卡、参考网格        | [角色资产](references/character-assets.md)；需要生图时再读 [Image Skill](../verdantflare-image/SKILL.md) |
+| 人物四视图、服装、角色卡、参考网格        | [角色资产](references/character-assets.md)；需要生图时再读 [Image Skill](../verdantflare-image/SKILL.md)（默认出图模型 GPT Image 2.6 / `gpt-image-2.6-sunburst`） |
 | 到达审核点、收到批准或候选选择            | [审核门](references/review-gates.md)                                                                     |
 | 执行已冻结视频生成单元                    | [H3 Skill](../verdantflare-video/SKILL.md)                                                               |
 | 生成后 18+ 内容分级评估与标记             | [评估步骤](references/content-rating-step.md)、[评估规范](references/content-rating-rubric.md)           |

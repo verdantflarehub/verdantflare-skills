@@ -158,10 +158,15 @@ class TestVerdantflareImage(unittest.TestCase):
         self.assertFalse(old_skill.exists(), "已废弃的 verdantflare-image-codex 目录不应存在")
 
     def test_skill_frontmatter(self):
-        """检查 SKILL.md Frontmatter 名称正确性。"""
+        """检查 SKILL.md Frontmatter 名称与默认模型标记正确性。"""
         content = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("name: verdantflare-image", content)
         self.assertNotIn("name: verdantflare-image-codex", content)
+        self.assertIn("GPT Image 2.6", content)
+        self.assertIn("gpt-image-2.6-sunburst", content)
+        ui_meta = (SKILL_DIR / "agents" / "openai.yaml").read_text(encoding="utf-8")
+        self.assertIn("GPT Image 2.6", ui_meta)
+        self.assertIn("gpt-image-2.6-sunburst", ui_meta)
 
     def test_env_parsing(self):
         """测试 .env 文件解析与哈希计算工具。"""
