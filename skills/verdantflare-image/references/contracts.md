@@ -24,7 +24,7 @@
   "idempotency_key": "B01/wardrobe-v1/attempt-01",
   "prompt": "A single full-body wardrobe reference on a plain neutral background.",
   "engine": "codex",
-  "model": "gpt-image-2.5-sunburst",
+  "model": "gpt-image-2.6-sunburst",
   "aspect_ratio": "16:9",
   "resolution": "2k",
   "quality": "high",

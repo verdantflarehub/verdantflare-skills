@@ -215,7 +215,7 @@ class TestVerdantflareImage(unittest.TestCase):
             self.assertEqual(image_client.calculate_sha256(content), expected_sha)
             self.assertEqual(len(MockImageServerHandler.received_tasks), 1)
             self.assertEqual(MockImageServerHandler.received_tasks[0]["engine"], "codex")
-            self.assertEqual(MockImageServerHandler.received_tasks[0]["model"], "gpt-image-2.5-sunburst")
+            self.assertEqual(MockImageServerHandler.received_tasks[0]["model"], "gpt-image-2.6-sunburst")
 
             ret_gemini = image_client.cmd_generate(
                 argparse.Namespace(

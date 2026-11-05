@@ -547,7 +547,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
     engine = (args.engine or "codex").lower()
     project_id = validate_project_id(args.project_id)
     idempotency_key = args.idempotency_key or f"cli-{int(time.time() * 1000)}-{os.urandom(3).hex()}"
-    resolved_model = args.model or ("gpt-image-2.5-sunburst" if engine == "codex" else "gemini-nano-banana-2.1")
+    resolved_model = args.model or ("gpt-image-2.6-sunburst" if engine == "codex" else "gemini-nano-banana-2.1")
 
     target_quality = getattr(args, "quality", "high") or "high"
     background = getattr(args, "background", "auto") or "auto"
@@ -818,7 +818,7 @@ def main() -> int:
     sub_gen = subparsers.add_parser("generate", help="提交生图或编辑任务")
     sub_gen.add_argument("--prompt", required=True, help="生图提示词")
     sub_gen.add_argument("--engine", choices=["codex", "gemini", "grok", "moss-image"], default="codex", help="底层引擎驱动 (默认 codex)")
-    sub_gen.add_argument("--model", default="", help="指定模型覆盖默认值 (codex 默认 gpt-image-2.5-sunburst, gemini 默认 gemini-nano-banana-2.1)")
+    sub_gen.add_argument("--model", default="", help="指定模型覆盖默认值 (codex 默认 gpt-image-2.6-sunburst，可选 gpt-image-2.6-flare；gemini 默认 gemini-nano-banana-2.1)")
     sub_gen.add_argument("--aspect-ratio", choices=["16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3"], default="16:9", help="画幅比例 (默认 16:9)")
     sub_gen.add_argument("--resolution", choices=["1k", "2k", "4k"], default="2k", help="分辨率 (默认 2k)")
     sub_gen.add_argument("--quality", choices=["auto", "low", "medium", "high", "xhigh", "max", "hd", "standard"], default="high", help="图像质量 (默认 high)")
