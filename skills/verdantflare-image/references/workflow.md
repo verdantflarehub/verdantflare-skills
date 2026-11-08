@@ -18,9 +18,9 @@
 
 使用当前注册的创建/编辑工具：现有网关是 `image.create`、`image.edit`、`image.inpaint`。得到 `task_id` 后立即保存，再查询 `image.status`。
 
-- `queued` / `running`：按宿主或客户端间隔继续查询。
+- `queued` / `running`：按宿主或客户端间隔继续查询。若 `status` 为 `"running"` 但同时返回 `needs_attention: true` 或 `phase: "submission_unknown"` / `error: "submission_unknown"`，说明下游提交响应未决且 `image.status` 按需恢复后仍未取得终态，客户端须立即停止无限轮询，保存原幂等键与 `task_id` 转入异常排查或清理，不得仅按 `status in ("completed", "failed", "canceled")` 死等。
 - `completed`：调用 `image.result` 获取结果。
-- `failed` / `canceled`：记录真实错误或取消状态；新尝试须在授权次数/预算内。
+- `failed` / `canceled`：记录真实错误或取消状态（如 `channel_call_failed: image_safety` 表示触发上游安全策略拦截，需调整提示词中敏感解剖或擦边措辞后使用新幂等键提交）；新尝试须在授权次数/预算内。
 - 等待超时或提交响应未知：保存原幂等键、已知ID与最近状态，恢复原任务；不因为本地等待结束就换键重提。
 
 相同键只用于相同输入。改变Prompt、参考图或规格时保留旧版本，建立新的候选版本与尝试记录；下载故障只重取原结果。
