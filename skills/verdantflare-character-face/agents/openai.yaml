@@ -1,0 +1,4 @@
+interface:
+  display_name: "角色锁脸与多角度参考"
+  short_description: "从正脸、视频抽帧到身份纠正，制作并局部修复可追溯的角色参考库"
+  default_prompt: "使用 $verdantflare-character-face，接续现有素材和授权，制作或修复角色锁脸与多角度参考，保留身份基准与来源记录。"

@@ -178,4 +178,4 @@ CLI现状见 [Image CLI](skills/verdantflare-image/references/cli.md)，实际�
 
 ## 角色多角度参考库
 
-[`verdantflare-character-reference`](skills/verdantflare-character-reference/SKILL.md) 编排正脸基准、视频抽帧、正脸参考纠正和局部返修，按现有Project／Artifact流程归档。中文提示词、可点击编号图与来源追溯随包提供。依赖按阶段安装的Studio版Image、Video、Project和Artifact技能；源码新增不代表已安装、发布或被当前会话加载。
+[`verdantflare-character-face`](skills/verdantflare-character-face/SKILL.md) 编排正脸基准、视频抽帧、正脸参考纠正和局部返修，按现有Project／Artifact流程归档。中文提示词、可点击编号图与来源追溯随包提供。依赖按阶段安装的Studio版Image、Video、Project和Artifact技能；源码新增不代表已安装、发布或被当前会话加载。

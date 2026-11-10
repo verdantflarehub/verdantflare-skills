@@ -1,4 +1,4 @@
 interface:
-  display_name: "角色多角度参考库"
-  short_description: "从正脸、视频抽帧到身份纠正，制作并局部修复可追溯的角色参考库"
-  default_prompt: "使用 $verdantflare-character-reference，接续现有素材和授权，制作或修复角色多角度参考库，保留身份基准与来源记录。"
+  display_name: "角色参考库（旧名入口）"
+  short_description: "旧角色参考库名称的兼容入口，转到角色锁脸技能并沿用已有任务授权"
+  default_prompt: "使用 $verdantflare-character-reference，按迁移入口接续角色锁脸任务。"
