@@ -1,4 +1,0 @@
-interface:
-  display_name: "角色参考库（旧名入口）"
-  short_description: "旧角色参考库名称的兼容入口，转到角色锁脸技能并沿用已有任务授权"
-  default_prompt: "使用 $verdantflare-character-reference，按迁移入口接续角色锁脸任务。"
