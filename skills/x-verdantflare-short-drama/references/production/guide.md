@@ -12,7 +12,7 @@
 | 从剧本到场景、Shot 和资产需求 | [制作流程](workflow.md)；使用 [短剧 Director Skill](../directing/guide.md) 的计划契约与校验器 |
 | 场景正反打、人物站位、关键帧确认与视频返修 | [场景—关键帧—视频规范](scene-keyframe-video.md)；先确定空间与表演目标，再按真实模型能力生成和验片 |
 | 场景、道具、服装分别沉淀为跨集一致性资产 | [数字资产圣经模板](asset-bible-template.md)；地点本体、场次变体、道具状态、角色 Look 和逐镜引用分别记录 |
-| 角色、造型、场景或分镜图像候选 | [Image Skill](https://github.com/verdantflarehub/verdantflare-skills/blob/3c5a282fc4e8c30bda3bbfeef173f43d543bf93d/skills/verdantflare-image/SKILL.md) |
+| 角色、造型、场景或分镜图像候选 | [Image Skill](https://github.com/verdantflarehub/verdantflare-skills/blob/48ce44aa22e8c024e92cb79eb2c2da2b4bbcc45c/skills/verdantflare-image/SKILL.md)（默认出图模型 GPT Image 2.6 / `gpt-image-2.6-sunburst`） |
 | 已冻结 Generation Unit 的视频提示词、提交、查询和恢复 | [Video Skill](https://github.com/verdantflarehub/verdantflare-skills/blob/9320ed7f1af6dfe6dc3ad5d43cff4e68685df586/skills/verdantflare-video/SKILL.md) |
 | 已批准歌曲的 30 秒高潮 MV | [Music MV Skill](https://github.com/verdantflarehub/verdantflare-skills/blob/3c5a282fc4e8c30bda3bbfeef173f43d543bf93d/skills/verdantflare-music-mv/SKILL.md) |
 

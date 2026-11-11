@@ -4,8 +4,8 @@
 
 - [调用契约](contracts.md)：Studio Image MCP 工具发现、任务轮询与 Artifact 归档。
 - [生成后内容分级评估步骤](content-rating-step.md)：MOSS-Image 产物生成后的 18+ 评估与 `image.rate_content` 标记。
-- [MOSS-Image 主设计](../../../../docs/design/app/image/moss-image.md)：已批准的一期能力与参考图限制。
-- [多参考图参数契约（待 H1）](../../../../docs/design/app/image/moss-image.md#167-多参考图参数契约待-h1)：新模式的唯一设计依据，尚未批准或交付，不作为当前调用能力。
+- MOSS-Image 主设计（`docs/design/app/image/moss-image.md`）：已批准的一期能力与参考图限制。
+- 多参考图参数契约（`docs/design/app/image/moss-image.md#167-多参考图参数契约待-h1`）：新模式的唯一设计依据，尚未批准或交付，不作为当前调用能力。
 
 ## 2. 引擎定位与能力发现
 
@@ -26,7 +26,7 @@
 - **`project_id` / `idempotency_key`**：必填，使用真实 Studio 项目 ID 与固定幂等键。
 - **`engine`**：固定传 `"moss-image"`。
 - **`prompt`**：现行服务要求非空、最多 4000 字符，`layout` 不能替代 prompt；同时提供时由服务合并。不要按旧文档假定已有 4096 token 分词校验。
-- **`layout`**（可选，实验性）：沿用现行 `meta` 与 `items[{id,desc,box_2d}]` 格式，坐标为 `[x1,y1,x2,y2]`，同一请求使用归一化坐标或 0～1000 整数坐标；上限 32 项，详见[主设计第 7 节](../../../../docs/design/app/image/moss-image.md#7-版式-json-校验)。不要发送旧文档中的 `summary.caption` / `bbox` 格式。
+- **`layout`**（可选，实验性）：沿用现行 `meta` 与 `items[{id,desc,box_2d}]` 格式，坐标为 `[x1,y1,x2,y2]`，同一请求使用归一化坐标或 0～1000 整数坐标；上限 32 项（对应主设计 `docs/design/app/image/moss-image.md` 第 7 节版式 JSON 校验）。不要发送旧文档中的 `summary.caption` / `bbox` 格式。
 - **`width` / `height` 与 `aspect_ratio` / `resolution`**：宽高必须为 16 的正整数倍，范围 `[512, 2048]`，总像素不超过 `2,097,152`（2M）；原生支持 `1:1`、`2:3`、`3:2`、`3:4`、`4:3`、`9:16`、`16:9` 画幅与 `1k` / `2k` 分辨率档位。工具默认值可能不同；需要 `1024×1024` 时显式指定受支持的宽高或 `1:1` / `1k`，不从内部引擎默认值推断公共入口输出。
 - **`steps` / `cfg_scale` / `seed`**：默认采用官方 50 步、CFG `3.0`、Euler、shift `5`（跳第 22 层）；`seed` 省略时由服务端生成并写入结果。现行调用使用实际 schema 声明的 `cfg_scale`；`guidance` 的别名映射属于待审修正，不能仅凭函数接收字段就假定已参与推理。
 - **`negative_prompt`**：可选，默认为空；`moss-image` 有独立负向分支，不套用 Codex 通道的负向词剥离清洗。
@@ -41,7 +41,7 @@
 
 ### 3.3 多参考图模式摘要（待 H1，不是当前调用能力）
 
-以下只帮助理解[主设计的多参考图参数契约](../../../../docs/design/app/image/moss-image.md#167-多参考图参数契约待-h1)。须 H1 批准、完成 T3/T4 实现验证且实际工具及能力发现包含对应模式后，才按该契约构造请求；本技能不据草案试探未公开参数。
+以下只帮助理解主设计的多参考图参数契约（`docs/design/app/image/moss-image.md` 第 1.6.7 节）。须 H1 批准、完成 T3/T4 实现验证且实际工具及能力发现包含对应模式后，才按该契约构造请求；本技能不据草案试探未公开参数。
 
 - 保留同一 `moss-image` 引擎与 `moss-image-sft-int8-convrot` 模型，`moss_mode` 省略或为 `semantic` 时保持旧行为，不自动换脸。
 - `identity` 是推荐的路线 A，入口为 `image.create` / 实际发现的 `image.generate`；使用人物 `source_identity_artifact_id` 和服装 `outfit_reference_artifact_id` 两图生成，随后换脸。

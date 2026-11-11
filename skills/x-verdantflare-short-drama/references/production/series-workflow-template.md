@@ -106,7 +106,7 @@
 - 单场原文证据提取：`x-verdantflare-short-drama`。本机 Ollama 草案，人工核对后使用。
 - 导演方案、Shot 与计划校验：`x-verdantflare-short-drama`。`plan.json` 是本地策划契约，不是 MCP 请求。
 - 跨阶段影视制作：`x-verdantflare-short-drama`。维护输入版本与交接，不代替专业工具。
-- 角色、Look、场景、分镜图：`verdantflare-image`。产出候选并核对 Artifact/哈希。
+- 角色、Look、场景、分镜图：`verdantflare-image`（默认出图模型 GPT Image 2.6 / `gpt-image-2.6-sunburst`）。产出候选并核对 Artifact/哈希。
 - 表演难点：`x-verdantflare-short-drama`。单镜或相邻镜头的动作/情绪/对白。
 - 视频生成与恢复：`verdantflare-video`。从当前宿主解析模型/渠道，正式项目 ID 必填。
 - 原创歌曲、MV（按需）：`verdantflare-music`、`verdantflare-music-mv`。独立审核歌曲与音色，不把配乐视为默认必做。

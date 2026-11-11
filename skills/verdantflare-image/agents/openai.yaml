@@ -1,4 +1,4 @@
 interface:
   display_name: "VerdantFlare Image"
-  short_description: "Generate or edit image assets via Image MCP"
-  default_prompt: "Use $verdantflare-image to generate or edit image candidates for this project."
+  short_description: "Generate or edit image assets via Image MCP (default: GPT Image 2.6)"
+  default_prompt: "Use $verdantflare-image (default model GPT Image 2.6 / gpt-image-2.6-sunburst) to generate or edit image candidates for this project."
