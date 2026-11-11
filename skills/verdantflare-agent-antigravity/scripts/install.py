@@ -14,7 +14,8 @@ import tempfile
 import tomllib
 
 DEFAULT_ROOTS = ("~/.agents/skills",)
-MCP_SERVER_KEY = "antigravity"
+MCP_SERVER_KEY = "verdantflare-agent-antigravity"
+LEGACY_MCP_KEYS = ("antigravity",)
 
 
 def fingerprint(root: Path) -> dict[str, str]:
@@ -69,12 +70,14 @@ def install(destination: str | Path, replace: bool = False) -> Path:
 
 
 def register_claude_mcp(server_script: Path, claude_config_path: Path | None = None) -> Path:
-    """Register or update mcpServers.antigravity in ~/.claude.json."""
+    """Register or update mcpServers.verdantflare-agent-antigravity in ~/.claude.json and remove legacy keys."""
     cfg_path = (claude_config_path or Path("~/.claude.json")).expanduser().resolve()
     data: dict = {}
     if cfg_path.is_file():
         data = json.loads(cfg_path.read_text(encoding="utf-8"))
     mcp_servers = data.setdefault("mcpServers", {})
+    for legacy_key in LEGACY_MCP_KEYS:
+        mcp_servers.pop(legacy_key, None)
     mcp_servers[MCP_SERVER_KEY] = {
         "command": "python",
         "args": ["-X", "utf8", server_script.as_posix(), "mcp"],
@@ -84,8 +87,18 @@ def register_claude_mcp(server_script: Path, claude_config_path: Path | None = N
     return cfg_path
 
 
+def _strip_toml_mcp_sections(text: str, keys: tuple[str, ...]) -> str:
+    cleaned = text
+    for key in keys:
+        pattern = re.compile(
+            rf"(?ms)^\[mcp_servers\.(?:{re.escape(key)}|\"{re.escape(key)}\")(?:\.[^\]]+)?\]\r?\n.*?(?=^\[|\Z)"
+        )
+        cleaned = pattern.sub("", cleaned)
+    return cleaned.rstrip()
+
+
 def register_codex_mcp(server_script: Path, codex_config_path: Path | None = None) -> Path:
-    """Register or update [mcp_servers.antigravity] in ~/.codex/config.toml."""
+    """Register or update [mcp_servers.verdantflare-agent-antigravity] in ~/.codex/config.toml."""
     cfg_path = (codex_config_path or Path("~/.codex/config.toml")).expanduser().resolve()
     cfg_path.parent.mkdir(parents=True, exist_ok=True)
     text = cfg_path.read_text(encoding="utf-8") if cfg_path.is_file() else ""
@@ -97,10 +110,7 @@ def register_codex_mcp(server_script: Path, codex_config_path: Path | None = Non
         f"startup_timeout_sec = 30\n"
         f"tool_timeout_sec = 450\n"
     )
-    pattern = re.compile(
-        rf"(?ms)^\[mcp_servers\.{re.escape(MCP_SERVER_KEY)}(?:\.[^\]]+)?\]\r?\n.*?(?=^\[|\Z)"
-    )
-    cleaned = pattern.sub("", text).rstrip()
+    cleaned = _strip_toml_mcp_sections(text, (MCP_SERVER_KEY, *LEGACY_MCP_KEYS))
     new_text = (cleaned + "\n\n" + block) if cleaned else block
     tomllib.loads(new_text)
     cfg_path.write_text(new_text, encoding="utf-8")
@@ -109,7 +119,7 @@ def register_codex_mcp(server_script: Path, codex_config_path: Path | None = Non
 
 
 def register_grok_mcp(server_script: Path, grok_config_path: Path | None = None) -> Path:
-    """Register or update [mcp_servers.antigravity] in ~/.grok/config.toml."""
+    """Register or update [mcp_servers.verdantflare-agent-antigravity] in ~/.grok/config.toml."""
     cfg_path = (grok_config_path or Path("~/.grok/config.toml")).expanduser().resolve()
     cfg_path.parent.mkdir(parents=True, exist_ok=True)
     text = cfg_path.read_text(encoding="utf-8") if cfg_path.is_file() else ""
@@ -120,10 +130,7 @@ def register_grok_mcp(server_script: Path, grok_config_path: Path | None = None)
         f'args = [ "-X", "utf8", "{script_posix}", "mcp" ]\n'
         f"enabled = true\n"
     )
-    pattern = re.compile(
-        rf"(?ms)^\[mcp_servers\.{re.escape(MCP_SERVER_KEY)}(?:\.[^\]]+)?\]\r?\n.*?(?=^\[|\Z)"
-    )
-    cleaned = pattern.sub("", text).rstrip()
+    cleaned = _strip_toml_mcp_sections(text, (MCP_SERVER_KEY, *LEGACY_MCP_KEYS))
     new_text = (cleaned + "\n\n" + block) if cleaned else block
     tomllib.loads(new_text)
     cfg_path.write_text(new_text, encoding="utf-8")

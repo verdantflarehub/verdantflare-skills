@@ -177,15 +177,27 @@ class TestAgyMcpServer(unittest.TestCase):
             self.assertTrue((target / "scripts" / "agy_mcp_server.py").is_file())
 
             claude_cfg = tmp_path / ".claude.json"
+            claude_cfg.write_text(
+                json.dumps({"mcpServers": {"antigravity": {"command": "old"}, "keep-me": {"command": "ok"}}}),
+                encoding="utf-8",
+            )
             codex_cfg = tmp_path / "config.toml"
+            codex_cfg.write_text(
+                '[mcp_servers.antigravity]\ncommand = "old"\n\n[mcp_servers.keep-me]\ncommand = "ok"\n',
+                encoding="utf-8",
+            )
             server_script = target / "scripts" / "agy_mcp_server.py"
             agy_install.register_claude_mcp(server_script, claude_cfg)
             agy_install.register_codex_mcp(server_script, codex_cfg)
 
             claude_data = json.loads(claude_cfg.read_text(encoding="utf-8"))
-            self.assertIn("antigravity", claude_data["mcpServers"])
+            self.assertIn("verdantflare-agent-antigravity", claude_data["mcpServers"])
+            self.assertNotIn("antigravity", claude_data["mcpServers"])
+            self.assertIn("keep-me", claude_data["mcpServers"])
             codex_text = codex_cfg.read_text(encoding="utf-8")
-            self.assertIn("[mcp_servers.antigravity]", codex_text)
+            self.assertIn("[mcp_servers.verdantflare-agent-antigravity]", codex_text)
+            self.assertNotIn("[mcp_servers.antigravity]", codex_text)
+            self.assertIn("[mcp_servers.keep-me]", codex_text)
 
     def test_resolve_project_id_and_dispatch_project_env_config(self) -> None:
         home_uri = agy_mcp_server.path_to_workspace_uri(Path.home())
