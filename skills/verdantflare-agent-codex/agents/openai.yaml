@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Agent Codex"
+  short_description: "Dispatch, monitor, and resume Codex plugin or backend tasks"
+  default_prompt: "Use $verdantflare-agent-codex to inspect Codex session capabilities, dispatch a workspace task, and verify its result."

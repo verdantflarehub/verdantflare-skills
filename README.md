@@ -179,3 +179,15 @@ CLI现状见 [Image CLI](skills/verdantflare-image/references/cli.md)，实际�
 ## 角色多角度参考库
 
 [`verdantflare-character-face`](skills/verdantflare-character-face/SKILL.md) 编排正脸基准、视频抽帧、正脸参考纠正和局部返修，按现有Project／Artifact流程归档。中文提示词、可点击编号图与来源追溯随包提供。依赖按阶段安装的Studio版Image、Video、Project和Artifact技能；源码新增不代表已安装、发布或被当前会话加载。
+
+## 智能体调度与基础治理技能
+
+工作区统一纳入四项本机跨智能体 MCP 调度技能与三项跨仓库基础治理技能，统一采用 `verdantflare-` 命名空间，各自包含路由入口 `SKILL.md`、四份底座专册 `references/01.base-*.md` 与 `agents/openai.yaml`：
+
+- [`verdantflare-agent-antigravity`](skills/verdantflare-agent-antigravity/SKILL.md)：封装 VS Code Antigravity 面板 Connect-RPC 与无头 CLI，供其他智能体派单、查询与回收产物。
+- [`verdantflare-agent-claude`](skills/verdantflare-agent-claude/SKILL.md)：向指定 VS Code Claude Code 面板会话或受管 CLI 派单、续接任务与读取结果。
+- [`verdantflare-agent-codex`](skills/verdantflare-agent-codex/SKILL.md)：向指定 Codex 插件会话或独立后端派单、监控进度与验收结果。
+- [`verdantflare-agent-grok`](skills/verdantflare-agent-grok/SKILL.md)：调度 Grok ACP 会话并同步写入索引以在 VS Code AFK Pilot 面板展示。
+- [`verdantflare-meta-googledrive`](skills/verdantflare-meta-googledrive/SKILL.md)：通过已登录的 Google Drive 桌面映射盘与项目 `.gdrive` 软连接管理 SHA-256 版本化素材。
+- [`verdantflare-meta-markdown`](skills/verdantflare-meta-markdown/SKILL.md)：按文档主类型组织浅层 Markdown 结构，探测 Prettier 执行格式化与量化检查。
+- [`verdantflare-meta-skill`](skills/verdantflare-meta-skill/SKILL.md)：统一技能入口与四份底座专册规范，提供脚手架初始化与静态结构评审工具。

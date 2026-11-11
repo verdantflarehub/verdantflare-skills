@@ -1,0 +1,1225 @@
+#!/usr/bin/env python3
+"""Antigravity (Gemini) MCP Server & CLI Driver for multi-agent orchestration.
+
+Exposes the VS Code Google Antigravity extension (backed by local `agy.exe --hub`
+LanguageServerService Connect-RPC) and headless `agy.exe` CLI as standard MCP tools
+so external agents (Claude Code, Codex, etc.) can dispatch tasks into the VS Code
+Antigravity foreground panel, monitor execution, and inspect artifacts.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import time
+from typing import Any
+import urllib.error
+import urllib.parse
+import urllib.request
+
+SERVER_NAME = "verdantflare-agent-antigravity"
+SERVER_VERSION = "1.0.0"
+DEFAULT_MODEL = "MODEL_PLACEHOLDER_M418"
+SERVICE_PREFIX = "/exa.language_server_pb.LanguageServerService/"
+
+
+def _gemini_home() -> Path:
+    return Path(os.environ.get("AGY_GEMINI_HOME", "~/.gemini")).expanduser().resolve()
+
+
+def _brain_root() -> Path:
+    return _gemini_home() / "antigravity" / "brain"
+
+
+def _agy_binary() -> Path:
+    env_bin = os.environ.get("AGY_BINARY")
+    if env_bin:
+        return Path(env_bin).expanduser().resolve()
+    candidate = _gemini_home() / "bin" / ("agy.exe" if os.name == "nt" else "agy")
+    if candidate.is_file():
+        return candidate
+    return Path("agy.exe" if os.name == "nt" else "agy")
+
+
+def path_to_workspace_uri(workspace_path: str | Path) -> str:
+    """Convert a local filesystem path into the file:/// URI format expected by Antigravity Hub."""
+    resolved = Path(workspace_path).expanduser().resolve()
+    posix = resolved.as_posix()
+    if re.match(r"^[A-Za-z]:/", posix):
+        drive = posix[0].lower()
+        rest = posix[2:]
+        return f"file:///{drive}%3A{rest}"
+    if posix.startswith("/"):
+        return f"file://{posix}"
+    return f"file:///{posix}"
+
+
+def normalize_uri_for_compare(uri_or_path: str) -> str:
+    """Normalize a file:/// URI or filesystem path for case-insensitive workspace matching."""
+    text = urllib.parse.unquote(str(uri_or_path or "")).strip()
+    if text.startswith("file:///"):
+        text = text[len("file:///") :]
+    elif text.startswith("file://"):
+        text = text[len("file://") :]
+    return text.replace("\\", "/").rstrip("/").lower()
+
+
+def workspace_matches_uri(target_uri_or_path: str, candidate_uri_or_path: str) -> str | None:
+    """Check if target and candidate workspace paths match exactly or by subdirectory prefix.
+
+    Returns 'exact', 'prefix', or None.
+    """
+    t_norm = normalize_uri_for_compare(target_uri_or_path)
+    c_norm = normalize_uri_for_compare(candidate_uri_or_path)
+    if not t_norm or not c_norm:
+        return None
+    if t_norm == c_norm:
+        return "exact"
+    if t_norm.startswith(c_norm + "/") or c_norm.startswith(t_norm + "/"):
+        return "prefix"
+    return None
+
+
+def _query_windows_agy_processes() -> list[dict[str, Any]]:
+    """Query running agy.exe processes on Windows, trying pwsh first then falling back to powershell.exe."""
+    ps_cmd = (
+        "Get-CimInstance Win32_Process -Filter \"Name='agy.exe'\" "
+        "| Select-Object ProcessId, CommandLine | ConvertTo-Json -Compress"
+    )
+    for shell_bin in ("pwsh", "powershell.exe"):
+        try:
+            out = subprocess.check_output(
+                [shell_bin, "-NoProfile", "-Command", ps_cmd],
+                text=True,
+                timeout=8,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+            if not out:
+                return []
+            parsed = json.loads(out)
+            return [parsed] if isinstance(parsed, dict) else list(parsed)
+        except Exception:
+            continue
+    return []
+
+
+def lsrpc_call(
+    address: str,
+    csrf_token: str,
+    method: str,
+    payload: dict[str, Any] | None = None,
+    timeout: float = 15.0,
+) -> dict[str, Any]:
+    """Invoke a Connect-RPC method on LanguageServerService."""
+    url = f"http://{address}{SERVICE_PREFIX}{method}"
+    body_bytes = json.dumps(payload or {}, ensure_ascii=False).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "x-codeium-csrf-token": csrf_token,
+    }
+    req = urllib.request.Request(url, data=body_bytes, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+            return json.loads(raw) if raw.strip() else {}
+    except urllib.error.HTTPError as exc:
+        err_body = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"LS RPC {method} HTTP {exc.code}: {err_body}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"LS RPC {method} connection error ({address}): {exc}") from exc
+
+
+def discover_hubs() -> list[dict[str, Any]]:
+    """Discover all running `agy.exe --hub` instances and enrich with trajectory summaries."""
+    candidates: list[dict[str, Any]] = []
+    seen_ports: set[str] = set()
+
+    env_addr = os.environ.get("ANTIGRAVITY_LS_ADDRESS", "").strip()
+    env_csrf = os.environ.get("ANTIGRAVITY_CSRF_TOKEN", "").strip()
+    if env_addr and env_csrf:
+        port_str = env_addr.split(":")[-1]
+        seen_ports.add(port_str)
+        candidates.append(
+            {
+                "pid": None,
+                "address": env_addr,
+                "port": int(port_str) if port_str.isdigit() else 0,
+                "csrf_token": env_csrf,
+                "source": "env",
+            }
+        )
+
+    if os.name == "nt":
+        for proc in _query_windows_agy_processes():
+            cmdline = proc.get("CommandLine") or ""
+            port_m = re.search(r"--hub-port=(\d+)", cmdline)
+            csrf_m = re.search(r"--csrf_token=([A-Za-z0-9_-]+)", cmdline)
+            if port_m and csrf_m:
+                port_str = port_m.group(1)
+                if port_str not in seen_ports:
+                    seen_ports.add(port_str)
+                    candidates.append(
+                        {
+                            "pid": proc.get("ProcessId"),
+                            "address": f"localhost:{port_str}",
+                            "port": int(port_str),
+                            "csrf_token": csrf_m.group(1),
+                            "source": "process",
+                        }
+                    )
+    else:
+        try:
+            out = subprocess.check_output(["ps", "-eo", "pid,args"], text=True, timeout=5)
+            for line in out.splitlines():
+                if "--hub" in line and "--hub-port=" in line:
+                    port_m = re.search(r"--hub-port=(\d+)", line)
+                    csrf_m = re.search(r"--csrf_token=([A-Za-z0-9_-]+)", line)
+                    pid_m = re.match(r"^\s*(\d+)", line)
+                    if port_m and csrf_m:
+                        port_str = port_m.group(1)
+                        if port_str not in seen_ports:
+                            seen_ports.add(port_str)
+                            candidates.append(
+                                {
+                                    "pid": int(pid_m.group(1)) if pid_m else None,
+                                    "address": f"localhost:{port_str}",
+                                    "port": int(port_str),
+                                    "csrf_token": csrf_m.group(1),
+                                    "source": "process",
+                                }
+                            )
+        except Exception:
+            pass
+
+    alive_hubs: list[dict[str, Any]] = []
+    for item in candidates:
+        try:
+            trajs = lsrpc_call(
+                item["address"],
+                item["csrf_token"],
+                "GetAllCascadeTrajectories",
+                {"excludeSubtrajectories": True},
+                timeout=3.0,
+            )
+            summaries = trajs.get("trajectorySummaries") or {}
+            workspaces: set[str] = set()
+            latest_ts = ""
+            running_count = 0
+            for cid, summary in summaries.items():
+                mtime = summary.get("lastModifiedTime") or ""
+                if mtime > latest_ts:
+                    latest_ts = mtime
+                if summary.get("status") == "CASCADE_RUN_STATUS_RUNNING":
+                    running_count += 1
+                for ws in summary.get("workspaces") or []:
+                    uri = ws.get("workspaceFolderAbsoluteUri")
+                    if uri:
+                        workspaces.add(uri)
+            item["conversation_count"] = len(summaries)
+            item["running_count"] = running_count
+            item["latest_modified_time"] = latest_ts
+            item["workspaces"] = sorted(workspaces)
+            item["summaries"] = summaries
+            alive_hubs.append(item)
+        except Exception:
+            continue
+
+    alive_hubs.sort(
+        key=lambda h: (
+            h.get("running_count", 0) > 0,
+            h.get("latest_modified_time", ""),
+            h.get("conversation_count", 0),
+        ),
+        reverse=True,
+    )
+    return alive_hubs
+
+
+def select_hub(
+    conversation_id: str | None = None,
+    workspace: str | None = None,
+    hubs: list[dict[str, Any]] | None = None,
+    strict_workspace: bool = False,
+) -> dict[str, Any]:
+    """Select the best matching running Antigravity Hub for the given conversation or workspace.
+
+    Attaches `workspace_matched` (bool) and `matched_by` (str) metadata onto the returned hub dict.
+    """
+    active_hubs = hubs if hubs is not None else discover_hubs()
+    if not active_hubs:
+        raise RuntimeError(
+            "No running Antigravity Hub (`agy.exe --hub`) found. "
+            "Ensure the VS Code Google Antigravity extension is open or use mode='cli'."
+        )
+    if conversation_id:
+        for hub in active_hubs:
+            if conversation_id in (hub.get("summaries") or {}):
+                chosen = dict(hub)
+                chosen["workspace_matched"] = True
+                chosen["matched_by"] = "conversation_id"
+                return chosen
+    if workspace:
+        target_uri = path_to_workspace_uri(workspace)
+        # 1. Exact workspace URI match
+        for hub in active_hubs:
+            for ws_uri in hub.get("workspaces") or []:
+                if workspace_matches_uri(target_uri, ws_uri) == "exact":
+                    chosen = dict(hub)
+                    chosen["workspace_matched"] = True
+                    chosen["matched_by"] = "workspace_exact"
+                    return chosen
+        # 2. Subdirectory / parent prefix match
+        for hub in active_hubs:
+            for ws_uri in hub.get("workspaces") or []:
+                if workspace_matches_uri(target_uri, ws_uri) == "prefix":
+                    chosen = dict(hub)
+                    chosen["workspace_matched"] = True
+                    chosen["matched_by"] = "workspace_prefix"
+                    return chosen
+        if strict_workspace:
+            known_ws = [h.get("workspaces") for h in active_hubs]
+            raise RuntimeError(
+                f"No running Antigravity Hub matched workspace {target_uri!r}. "
+                f"Active hub workspaces: {known_ws}"
+            )
+        # 3. Prefer a freshly opened window with 0 existing conversations before falling back to hubs[0]
+        for hub in active_hubs:
+            if not (hub.get("workspaces") or []):
+                chosen = dict(hub)
+                chosen["workspace_matched"] = False
+                chosen["matched_by"] = "empty_hub_fallback"
+                return chosen
+
+    chosen = dict(active_hubs[0])
+    chosen["workspace_matched"] = workspace is None
+    chosen["matched_by"] = "default_fallback"
+    return chosen
+
+
+def list_brain_artifacts(conversation_id: str) -> list[str]:
+    """List user-facing artifact files generated inside brain/<conversation_id>/."""
+    conv_dir = _brain_root() / conversation_id
+    if not conv_dir.is_dir():
+        return []
+    artifacts: list[str] = []
+    for p in sorted(conv_dir.rglob("*")):
+        if not p.is_file():
+            continue
+        rel_parts = p.relative_to(conv_dir).parts
+        if any(part.startswith(".") for part in rel_parts):
+            continue
+        if p.name.endswith(".metadata.json") or p.name.endswith(".resolved") or ".resolved." in p.name:
+            continue
+        artifacts.append(p.as_posix())
+    return artifacts
+
+
+def extract_trajectory_digest(traj_resp: dict[str, Any]) -> dict[str, Any]:
+    """Extract the latest assistant response, thinking, tool calls, and status from GetCascadeTrajectory."""
+    status = traj_resp.get("status", "UNKNOWN")
+    traj = traj_resp.get("trajectory") or {}
+    steps = traj.get("steps") or []
+    last_response = ""
+    last_thinking = ""
+    recent_tool_calls: list[dict[str, Any]] = []
+    last_user_input = ""
+
+    for idx, step in enumerate(steps):
+        stype = step.get("type", "")
+        if stype == "CORTEX_STEP_TYPE_USER_INPUT":
+            items = (step.get("userInput") or {}).get("items") or []
+            texts = [it.get("text", "") for it in items if it.get("text")]
+            if texts:
+                last_user_input = "\n".join(texts)
+        elif stype == "CORTEX_STEP_TYPE_PLANNER_RESPONSE":
+            pr = step.get("plannerResponse") or {}
+            resp_text = pr.get("modifiedResponse") or pr.get("response") or ""
+            if resp_text:
+                last_response = resp_text
+            if pr.get("thinking"):
+                last_thinking = pr.get("thinking")
+            for tc in pr.get("toolCalls") or []:
+                recent_tool_calls.append(
+                    {
+                        "step_index": idx,
+                        "name": tc.get("name"),
+                        "arguments_preview": (tc.get("argumentsJson") or "")[:300],
+                    }
+                )
+
+    return {
+        "status": status,
+        "num_total_steps": traj_resp.get("numTotalSteps", len(steps)),
+        "last_user_input": last_user_input,
+        "last_response": last_response,
+        "last_thinking": last_thinking[:1000] if last_thinking else "",
+        "recent_tool_calls": recent_tool_calls[-10:],
+    }
+
+
+def open_conversation_in_vscode_panel(conversation_id: str) -> bool:
+    """Trigger VS Code URI handler to switch the foreground Antigravity panel to conversation_id."""
+    uri = f"vscode://google.google-antigravity/open-conversation?cascadeId={conversation_id}"
+    try:
+        if os.name == "nt":
+            subprocess.Popen(
+                ["cmd.exe", "/d", "/c", "start", "", uri],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", uri], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            subprocess.Popen(["xdg-open", uri], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except Exception:
+        return False
+
+
+def tool_agy_hub_status() -> dict[str, Any]:
+    """Report status of all running Antigravity Hubs, available models, and binary location."""
+    hubs = discover_hubs()
+    models_info: list[dict[str, Any]] = []
+    if hubs:
+        primary = hubs[0]
+        try:
+            mdata = lsrpc_call(
+                primary["address"],
+                primary["csrf_token"],
+                "GetCascadeModelConfigData",
+                {},
+                timeout=5.0,
+            )
+            for cfg in mdata.get("clientModelConfigs") or []:
+                models_info.append(
+                    {
+                        "label": cfg.get("label"),
+                        "model": (cfg.get("modelOrAlias") or {}).get("model"),
+                        "remaining_fraction": (cfg.get("quotaInfo") or {}).get("remainingFraction"),
+                        "reset_time": (cfg.get("quotaInfo") or {}).get("resetTime"),
+                    }
+                )
+        except Exception:
+            pass
+
+    sanitized_hubs = [
+        {
+            "pid": h.get("pid"),
+            "address": h.get("address"),
+            "port": h.get("port"),
+            "conversation_count": h.get("conversation_count"),
+            "running_count": h.get("running_count"),
+            "latest_modified_time": h.get("latest_modified_time"),
+            "workspaces": h.get("workspaces"),
+        }
+        for h in hubs
+    ]
+    return {
+        "ok": len(hubs) > 0,
+        "agy_binary": _agy_binary().as_posix(),
+        "brain_root": _brain_root().as_posix(),
+        "hub_count": len(hubs),
+        "hubs": sanitized_hubs,
+        "models": models_info,
+    }
+
+
+def tool_agy_list_conversations(
+    workspace: str | None = None,
+    limit: int = 20,
+) -> dict[str, Any]:
+    """List conversations from running Antigravity Hubs, optionally filtered by workspace."""
+    hubs = discover_hubs()
+    target_uri = path_to_workspace_uri(workspace) if workspace else None
+    items: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+
+    for hub in hubs:
+        summaries = hub.get("summaries") or {}
+        for cid, info in summaries.items():
+            if cid in seen_ids:
+                continue
+            ws_list = [
+                w.get("workspaceFolderAbsoluteUri", "")
+                for w in (info.get("workspaces") or [])
+                if w.get("workspaceFolderAbsoluteUri")
+            ]
+            if target_uri:
+                if not any(workspace_matches_uri(target_uri, u) is not None for u in ws_list):
+                    continue
+            seen_ids.add(cid)
+            items.append(
+                {
+                    "conversation_id": cid,
+                    "summary": info.get("summary", "(Untitled)"),
+                    "status": info.get("status", "UNKNOWN"),
+                    "step_count": info.get("stepCount", 0),
+                    "created_time": info.get("createdTime", ""),
+                    "last_modified_time": info.get("lastModifiedTime", ""),
+                    "workspaces": ws_list,
+                    "hub_address": hub["address"],
+                }
+            )
+
+    items.sort(key=lambda x: x.get("last_modified_time", ""), reverse=True)
+    selected = items[: max(1, int(limit))]
+    for entry in selected:
+        entry["artifacts"] = list_brain_artifacts(entry["conversation_id"])
+    return {
+        "total": len(items),
+        "conversations": selected,
+    }
+
+
+def tool_agy_dispatch_task(
+    prompt: str,
+    conversation_id: str | None = None,
+    workspace: str | None = None,
+    mode: str = "panel",
+    focus_panel: bool = False,
+    wait: bool = True,
+    timeout_sec: int = 300,
+    model: str = DEFAULT_MODEL,
+    skip_permissions: bool = False,
+    strict_workspace: bool = False,
+) -> dict[str, Any]:
+    """Dispatch a prompt to Antigravity via VS Code foreground panel injection (default) or CLI."""
+    if not prompt or not prompt.strip():
+        raise ValueError("prompt must be a non-empty string")
+
+    effective_ws = workspace or os.getcwd()
+    ws_uri = path_to_workspace_uri(effective_ws)
+
+    if mode == "cli":
+        cmd = [str(_agy_binary()), "--print", prompt, "--output-format", "json"]
+        if skip_permissions:
+            cmd.append("--dangerously-skip-permissions")
+        if conversation_id:
+            cmd.extend(["--conversation", conversation_id])
+        if workspace:
+            cmd.extend(["--add-dir", str(Path(workspace).expanduser().resolve())])
+        if not wait:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(Path(effective_ws).expanduser().resolve()),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return {
+                "ok": True,
+                "mode": "cli",
+                "async_pid": proc.pid,
+                "conversation_id": conversation_id,
+                "workspace_uri": ws_uri,
+                "skip_permissions": skip_permissions,
+            }
+        proc_res = subprocess.run(
+            cmd,
+            cwd=str(Path(effective_ws).expanduser().resolve()),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=max(10, int(timeout_sec)),
+            check=False,
+        )
+        return {
+            "ok": proc_res.returncode == 0,
+            "mode": "cli",
+            "returncode": proc_res.returncode,
+            "stdout": proc_res.stdout.strip(),
+            "stderr": proc_res.stderr.strip(),
+            "skip_permissions": skip_permissions,
+        }
+
+    # Default mode == "panel": inject into live VS Code Antigravity Hub
+    hub = select_hub(
+        conversation_id=conversation_id,
+        workspace=effective_ws,
+        strict_workspace=strict_workspace,
+    )
+    addr = hub["address"]
+    csrf = hub["csrf_token"]
+    created_new = False
+    baseline_steps = 0
+
+    if not conversation_id:
+        start_resp = lsrpc_call(
+            addr,
+            csrf,
+            "StartCascade",
+            {
+                "source": "CORTEX_TRAJECTORY_SOURCE_CASCADE_CLIENT",
+                "trajectoryType": "CORTEX_TRAJECTORY_TYPE_CASCADE",
+                "workspaceUris": [ws_uri],
+            },
+        )
+        conversation_id = start_resp.get("cascadeId")
+        if not conversation_id:
+            raise RuntimeError(f"StartCascade did not return cascadeId: {start_resp}")
+        created_new = True
+    else:
+        summary_info = (hub.get("summaries") or {}).get(conversation_id) or {}
+        baseline_steps = int(summary_info.get("stepCount", 0))
+        try:
+            pre_traj = lsrpc_call(addr, csrf, "GetCascadeTrajectory", {"cascadeId": conversation_id}, timeout=5.0)
+            pre_steps = (pre_traj.get("trajectory") or {}).get("steps") or []
+            baseline_steps = max(baseline_steps, int(pre_traj.get("numTotalSteps", len(pre_steps))))
+        except Exception:
+            pass
+
+    try:
+        lsrpc_call(addr, csrf, "SetBrowserOpenConversation", {"cascadeId": conversation_id}, timeout=3.0)
+    except Exception:
+        pass
+
+    focused_via_uri = False
+    if focus_panel:
+        focused_via_uri = open_conversation_in_vscode_panel(conversation_id)
+
+    send_payload: dict[str, Any] = {
+        "cascadeId": conversation_id,
+        "items": [{"text": prompt}],
+        "cascadeConfig": {
+            "plannerConfig": {
+                "conversational": {},
+                "planModel": model or DEFAULT_MODEL,
+            }
+        },
+        "blocking": False,
+    }
+    lsrpc_call(addr, csrf, "SendUserCascadeMessage", send_payload, timeout=15.0)
+
+    result: dict[str, Any] = {
+        "ok": True,
+        "dispatched": True,
+        "mode": "panel",
+        "hub_address": addr,
+        "hub_workspaces": hub.get("workspaces") or [],
+        "workspace_matched": bool(hub.get("workspace_matched", True)),
+        "matched_by": hub.get("matched_by", "default_fallback"),
+        "conversation_id": conversation_id,
+        "created_new": created_new,
+        "baseline_steps": baseline_steps,
+        "focused_panel": focused_via_uri,
+        "workspace_uri": ws_uri,
+    }
+
+    if not wait:
+        result["status"] = "CASCADE_RUN_STATUS_RUNNING"
+        result["timed_out"] = False
+        return result
+
+    deadline = time.time() + max(5, int(timeout_sec))
+    last_digest: dict[str, Any] = {}
+    saw_running = False
+    completed = False
+    while time.time() < deadline:
+        time.sleep(2.0)
+        try:
+            traj = lsrpc_call(addr, csrf, "GetCascadeTrajectory", {"cascadeId": conversation_id}, timeout=10.0)
+        except Exception:
+            continue
+        last_digest = extract_trajectory_digest(traj)
+        st = last_digest.get("status")
+        cur_steps = int(last_digest.get("num_total_steps", 0))
+        if st == "CASCADE_RUN_STATUS_RUNNING":
+            saw_running = True
+        elif st == "CASCADE_RUN_STATUS_IDLE" and (saw_running or cur_steps >= baseline_steps + 2):
+            completed = True
+            break
+
+    timed_out = not completed
+    result.update(last_digest)
+    result["timed_out"] = timed_out
+    if timed_out:
+        result["ok"] = False
+    result["artifacts"] = list_brain_artifacts(conversation_id)
+    return result
+
+
+def tool_agy_get_conversation(
+    conversation_id: str,
+    wait_sec: int = 0,
+) -> dict[str, Any]:
+    """Get execution status, latest assistant response, and artifacts for conversation_id."""
+    if not conversation_id:
+        raise ValueError("conversation_id is required")
+    hub = select_hub(conversation_id=conversation_id)
+    addr = hub["address"]
+    csrf = hub["csrf_token"]
+
+    if wait_sec > 0:
+        try:
+            lsrpc_call(
+                addr,
+                csrf,
+                "WaitForConversationFullyIdle",
+                {
+                    "conversationId": conversation_id,
+                    "inactivityTimeoutSeconds": int(wait_sec),
+                    "stabilizationDurationSeconds": 1,
+                    "returnOnExecutorError": True,
+                },
+                timeout=float(wait_sec) + 5.0,
+            )
+        except Exception:
+            pass
+
+    traj = lsrpc_call(addr, csrf, "GetCascadeTrajectory", {"cascadeId": conversation_id}, timeout=10.0)
+    digest = extract_trajectory_digest(traj)
+    digest["conversation_id"] = conversation_id
+    digest["hub_address"] = addr
+    digest["artifacts"] = list_brain_artifacts(conversation_id)
+    return digest
+
+
+def tool_agy_read_transcript(
+    conversation_id: str,
+    start_step: int = 0,
+    end_step: int = 50,
+    include_thinking: bool = False,
+) -> dict[str, Any]:
+    """Read trajectory steps from live Hub or local transcript.jsonl."""
+    if not conversation_id:
+        raise ValueError("conversation_id is required")
+    transcript_file = _brain_root() / conversation_id / ".system_generated" / "logs" / "transcript.jsonl"
+    if transcript_file.is_file():
+        lines = transcript_file.read_text(encoding="utf-8", errors="replace").splitlines()
+        total = len(lines)
+        s_idx = max(0, int(start_step))
+        e_idx = min(total, int(end_step)) if end_step >= 0 else total
+        steps_out: list[dict[str, Any]] = []
+        for line in lines[s_idx:e_idx]:
+            if not line.strip():
+                continue
+            obj = json.loads(line)
+            if not include_thinking and "thinking" in obj:
+                obj.pop("thinking", None)
+            steps_out.append(obj)
+        return {
+            "source": "transcript.jsonl",
+            "conversation_id": conversation_id,
+            "total_steps": total,
+            "start_step": s_idx,
+            "end_step": e_idx,
+            "steps": steps_out,
+        }
+
+    hub = select_hub(conversation_id=conversation_id)
+    traj = lsrpc_call(
+        hub["address"],
+        hub["csrf_token"],
+        "GetCascadeTrajectory",
+        {"cascadeId": conversation_id},
+        timeout=10.0,
+    )
+    raw_steps = (traj.get("trajectory") or {}).get("steps") or []
+    total = len(raw_steps)
+    s_idx = max(0, int(start_step))
+    e_idx = min(total, int(end_step)) if end_step >= 0 else total
+    steps_out = []
+    for idx in range(s_idx, e_idx):
+        st = raw_steps[idx]
+        entry: dict[str, Any] = {
+            "step_index": idx,
+            "type": st.get("type"),
+            "status": st.get("status"),
+        }
+        if st.get("type") == "CORTEX_STEP_TYPE_USER_INPUT":
+            items = (st.get("userInput") or {}).get("items") or []
+            entry["content"] = "\n".join(it.get("text", "") for it in items if it.get("text"))
+        elif st.get("type") == "CORTEX_STEP_TYPE_PLANNER_RESPONSE":
+            pr = st.get("plannerResponse") or {}
+            entry["content"] = pr.get("modifiedResponse") or pr.get("response") or ""
+            if include_thinking and pr.get("thinking"):
+                entry["thinking"] = pr.get("thinking")
+            if pr.get("toolCalls"):
+                entry["tool_calls"] = pr.get("toolCalls")
+        steps_out.append(entry)
+
+    return {
+        "source": "hub_rpc",
+        "conversation_id": conversation_id,
+        "total_steps": total,
+        "start_step": s_idx,
+        "end_step": e_idx,
+        "steps": steps_out,
+    }
+
+
+def tool_agy_cancel_conversation(
+    conversation_id: str,
+    delete_trajectory: bool = False,
+) -> dict[str, Any]:
+    """Cancel an active Antigravity run and optionally delete the trajectory."""
+    if not conversation_id:
+        raise ValueError("conversation_id is required")
+    hub = select_hub(conversation_id=conversation_id)
+    addr = hub["address"]
+    csrf = hub["csrf_token"]
+    cancel_resp = lsrpc_call(
+        addr,
+        csrf,
+        "CancelCascadeInvocation",
+        {"cascadeId": conversation_id, "killBackgroundTasks": True},
+        timeout=5.0,
+    )
+    deleted = False
+    if delete_trajectory:
+        lsrpc_call(addr, csrf, "DeleteCascadeTrajectory", {"cascadeId": conversation_id}, timeout=5.0)
+        deleted = True
+    return {
+        "ok": True,
+        "conversation_id": conversation_id,
+        "cancelled": True,
+        "deleted": deleted,
+        "cancel_response": cancel_resp,
+    }
+
+
+MCP_TOOLS: list[dict[str, Any]] = [
+    {
+        "name": "agy_hub_status",
+        "description": (
+            "Discover running VS Code Antigravity Hub instances (agy.exe --hub), "
+            "active workspaces, conversation counts, and available Gemini models/quota."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "agy_list_conversations",
+        "description": (
+            "List recent Antigravity (Gemini) conversations in the VS Code panel, "
+            "including conversation_id (cascadeId), title, run status, workspace, and artifacts."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workspace": {
+                    "type": "string",
+                    "description": "Optional workspace folder path to filter conversations.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of conversations to return (default 20).",
+                    "default": 20,
+                },
+            },
+        },
+    },
+    {
+        "name": "agy_dispatch_task",
+        "description": (
+            "Dispatch a task or follow-up prompt to Antigravity (Gemini). "
+            "Defaults to mode='panel' which injects the task directly into the live VS Code "
+            "Antigravity panel via LanguageServerService RPC."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "Task instruction or handover prompt for Antigravity.",
+                },
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Existing conversation_id (cascadeId) to continue; omit to create a new conversation.",
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Target workspace directory path (defaults to current working directory).",
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["panel", "cli"],
+                    "description": "Execution mode: 'panel' (default, live VS Code panel Hub RPC) or 'cli' (headless agy.exe).",
+                    "default": "panel",
+                },
+                "focus_panel": {
+                    "type": "boolean",
+                    "description": "If true, triggers vscode:// URI to switch the foreground panel view to this conversation.",
+                    "default": False,
+                },
+                "wait": {
+                    "type": "boolean",
+                    "description": "If true (default), waits until the turn finishes and returns the assistant response.",
+                    "default": True,
+                },
+                "timeout_sec": {
+                    "type": "integer",
+                    "description": "Max seconds to wait when wait=true (default 300).",
+                    "default": 300,
+                },
+                "model": {
+                    "type": "string",
+                    "description": "Optional model identifier override (default MODEL_PLACEHOLDER_M418).",
+                    "default": DEFAULT_MODEL,
+                },
+                "skip_permissions": {
+                    "type": "boolean",
+                    "description": "In mode='cli', pass --dangerously-skip-permissions (default false).",
+                    "default": False,
+                },
+                "strict_workspace": {
+                    "type": "boolean",
+                    "description": "If true, raise an error when no running Hub matches the target workspace.",
+                    "default": False,
+                },
+            },
+            "required": ["prompt"],
+        },
+    },
+    {
+        "name": "agy_get_conversation",
+        "description": (
+            "Query the live status, latest assistant response, recent tool calls, "
+            "and artifact paths of an Antigravity conversation."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Target conversation_id (cascadeId).",
+                },
+                "wait_sec": {
+                    "type": "integer",
+                    "description": "Optional seconds to wait for the conversation to become idle before reading (default 0).",
+                    "default": 0,
+                },
+            },
+            "required": ["conversation_id"],
+        },
+    },
+    {
+        "name": "agy_read_transcript",
+        "description": "Read step-by-step trajectory / transcript entries for an Antigravity conversation.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Target conversation_id (cascadeId).",
+                },
+                "start_step": {
+                    "type": "integer",
+                    "description": "Inclusive start step index (default 0).",
+                    "default": 0,
+                },
+                "end_step": {
+                    "type": "integer",
+                    "description": "Exclusive end step index (default 50).",
+                    "default": 50,
+                },
+                "include_thinking": {
+                    "type": "boolean",
+                    "description": "Include model thinking traces in output (default false).",
+                    "default": False,
+                },
+            },
+            "required": ["conversation_id"],
+        },
+    },
+    {
+        "name": "agy_cancel_conversation",
+        "description": "Cancel a running Antigravity turn and optionally delete the conversation trajectory.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Target conversation_id (cascadeId).",
+                },
+                "delete_trajectory": {
+                    "type": "boolean",
+                    "description": "If true, also deletes the conversation trajectory from the Hub.",
+                    "default": False,
+                },
+            },
+            "required": ["conversation_id"],
+        },
+    },
+]
+
+
+def handle_mcp_request(msg: dict[str, Any]) -> dict[str, Any] | None:
+    """Process a single JSON-RPC 2.0 request and return a JSON-RPC 2.0 response (or None for notifications)."""
+    method = msg.get("method", "")
+    req_id = msg.get("id")
+    params = msg.get("params") or {}
+
+    if req_id is None:
+        return None
+
+    try:
+        if method == "initialize":
+            client_proto = params.get("protocolVersion") or "2024-11-05"
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "protocolVersion": client_proto,
+                    "capabilities": {
+                        "tools": {"listChanged": False},
+                    },
+                    "serverInfo": {
+                        "name": SERVER_NAME,
+                        "version": SERVER_VERSION,
+                    },
+                },
+            }
+        if method == "ping":
+            return {"jsonrpc": "2.0", "id": req_id, "result": {}}
+        if method == "tools/list":
+            return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": MCP_TOOLS}}
+        if method == "resources/list":
+            return {"jsonrpc": "2.0", "id": req_id, "result": {"resources": []}}
+        if method == "prompts/list":
+            return {"jsonrpc": "2.0", "id": req_id, "result": {"prompts": []}}
+        if method == "tools/call":
+            t_name = params.get("name", "")
+            t_args = params.get("arguments") or {}
+            if t_name == "agy_hub_status":
+                res = tool_agy_hub_status()
+            elif t_name == "agy_list_conversations":
+                res = tool_agy_list_conversations(
+                    workspace=t_args.get("workspace"),
+                    limit=int(t_args.get("limit", 20)),
+                )
+            elif t_name == "agy_dispatch_task":
+                res = tool_agy_dispatch_task(
+                    prompt=t_args["prompt"],
+                    conversation_id=t_args.get("conversation_id"),
+                    workspace=t_args.get("workspace"),
+                    mode=t_args.get("mode", "panel"),
+                    focus_panel=bool(t_args.get("focus_panel", False)),
+                    wait=bool(t_args.get("wait", True)),
+                    timeout_sec=int(t_args.get("timeout_sec", 300)),
+                    model=t_args.get("model", DEFAULT_MODEL),
+                    skip_permissions=bool(t_args.get("skip_permissions", False)),
+                    strict_workspace=bool(t_args.get("strict_workspace", False)),
+                )
+            elif t_name == "agy_get_conversation":
+                res = tool_agy_get_conversation(
+                    conversation_id=t_args["conversation_id"],
+                    wait_sec=int(t_args.get("wait_sec", 0)),
+                )
+            elif t_name == "agy_read_transcript":
+                res = tool_agy_read_transcript(
+                    conversation_id=t_args["conversation_id"],
+                    start_step=int(t_args.get("start_step", 0)),
+                    end_step=int(t_args.get("end_step", 50)),
+                    include_thinking=bool(t_args.get("include_thinking", False)),
+                )
+            elif t_name == "agy_cancel_conversation":
+                res = tool_agy_cancel_conversation(
+                    conversation_id=t_args["conversation_id"],
+                    delete_trajectory=bool(t_args.get("delete_trajectory", False)),
+                )
+            else:
+                raise ValueError(f"Unknown tool: {t_name}")
+
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps(res, ensure_ascii=False, indent=2),
+                        }
+                    ],
+                    "isError": False,
+                },
+            }
+
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "error": {"code": -32601, "message": f"Method not found: {method}"},
+        }
+    except Exception as exc:
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False, indent=2),
+                    }
+                ],
+                "isError": True,
+            },
+        }
+
+
+def _write_stdio_response(stdout: Any, resp: dict[str, Any], use_content_length: bool) -> None:
+    payload = json.dumps(resp, ensure_ascii=False).encode("utf-8")
+    if use_content_length:
+        header = f"Content-Length: {len(payload)}\r\n\r\n".encode("ascii")
+        stdout.write(header + payload)
+    else:
+        stdout.write(payload + b"\n")
+    stdout.flush()
+
+
+def run_stdio_server() -> None:
+    """Run the MCP server over stdin/stdout, supporting both NDJSON and Content-Length framing."""
+    stdin = sys.stdin.buffer
+    stdout = sys.stdout.buffer
+
+    while True:
+        first_line = stdin.readline()
+        if not first_line:
+            break
+        stripped = first_line.strip()
+        if not stripped:
+            continue
+
+        use_content_length = False
+        is_header_block = b":" in stripped and not stripped.startswith(b"{") and not stripped.startswith(b"[")
+        if is_header_block:
+            use_content_length = True
+            headers: dict[bytes, bytes] = {}
+            k, v = stripped.split(b":", 1)
+            headers[k.strip().lower()] = v.strip()
+            while True:
+                hdr = stdin.readline()
+                if not hdr or hdr in (b"\r\n", b"\n"):
+                    break
+                if b":" in hdr:
+                    hk, hv = hdr.split(b":", 1)
+                    headers[hk.strip().lower()] = hv.strip()
+            if b"content-length" not in headers:
+                _write_stdio_response(
+                    stdout,
+                    {
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": {"code": -32700, "message": "Parse error: missing Content-Length header"},
+                    },
+                    use_content_length=True,
+                )
+                continue
+            try:
+                length = int(headers[b"content-length"])
+                body = stdin.read(length)
+                msg = json.loads(body.decode("utf-8", errors="replace"))
+            except Exception as exc:
+                _write_stdio_response(
+                    stdout,
+                    {
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": {"code": -32700, "message": f"Parse error: {exc}"},
+                    },
+                    use_content_length=True,
+                )
+                continue
+        else:
+            try:
+                msg = json.loads(stripped.decode("utf-8", errors="replace"))
+            except Exception as exc:
+                _write_stdio_response(
+                    stdout,
+                    {
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": {"code": -32700, "message": f"Parse error: {exc}"},
+                    },
+                    use_content_length=False,
+                )
+                continue
+
+        resp = handle_mcp_request(msg)
+        if resp is not None:
+            _write_stdio_response(stdout, resp, use_content_length=use_content_length)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="subcommand")
+
+    sub.add_parser("mcp", help="Run stdio MCP server (default when no subcommand is given)")
+    sub.add_parser("status", help="Discover running Antigravity Hubs and models")
+
+    p_list = sub.add_parser("list", help="List recent Antigravity conversations")
+    p_list.add_argument("--workspace", help="Filter by workspace path")
+    p_list.add_argument("--limit", type=int, default=20)
+
+    p_disp = sub.add_parser("dispatch", help="Dispatch a task to Antigravity")
+    p_disp.add_argument("prompt", help="Prompt text to send")
+    p_disp.add_argument("--conversation", dest="conversation_id", help="Existing conversation ID")
+    p_disp.add_argument("--workspace", help="Workspace path")
+    p_disp.add_argument("--mode", choices=["panel", "cli"], default="panel")
+    p_disp.add_argument("--focus-panel", action="store_true")
+    p_disp.add_argument("--no-wait", action="store_true")
+    p_disp.add_argument("--timeout", type=int, default=300)
+    p_disp.add_argument("--skip-permissions", action="store_true")
+    p_disp.add_argument("--strict-workspace", action="store_true")
+
+    p_get = sub.add_parser("get", help="Get conversation status and latest response")
+    p_get.add_argument("conversation_id", help="Target conversation ID")
+    p_get.add_argument("--wait-sec", type=int, default=0)
+
+    p_read = sub.add_parser("read", help="Read conversation transcript steps")
+    p_read.add_argument("conversation_id", help="Target conversation ID")
+    p_read.add_argument("--start-step", type=int, default=0)
+    p_read.add_argument("--end-step", type=int, default=50)
+    p_read.add_argument("--include-thinking", action="store_true")
+
+    p_cancel = sub.add_parser("cancel", help="Cancel a running conversation")
+    p_cancel.add_argument("conversation_id", help="Target conversation ID")
+    p_cancel.add_argument("--delete", action="store_true")
+
+    args = parser.parse_args(argv)
+    if args.subcommand in (None, "mcp"):
+        run_stdio_server()
+        return 0
+
+    if args.subcommand == "status":
+        out = tool_agy_hub_status()
+    elif args.subcommand == "list":
+        out = tool_agy_list_conversations(workspace=args.workspace, limit=args.limit)
+    elif args.subcommand == "dispatch":
+        out = tool_agy_dispatch_task(
+            prompt=args.prompt,
+            conversation_id=args.conversation_id,
+            workspace=args.workspace,
+            mode=args.mode,
+            focus_panel=args.focus_panel,
+            wait=not args.no_wait,
+            timeout_sec=args.timeout,
+            skip_permissions=args.skip_permissions,
+            strict_workspace=args.strict_workspace,
+        )
+    elif args.subcommand == "get":
+        out = tool_agy_get_conversation(args.conversation_id, wait_sec=args.wait_sec)
+    elif args.subcommand == "read":
+        out = tool_agy_read_transcript(
+            args.conversation_id,
+            start_step=args.start_step,
+            end_step=args.end_step,
+            include_thinking=args.include_thinking,
+        )
+    elif args.subcommand == "cancel":
+        out = tool_agy_cancel_conversation(args.conversation_id, delete_trajectory=args.delete)
+    else:
+        parser.error(f"Unknown subcommand: {args.subcommand}")
+        return 2
+
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

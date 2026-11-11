@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Meta Skill"
+  short_description: "Scaffold, lint, and review reusable skills with base guides"
+  default_prompt: "Use $verdantflare-meta-skill to scaffold a new skill or run static structure and link checks on an existing skill."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Agent Antigravity"
+  short_description: "Dispatch and monitor VS Code Antigravity panel and CLI tasks"
+  default_prompt: "Use $verdantflare-agent-antigravity to check Hub status, dispatch a task to the Antigravity panel, and inspect its output."
