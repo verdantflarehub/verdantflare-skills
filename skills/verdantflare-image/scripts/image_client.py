@@ -236,6 +236,100 @@ def calculate_sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def inspect_image_bytes(data: bytes) -> dict[str, Any]:
+    """零依赖解析二进制图像头部，返回 mime_type、width 与 height。"""
+    info: dict[str, Any] = {"mime_type": None, "width": None, "height": None}
+    if len(data) >= 24 and data.startswith(b"\x89PNG\r\n\x1a\n") and data[12:16] == b"IHDR":
+        info["mime_type"] = "image/png"
+        info["width"] = int.from_bytes(data[16:20], "big")
+        info["height"] = int.from_bytes(data[20:24], "big")
+        return info
+    if len(data) >= 4 and data.startswith(b"\xff\xd8"):
+        info["mime_type"] = "image/jpeg"
+        idx = 2
+        n = len(data)
+        sof_markers = {
+            0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7,
+            0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF,
+        }
+        while idx + 4 <= n:
+            if data[idx] != 0xFF:
+                idx += 1
+                continue
+            while idx < n and data[idx] == 0xFF:
+                idx += 1
+            if idx >= n:
+                break
+            marker = data[idx]
+            idx += 1
+            if marker in (0xD8, 0xD9) or (0xD0 <= marker <= 0xD7):
+                continue
+            if idx + 2 > n:
+                break
+            seg_len = int.from_bytes(data[idx : idx + 2], "big")
+            if seg_len < 2 or idx + seg_len > n:
+                break
+            if marker in sof_markers and idx + 7 <= n:
+                info["height"] = int.from_bytes(data[idx + 3 : idx + 5], "big")
+                info["width"] = int.from_bytes(data[idx + 5 : idx + 7], "big")
+                break
+            idx += seg_len
+        return info
+    if len(data) >= 30 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        info["mime_type"] = "image/webp"
+        chunk = data[12:16]
+        if chunk == b"VP8X" and len(data) >= 30:
+            info["width"] = 1 + int.from_bytes(data[24:27], "little")
+            info["height"] = 1 + int.from_bytes(data[27:30], "little")
+        elif chunk == b"VP8 " and len(data) >= 30:
+            info["width"] = int.from_bytes(data[26:28], "little") & 0x3FFF
+            info["height"] = int.from_bytes(data[28:30], "little") & 0x3FFF
+        elif chunk == b"VP8L" and len(data) >= 25:
+            bits = int.from_bytes(data[21:25], "little")
+            info["width"] = (bits & 0x3FFF) + 1
+            info["height"] = ((bits >> 14) & 0x3FFF) + 1
+        return info
+    return info
+
+
+def check_resolution_and_aspect_ratio(
+    width: int | None,
+    height: int | None,
+    requested_aspect_ratio: str = "",
+    requested_resolution: str = "",
+) -> list[str]:
+    """核对实际像素宽高与请求的画幅、分辨率档位是否一致，返回偏差告警列表。"""
+    warnings: list[str] = []
+    if not width or not height or width <= 0 or height <= 0:
+        return warnings
+
+    if requested_aspect_ratio and ":" in requested_aspect_ratio:
+        try:
+            rw_s, rh_s = requested_aspect_ratio.split(":", 1)
+            target_ratio = float(rw_s) / float(rh_s)
+            actual_ratio = float(width) / float(height)
+            if abs(actual_ratio - target_ratio) / target_ratio > 0.03:
+                warnings.append(
+                    f"画幅偏差: 请求 aspect_ratio={requested_aspect_ratio}，实际返回 {width}x{height} "
+                    f"(实际比例 {actual_ratio:.3f} vs 目标 {target_ratio:.3f})"
+                )
+        except (ValueError, ZeroDivisionError):
+            pass
+
+    res_norm = (requested_resolution or "").strip().lower()
+    long_edge = max(width, height)
+    min_2k_long_edge = 1254 if requested_aspect_ratio.strip() == "1:1" else 1600
+    if res_norm == "2k" and long_edge < min_2k_long_edge:
+        warnings.append(
+            f"分辨率偏差: 请求 resolution=2k，实际长边仅 {long_edge}px ({width}x{height})，低于 2K 标准"
+        )
+    elif res_norm == "4k" and long_edge < 3000:
+        warnings.append(
+            f"分辨率偏差: 请求 resolution=4k，实际长边仅 {long_edge}px ({width}x{height})，低于 4K 标准"
+        )
+    return warnings
+
+
 def cmd_stats(args: argparse.Namespace) -> int:
     """查询服务全局任务排队统计或 MCP 渠道能力。"""
     base_url, token = load_config()
@@ -337,6 +431,15 @@ def poll_task_completion(
             if curr_status in ("failed", "canceled"):
                 err = status_res.get("error") or "未知错误"
                 raise ImageClientError(f"任务已终结 ({curr_status}): {err}")
+            if (
+                status_res.get("needs_attention") is True
+                or status_res.get("phase") == "submission_unknown"
+                or status_res.get("error") == "submission_unknown"
+            ):
+                raise ImageClientError(
+                    f"任务 {task_id} 处于未决状态 (phase={status_res.get('phase')}, error={status_res.get('error')})，"
+                    "请勿更换幂等键重提，先按原任务对账恢复"
+                )
         else:
             query = {"project_id": project_id, "limit": "50"}
             url = f"{base_url}/api/tasks?{urllib.parse.urlencode(query)}"
@@ -366,6 +469,8 @@ def download_artifact(
     output_path: Path,
     expected_sha256: str = "",
     download_path: str = "",
+    requested_aspect_ratio: str = "",
+    requested_resolution: str = "",
 ) -> str:
     """从服务端受控路由下载产物并校验哈希，返回实际 SHA-256。"""
     dl_url = resolve_download_url(base_url, artifact_id, download_path=download_path)
@@ -382,7 +487,21 @@ def download_artifact(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_bytes(content)
-    print(f"[+] 图像已保存至: {output_path} (大小: {len(content):,} bytes, SHA-256: {actual_sha})")
+    img_info = inspect_image_bytes(content)
+    dim_str = (
+        f", 尺寸: {img_info['width']}x{img_info['height']}, MIME: {img_info['mime_type']}"
+        if img_info.get("width") and img_info.get("height")
+        else ""
+    )
+    print(f"[+] 图像已保存至: {output_path} (大小: {len(content):,} bytes{dim_str}, SHA-256: {actual_sha})")
+    spec_warnings = check_resolution_and_aspect_ratio(
+        img_info.get("width"),
+        img_info.get("height"),
+        requested_aspect_ratio=requested_aspect_ratio,
+        requested_resolution=requested_resolution,
+    )
+    for w_msg in spec_warnings:
+        print(f"[!] 规格偏差告警: {w_msg}", file=sys.stderr)
     return actual_sha
 
 
@@ -708,6 +827,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
                 output_path=out_path,
                 expected_sha256=expected_sha256,
                 download_path=download_path,
+                requested_aspect_ratio=args.aspect_ratio,
+                requested_resolution=args.resolution,
             )
         except ImageClientError as e:
             print(f"[-] {e}", file=sys.stderr)

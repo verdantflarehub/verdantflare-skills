@@ -11,21 +11,22 @@ description: 通过 VerdantFlare Image MCP 生成或编辑图像候选（默认�
 
 Project 归属、换电脑恢复、Artifact 保存及 World 固定资产引用遵循[共同接入规则](../_shared/project-world.md)。生成或导入结果先保存到当前 Project；确认可复用后，按 World / Character 形象基线（`docs/design/world/character/identity.md`）显式登记固定版本。
 
-| 当前操作                               | 按需读取                                                                                       |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 构造生成、编辑、遮罩或导入请求         | [调用契约](references/contracts.md) 的对应工具章节                                             |
-| Google Nano Banana 生图与多参考编辑    | [Google 图像调用](references/google.md)                                                        |
-| MOSS-Image 文字海报与 JSON 版式文生图  | [MOSS-Image 调用](references/moss-image.md)                                                    |
-| 角色四视图、服装三视图、分镜或场景规格 | [视觉规格](references/visual-specs.md) 对应资产类型                                            |
-| 角色五视图合成板                       | [五视图模式选择](references/visual-specs.md#6-角色五视图合成板)                                |
-| 提交、轮询、恢复、下载与归档           | [执行流程](references/workflow.md)                                                             |
-| 生成后 18+ 内容分级评估与标记          | [评估步骤](references/content-rating-step.md)、[评估规范](references/content-rating-rubric.md) |
-| 使用本地客户端                         | [CLI](references/cli.md)；参数不确定时运行 `--help`                                            |
-| 连接或配置问题                         | [环境说明](../ENVIRONMENT.md)                                                                  |
+| 当前操作                               | 按需读取                                                        |
+| :------------------------------------- | :-------------------------------------------------------------- |
+| 构造生成、编辑、遮罩或导入请求         | [调用契约](references/contracts.md)                             |
+| Google Nano Banana 生图与多参考编辑    | [Google 图像调用](references/google.md)                         |
+| MOSS-Image 文字海报与 JSON 版式文生图  | [MOSS-Image 调用](references/moss-image.md)                     |
+| 角色四视图、服装三视图、分镜或场景规格 | [视觉规格](references/visual-specs.md)                          |
+| 角色五视图合成板                       | [五视图模式选择](references/visual-specs.md#6-角色五视图合成板) |
+| 提交、轮询、恢复、下载与归档           | [执行流程](references/workflow.md)                              |
+| 生成后 18+ 分级评估步骤                | [评估步骤](references/content-rating-step.md)                   |
+| 生成后 18+ 分级评估规范                | [评估规范](references/content-rating-rubric.md)                 |
+| 使用本地客户端                         | [CLI](references/cli.md)                                        |
+| 连接或配置问题                         | [环境说明](../ENVIRONMENT.md)                                   |
 
 用户或项目选用五视图时，明确指定的图格与角度优先；固定身份长相优先[三脸＋身体正背 3＋2](references/visual-specs.md#64-身份优先三脸与身体正背)，衣装造型优先[两脸＋身体正侧背 2＋3](references/visual-specs.md#61-五格布局与裁切)。3＋2 未包含身体侧视，交付须说明；原有四视图和含头全身三视图按各自用途继续适用。
 
-**默认出图模型**：本技能将 **GPT Image 2.6**（`engine="codex"`，默认 `model="gpt-image-2.6-sunburst"`；亦支持高速变体 `gpt-image-2.6-flare` 及向下兼容 `gpt-image-2.5-sunburst` / `gpt-image-2.5-flare`）标记为默认出图模型；用户未指定引擎或模型时一律使用 `codex` / `gpt-image-2.6-sunburst`。显式选择 Google 渠道（`engine="gemini"`）时默认 `gemini-nano-banana-2.1`（展示名 `Nano Banana 2.1`）；用户明确选择优先，模型支持以宿主能力和调用契约为准。不绕过 MCP/受控客户端直连供应商。
+**默认出图模型与分辨率边界**：本技能将 **GPT Image 2.6**（`engine="codex"`，默认 `model="gpt-image-2.6-sunburst"`；亦支持高速变体 `gpt-image-2.6-flare` 及向下兼容 `gpt-image-2.5-sunburst` / `gpt-image-2.5-flare`）标记为默认出图模型；用户未指定引擎或模型时一律使用 `codex` / `gpt-image-2.6-sunburst`。显式选择 Google 渠道（`engine="gemini"`）时默认 `gemini-nano-banana-2.1`（展示名 `Nano Banana 2.1`）；用户明确选择优先，模型支持以宿主能力和调用契约为准。注意各渠道对 `resolution="2k"` 与 `9:16` / `16:9` 画幅的实际像素输出（详见 [调用契约第 1.1 节](references/contracts.md#11-各渠道画幅与分辨率实际行为与防坑指南)）：`codex` 通过 `/v1/responses` 的 `[Aspect Ratio <ratio>]` 指令注入输出正确画幅，但 ChatGPT Web 端原生像素上限使 `9:16` / `16:9` 返回 `941×1672` / `1672×941` PNG（`1:1` 返回 `1254×1254`）；`gemini` 通过 `generationConfig.imageConfig.imageSize="2K"` 原生返回 `1536×2752` / `2752×1536`（`9:16` / `16:9`）或 `2048×2048`（`1:1`）；`grok`（`grok-imagine-image-2.0`）原生支持 `9:16` / `16:9` `2k`（`1584×2816` / `2816×1584`）。不绕过 MCP/受控客户端直连供应商。
 
 Google 渠道（`engine="gemini"`）Nano Banana 系列生图与最多 6 张参考图编辑读取 [Google 图像调用](references/google.md)，区分卡片展示名（`Nano Banana 2.1` / `Nano Banana Pro` / `Nano Banana 2` / `Nano Banana 2 Lite` / `Nano Banana`）与请求 `model` 编码（`gemini-nano-banana-2.1` / `gemini-3-pro-image` / `gemini-3.1-flash-image` / `gemini-3.1-flash-lite-image` / `gemini-2.5-flash-image`），不支持遮罩局部重绘（`max_Reference_masks=0`）。
 
@@ -35,7 +36,7 @@ MOSS-Image 自托管文生图（`engine="moss-image"`）读取 [MOSS-Image 调�
 
 使用真实Studio会话发现实际工具；现有网关提供 `image.create/edit/inpaint/status/result/rate_content`，不假定历史 `image.generate` 或 `image.list` 已注册。旧共享媒体令牌不能访问Project/Artifact，认证恢复见 [环境说明](../ENVIRONMENT.md)。
 
-中央Artifact引用与Image原生Artifact ID需要受控适配，不因同名字段就互换。附带的 `scripts/image_client.py` 已适配 Studio `/mcp` JSON-RPC 网关与受控下载路由（`/apps/image/artifacts/{artifact_id}/content`），具体用法见 [CLI](references/cli.md)。
+中央Artifact引用与Image原生Artifact ID需要受控适配，不因同名字段就互换。附带的 `scripts/image_client.py` 已适配 Studio `/mcp` JSON-RPC 网关与受控下载路由（`/apps/image/artifacts/{artifact_id}/content`），并在下载后自动解析真实宽高、MIME 与 `2k` 规格偏差告警，具体用法见 [CLI](references/cli.md)。
 
 描述目标画面、必要参考职责及编辑保留项即可；四段式提示词只是模板，不要求固定标签、句式或每轮只改一个变量。
 
