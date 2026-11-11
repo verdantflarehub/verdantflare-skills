@@ -187,6 +187,97 @@ class TestAgyMcpServer(unittest.TestCase):
             codex_text = codex_cfg.read_text(encoding="utf-8")
             self.assertIn("[mcp_servers.antigravity]", codex_text)
 
+    def test_resolve_project_id_and_dispatch_project_env_config(self) -> None:
+        home_uri = agy_mcp_server.path_to_workspace_uri(Path.home())
+        repo_uri = agy_mcp_server.path_to_workspace_uri("C:/Users/Test/go/src/github.com/org/design-repo")
+        sub_dir = "C:/Users/Test/go/src/github.com/org/design-repo/subpkg"
+
+        def fake_lsrpc(address: str, csrf: str, method: str, payload: dict | None = None, timeout: float = 15.0) -> dict:
+            if method == "ListProjects":
+                return {"projectIds": ["p-home", "p-repo", "p-archived", "outside-of-project"]}
+            if method == "ReadProjects":
+                return {
+                    "projects": [
+                        {
+                            "id": "p-home",
+                            "name": "Home",
+                            "projectResources": {"resources": [{"folderUri": home_uri}]},
+                        },
+                        {
+                            "id": "p-repo",
+                            "name": "design-repo",
+                            "projectResources": {"resources": [{"gitFolder": {"folderUri": repo_uri}}]},
+                        },
+                        {
+                            "id": "p-archived",
+                            "name": "archived-repo",
+                            "archived": True,
+                            "projectResources": {"resources": [{"folderUri": repo_uri}]},
+                        },
+                    ]
+                }
+            if method == "StartCascade":
+                self.assertNotIn("workspaceUris", payload or {})
+                self.assertEqual(
+                    (payload or {}).get("projectEnvConfig"),
+                    {"projectId": "p-repo", "defaultProjectEnvironment": {}},
+                )
+                return {"cascadeId": "cid-new-123"}
+            if method == "SendUserCascadeMessage":
+                return {}
+            if method == "SetBrowserOpenConversation":
+                return {}
+            raise AssertionError(f"Unexpected RPC method: {method}")
+
+        with mock.patch.object(agy_mcp_server, "lsrpc_call", side_effect=fake_lsrpc):
+            # Exact match
+            self.assertEqual(agy_mcp_server.resolve_project_id("localhost:1", "tok", repo_uri), "p-repo")
+            # Subdirectory inside repo matches p-repo
+            self.assertEqual(agy_mcp_server.resolve_project_id("localhost:1", "tok", sub_dir), "p-repo")
+            # Exact match on home directory matches p-home, but unrelated child under home does not
+            self.assertEqual(agy_mcp_server.resolve_project_id("localhost:1", "tok", home_uri), "p-home")
+            unrelated_under_home = Path.home() / "unregistered_workspace_xyz"
+            self.assertIsNone(agy_mcp_server.resolve_project_id("localhost:1", "tok", str(unrelated_under_home)))
+
+            fake_hub = {
+                "address": "localhost:1",
+                "csrf_token": "tok",
+                "workspaces": [repo_uri],
+                "workspace_matched": True,
+                "matched_by": "workspace_exact",
+                "summaries": {},
+            }
+            with mock.patch.object(agy_mcp_server, "select_hub", return_value=fake_hub):
+                disp = agy_mcp_server.tool_agy_dispatch_task(
+                    prompt="Ping",
+                    workspace="C:/Users/Test/go/src/github.com/org/design-repo",
+                    mode="panel",
+                    wait=False,
+                )
+                self.assertTrue(disp["ok"])
+                self.assertEqual(disp["conversation_id"], "cid-new-123")
+                self.assertEqual(disp["project_id"], "p-repo")
+
+    def test_cancel_already_idle_conversation_still_deletes(self) -> None:
+        deleted_ids: list[str] = []
+
+        def fake_lsrpc(address: str, csrf: str, method: str, payload: dict | None = None, timeout: float = 15.0) -> dict:
+            if method == "CancelCascadeInvocation":
+                raise RuntimeError('LS RPC CancelCascadeInvocation HTTP 500: {"message":"executor is not currently running"}')
+            if method == "DeleteCascadeTrajectory":
+                deleted_ids.append((payload or {})["cascadeId"])
+                return {}
+            raise AssertionError(f"Unexpected RPC method: {method}")
+
+        fake_hub = {"address": "localhost:1", "csrf_token": "tok", "summaries": {"cid-idle": {}}}
+        with mock.patch.object(agy_mcp_server, "select_hub", return_value=fake_hub):
+            with mock.patch.object(agy_mcp_server, "lsrpc_call", side_effect=fake_lsrpc):
+                res = agy_mcp_server.tool_agy_cancel_conversation("cid-idle", delete_trajectory=True)
+        self.assertTrue(res["ok"])
+        self.assertFalse(res["cancelled"])
+        self.assertTrue(res["deleted"])
+        self.assertEqual(deleted_ids, ["cid-idle"])
+
 
 if __name__ == "__main__":
     unittest.main()

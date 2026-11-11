@@ -84,6 +84,90 @@ def workspace_matches_uri(target_uri_or_path: str, candidate_uri_or_path: str) -
     return None
 
 
+def _extract_project_resource_uris(project: dict[str, Any]) -> list[str]:
+    """Extract all folder and gitFolder URIs configured on an Antigravity Project."""
+    uris: list[str] = []
+
+    def _collect_from_resources(res_list: list[dict[str, Any]] | None) -> None:
+        for res in res_list or []:
+            folder_uri = res.get("folderUri")
+            if folder_uri:
+                uris.append(folder_uri)
+            git_uri = (res.get("gitFolder") or {}).get("folderUri")
+            if git_uri:
+                uris.append(git_uri)
+
+    _collect_from_resources((project.get("projectResources") or {}).get("resources"))
+    for env in (project.get("environments") or {}).get("environments") or []:
+        _collect_from_resources((env.get("resources") or {}).get("resources"))
+    return uris
+
+
+def resolve_project_id(
+    address: str,
+    csrf_token: str,
+    workspace_uri_or_path: str,
+    summaries: dict[str, Any] | None = None,
+) -> str | None:
+    """Resolve the Antigravity Project ID matching workspace_uri_or_path so new cascades group under Projects."""
+    raw = str(workspace_uri_or_path or "").strip()
+    if not raw:
+        return None
+    canonical_input = raw if raw.startswith("file://") else path_to_workspace_uri(raw)
+    target_norm = normalize_uri_for_compare(canonical_input)
+    if not target_norm:
+        return None
+    home_norm = normalize_uri_for_compare(Path.home().as_posix())
+
+    try:
+        list_resp = lsrpc_call(address, csrf_token, "ListProjects", {}, timeout=3.0)
+        raw_ids = list_resp.get("projectIds") or []
+        valid_ids = [pid for pid in raw_ids if pid and pid != "outside-of-project"]
+        if valid_ids:
+            read_resp = lsrpc_call(address, csrf_token, "ReadProjects", {"ids": valid_ids}, timeout=3.0)
+            best_prefix_pid: str | None = None
+            best_prefix_len = -1
+            for proj in read_resp.get("projects") or []:
+                pid = proj.get("id")
+                if not pid or pid == "outside-of-project" or proj.get("archived") is True:
+                    continue
+                for res_uri in _extract_project_resource_uris(proj):
+                    res_norm = normalize_uri_for_compare(res_uri)
+                    if not res_norm:
+                        continue
+                    if target_norm == res_norm:
+                        return str(pid)
+                    if res_norm != home_norm and target_norm.startswith(res_norm + "/"):
+                        if len(res_norm) > best_prefix_len:
+                            best_prefix_len = len(res_norm)
+                            best_prefix_pid = str(pid)
+            if best_prefix_pid:
+                return best_prefix_pid
+    except Exception:
+        pass
+
+    if summaries:
+        ordered = sorted(
+            summaries.values(),
+            key=lambda item: item.get("lastModifiedTime") or "",
+            reverse=True,
+        )
+        for info in ordered:
+            meta = info.get("trajectoryMetadata") or {}
+            pid = meta.get("projectId")
+            if not pid or pid == "outside-of-project":
+                continue
+            candidate_uris = [
+                w.get("workspaceFolderAbsoluteUri", "")
+                for w in (info.get("workspaces") or [])
+                if w.get("workspaceFolderAbsoluteUri")
+            ] + list(meta.get("workspaceUris") or [])
+            if any(workspace_matches_uri(canonical_input, u) == "exact" for u in candidate_uris):
+                return str(pid)
+
+    return None
+
+
 def _query_windows_agy_processes() -> list[dict[str, Any]]:
     """Query running agy.exe processes on Windows, trying pwsh first then falling back to powershell.exe."""
     ps_cmd = (
@@ -452,6 +536,7 @@ def tool_agy_list_conversations(
                 if not any(workspace_matches_uri(target_uri, u) is not None for u in ws_list):
                     continue
             seen_ids.add(cid)
+            proj_id = (info.get("trajectoryMetadata") or {}).get("projectId") or None
             items.append(
                 {
                     "conversation_id": cid,
@@ -460,6 +545,7 @@ def tool_agy_list_conversations(
                     "step_count": info.get("stepCount", 0),
                     "created_time": info.get("createdTime", ""),
                     "last_modified_time": info.get("lastModifiedTime", ""),
+                    "project_id": proj_id,
                     "workspaces": ws_list,
                     "hub_address": hub["address"],
                 }
@@ -479,6 +565,7 @@ def tool_agy_dispatch_task(
     prompt: str,
     conversation_id: str | None = None,
     workspace: str | None = None,
+    project_id: str | None = None,
     mode: str = "panel",
     focus_panel: bool = False,
     wait: bool = True,
@@ -500,6 +587,8 @@ def tool_agy_dispatch_task(
             cmd.append("--dangerously-skip-permissions")
         if conversation_id:
             cmd.extend(["--conversation", conversation_id])
+        elif project_id:
+            cmd.extend(["--project", project_id])
         if workspace:
             cmd.extend(["--add-dir", str(Path(workspace).expanduser().resolve())])
         if not wait:
@@ -514,6 +603,7 @@ def tool_agy_dispatch_task(
                 "mode": "cli",
                 "async_pid": proc.pid,
                 "conversation_id": conversation_id,
+                "project_id": project_id,
                 "workspace_uri": ws_uri,
                 "skip_permissions": skip_permissions,
             }
@@ -533,6 +623,7 @@ def tool_agy_dispatch_task(
             "returncode": proc_res.returncode,
             "stdout": proc_res.stdout.strip(),
             "stderr": proc_res.stderr.strip(),
+            "project_id": project_id,
             "skip_permissions": skip_permissions,
         }
 
@@ -546,17 +637,32 @@ def tool_agy_dispatch_task(
     csrf = hub["csrf_token"]
     created_new = False
     baseline_steps = 0
+    effective_project_id: str | None = project_id
 
     if not conversation_id:
+        if not effective_project_id:
+            effective_project_id = resolve_project_id(
+                addr,
+                csrf,
+                ws_uri,
+                summaries=hub.get("summaries"),
+            )
+        start_payload: dict[str, Any] = {
+            "source": "CORTEX_TRAJECTORY_SOURCE_CASCADE_CLIENT",
+            "trajectoryType": "CORTEX_TRAJECTORY_TYPE_CASCADE",
+        }
+        if effective_project_id:
+            start_payload["projectEnvConfig"] = {
+                "projectId": effective_project_id,
+                "defaultProjectEnvironment": {},
+            }
+        else:
+            start_payload["workspaceUris"] = [ws_uri]
         start_resp = lsrpc_call(
             addr,
             csrf,
             "StartCascade",
-            {
-                "source": "CORTEX_TRAJECTORY_SOURCE_CASCADE_CLIENT",
-                "trajectoryType": "CORTEX_TRAJECTORY_TYPE_CASCADE",
-                "workspaceUris": [ws_uri],
-            },
+            start_payload,
         )
         conversation_id = start_resp.get("cascadeId")
         if not conversation_id:
@@ -564,6 +670,8 @@ def tool_agy_dispatch_task(
         created_new = True
     else:
         summary_info = (hub.get("summaries") or {}).get(conversation_id) or {}
+        if not effective_project_id:
+            effective_project_id = (summary_info.get("trajectoryMetadata") or {}).get("projectId") or None
         baseline_steps = int(summary_info.get("stepCount", 0))
         try:
             pre_traj = lsrpc_call(addr, csrf, "GetCascadeTrajectory", {"cascadeId": conversation_id}, timeout=5.0)
@@ -603,6 +711,7 @@ def tool_agy_dispatch_task(
         "workspace_matched": bool(hub.get("workspace_matched", True)),
         "matched_by": hub.get("matched_by", "default_fallback"),
         "conversation_id": conversation_id,
+        "project_id": effective_project_id,
         "created_new": created_new,
         "baseline_steps": baseline_steps,
         "focused_panel": focused_via_uri,
@@ -762,13 +871,21 @@ def tool_agy_cancel_conversation(
     hub = select_hub(conversation_id=conversation_id)
     addr = hub["address"]
     csrf = hub["csrf_token"]
-    cancel_resp = lsrpc_call(
-        addr,
-        csrf,
-        "CancelCascadeInvocation",
-        {"cascadeId": conversation_id, "killBackgroundTasks": True},
-        timeout=5.0,
-    )
+    cancel_resp: dict[str, Any] = {}
+    cancelled = False
+    try:
+        cancel_resp = lsrpc_call(
+            addr,
+            csrf,
+            "CancelCascadeInvocation",
+            {"cascadeId": conversation_id, "killBackgroundTasks": True},
+            timeout=5.0,
+        )
+        cancelled = True
+    except RuntimeError as exc:
+        if "executor is not currently running" not in str(exc):
+            raise
+        cancel_resp = {"already_idle": True}
     deleted = False
     if delete_trajectory:
         lsrpc_call(addr, csrf, "DeleteCascadeTrajectory", {"cascadeId": conversation_id}, timeout=5.0)
@@ -776,7 +893,7 @@ def tool_agy_cancel_conversation(
     return {
         "ok": True,
         "conversation_id": conversation_id,
-        "cancelled": True,
+        "cancelled": cancelled,
         "deleted": deleted,
         "cancel_response": cancel_resp,
     }
@@ -836,6 +953,10 @@ MCP_TOOLS: list[dict[str, Any]] = [
                 "workspace": {
                     "type": "string",
                     "description": "Target workspace directory path (defaults to current working directory).",
+                },
+                "project_id": {
+                    "type": "string",
+                    "description": "Optional Antigravity Project ID; auto-resolved from workspace via ListProjects/ReadProjects when omitted.",
                 },
                 "mode": {
                     "type": "string",
@@ -999,6 +1120,7 @@ def handle_mcp_request(msg: dict[str, Any]) -> dict[str, Any] | None:
                     prompt=t_args["prompt"],
                     conversation_id=t_args.get("conversation_id"),
                     workspace=t_args.get("workspace"),
+                    project_id=t_args.get("project_id"),
                     mode=t_args.get("mode", "panel"),
                     focus_panel=bool(t_args.get("focus_panel", False)),
                     wait=bool(t_args.get("wait", True)),
@@ -1160,6 +1282,7 @@ def main(argv: list[str] | None = None) -> int:
     p_disp.add_argument("prompt", help="Prompt text to send")
     p_disp.add_argument("--conversation", dest="conversation_id", help="Existing conversation ID")
     p_disp.add_argument("--workspace", help="Workspace path")
+    p_disp.add_argument("--project", dest="project_id", help="Optional Antigravity Project ID override")
     p_disp.add_argument("--mode", choices=["panel", "cli"], default="panel")
     p_disp.add_argument("--focus-panel", action="store_true")
     p_disp.add_argument("--no-wait", action="store_true")
@@ -1195,6 +1318,7 @@ def main(argv: list[str] | None = None) -> int:
             prompt=args.prompt,
             conversation_id=args.conversation_id,
             workspace=args.workspace,
+            project_id=args.project_id,
             mode=args.mode,
             focus_panel=args.focus_panel,
             wait=not args.no_wait,
