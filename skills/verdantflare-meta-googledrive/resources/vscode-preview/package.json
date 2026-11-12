@@ -1,0 +1,20 @@
+{
+  "name": "gdrive-markdown-preview",
+  "displayName": "GDrive Markdown Preview Bridge",
+  "description": "Preview local workspace .gdrive media without adding workspace folders.",
+  "version": "0.2.0",
+  "publisher": "verdantflare",
+  "engines": {"vscode": "^1.85.0"},
+  "categories": ["Other"],
+  "extensionKind": ["ui"],
+  "capabilities": {"untrustedWorkspaces": {"supported": false}},
+  "activationEvents": ["onLanguage:markdown"],
+  "main": "./extension.js",
+  "scripts": {"test": "node --test bridge.test.js"},
+  "devDependencies": {"markdown-it": "14.1.0"},
+  "contributes": {
+    "markdown.markdownItPlugins": true,
+    "markdown.previewScripts": ["./preview.js"],
+    "commands": [{"command": "verdantflare.gdrivePreview.configureSecurity", "title": "GDrive Preview: Configure Local Media Security"}]
+  }
+}

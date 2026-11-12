@@ -13,6 +13,60 @@ import gdrive
 import install
 
 
+class PreviewInstallerTests(unittest.TestCase):
+    def test_reproducible_archive_and_manifest(self):
+        import zipfile
+        import xml.etree.ElementTree as ET
+        with tempfile.TemporaryDirectory() as directory:
+            first = install.build_vsix(Path(directory) / "first.vsix")
+            second = install.build_vsix(Path(directory) / "second.vsix")
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            with zipfile.ZipFile(first) as archive:
+                self.assertEqual(set(archive.namelist()),
+                                 {"extension/" + n for n in install.EXTENSION_FILES} |
+                                 {"extension.vsixmanifest", "[Content_Types].xml"})
+                for name in ("extension.vsixmanifest", "[Content_Types].xml"):
+                    ET.fromstring(archive.read(name))
+                self.assertNotIn("__metadata", json.loads(archive.read("extension/package.json")))
+
+    def test_check_is_read_only_and_failure_propagates(self):
+        with unittest.mock.patch.object(install, "find_code", return_value="code"), \
+             unittest.mock.patch.object(install, "install") as copy, \
+             unittest.mock.patch.object(install, "run_code", return_value="verdantflare.gdrive-markdown-preview@0.2.0\n"):
+            install.main(["--check-vscode"])
+            copy.assert_not_called()
+        with unittest.mock.patch.object(install, "run_code", return_value="wrong@0.1.0"):
+            with self.assertRaises(ValueError):
+                install.check_vscode("code")
+        with unittest.mock.patch.object(install, "run_code", side_effect=subprocess.CalledProcessError(1, "code")):
+            with self.assertRaises(subprocess.CalledProcessError):
+                install.install_vscode("code")
+
+    def test_modes_and_missing_explicit_cli(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            install.main(["--check-vscode", "--vscode"])
+        with self.assertRaises(ValueError):
+            install.find_code("nonexistent-gdrive-editor-cli")
+
+    @unittest.skipUnless(install.os.name == "nt", "Windows CLI layout")
+    def test_versioned_windows_cli_without_shell(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            wrapper = root / "bin" / "code.cmd"
+            wrapper.parent.mkdir()
+            cli = root / "123abc/resources/app/out/cli.js"
+            cli.parent.mkdir(parents=True)
+            cli.write_text("", encoding="utf-8")
+            (root / "Code.exe").write_bytes(b"")
+            wrapper.write_text('"%~dp0..\\Code.exe" "%~dp0..\\123abc\\resources\\app\\out\\cli.js" %*', encoding="utf-8")
+            with unittest.mock.patch.object(install.subprocess, "run") as run:
+                run.return_value.stdout = "ok"
+                self.assertEqual(install.run_code(str(wrapper), ["--list-extensions"]), "ok")
+                self.assertEqual(run.call_args.args[0], [str(root / "Code.exe"), str(cli), "--list-extensions"])
+                self.assertEqual(run.call_args.kwargs["env"]["ELECTRON_RUN_AS_NODE"], "1")
+                self.assertNotIn("shell", run.call_args.kwargs)
+
+
 class StorageTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

@@ -32,6 +32,8 @@ description: 使用已登录的 Google Drive 桌面映射盘管理项目图片�
 
 ```powershell
 python scripts/install.py
+python scripts/install.py --vscode
+python scripts/install.py --check-vscode
 python scripts/gdrive.py --project '<project-abs-path>' init --drive-root '<drive-root>' --namespace github.com/<group>/<project>
 python scripts/gdrive.py --project '<project-abs-path>' audit --doc docs/review.md
 python scripts/gdrive.py --project '<project-abs-path>' put '<source-file>' --bucket pending --name shots/scene-01.png --reason markdown-reference
@@ -39,3 +41,5 @@ python scripts/gdrive.py --project '<project-abs-path>' verify
 python scripts/gdrive.py --project '<project-abs-path>' remove 'pending/<old-versioned-file>' --apply
 python -m unittest discover -s scripts -p test_gdrive.py -v
 ```
+
+本地 VS Code 单目录 Markdown 预览安装与排障见执行流程，扩展源码位于 [resources/vscode-preview/package.json](resources/vscode-preview/package.json)。安装回读不代表桌面预览或跨机同步已验收。
