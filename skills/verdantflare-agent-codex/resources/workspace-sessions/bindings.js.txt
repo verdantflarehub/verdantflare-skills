@@ -1,0 +1,25 @@
+import {createHooks as vfCreateHooks,allowsTask as vfAllowsTask} from "./verdantflare-workspace-sessions.mjs";
+import {Avn as vfInitRoots,Dvn as vfRootsAtom,cyn as vfReadRoots} from "./app-initial-1bf87ae32c44.js";
+import {JTt as vfManagerFor} from "./app-initial-20601a1f3fb3.js";
+let vfHooks;
+function vfGetHooks(){
+  vfInitRoots();
+  return vfHooks??=vfCreateHooks({React:k(),useRoots:()=>s(vfRootsAtom),useScope:()=>c(Qe),
+    rawQuery:vfRawQuery,managerFor:scope=>vfManagerFor(scope,"local"),
+    canonicalize:async paths=>{
+      const result={};
+      for(let i=0;i<paths.length;i+=100){
+        const page=await vfReadRoots({canonicalizeRoots:paths.slice(i,i+100)});
+        Object.assign(result,page.canonicalPathByRoot??{});
+      }
+      return result;
+    }});
+}
+function z(){return vfGetHooks().useRows()}
+function vfUseContext(){return vfGetHooks().useContext()}
+function vfNotice(){return vfGetHooks().Notice()}
+function vfNoticeElement(){return k().createElement(vfNotice)}
+function lt(options){
+  const query=vfRawCloud({...options,enabled:false});
+  return {...query,data:[],isLoading:false,isError:false,error:null};
+}

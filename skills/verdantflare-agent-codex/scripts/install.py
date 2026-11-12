@@ -200,6 +200,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--allow-root", action="append", default=None, help='Optional workspace root restriction; omit or "*" for all.')
     parser.add_argument("--replace", "--replace-config", dest="replace", action="store_true", help="Replace existing skill/runtime copies or config when hashes differ.")
     parser.add_argument("--register-mcp", action="store_true", help="Idempotently register verdantflare-agent-codex in peer hosts (Antigravity, Claude Code, Grok).")
+    parser.add_argument("--workspace-sessions", action="store_true", help="Explicitly apply the optional workspace-only VS Code session list patch; requires a compatible extension and a later UI reload.")
     parser.add_argument("--target", type=Path, default=Path(os.environ.get("LOCALAPPDATA", Path.home() / ".local/share")) / SKILL_NAME)
     parser.add_argument("--skills-root", action="append", default=None, help=f"Global skills root (default: {DEFAULT_SKILLS_ROOT}).")
     parser.add_argument("--skill-target", type=Path, default=None, help="Explicit skill destination override.")
@@ -212,6 +213,12 @@ def main(argv: list[str] | None = None) -> int:
         raise FileNotFoundError(f"Bundled service package missing at {service_source}")
 
     extension_dir = Path(args.extension).resolve() if args.extension else auto_find_codex_extension()
+    workspace_patch = None
+    if args.workspace_sessions:
+        from workspace_sessions import Patch, PatchError
+        workspace_patch = Patch(extension_dir)
+        if workspace_patch.probe() not in ("compatible", "installed"):
+            raise PatchError("Rollback the known workspace-session patch before installing this revision")
     codex_bin = Path(args.codex).resolve() if args.codex else auto_find_codex_binary(extension_dir)
     node_bin = Path(args.node).resolve() if args.node else auto_find_node_binary()
 
@@ -264,6 +271,7 @@ def main(argv: list[str] | None = None) -> int:
     manifest_path.write_text(json.dumps({"service": service_hashes, "skill": skill_hashes}, indent=2) + "\n", "utf-8")
 
     registered = register_peer_hosts(launch) if args.register_mcp else []
+    workspace_patch_status = workspace_patch.apply() if workspace_patch is not None else "not-requested"
     print(
         json.dumps(
             {
@@ -272,6 +280,7 @@ def main(argv: list[str] | None = None) -> int:
                 "service_files": len(service_hashes),
                 "skill_files": len(skill_hashes),
                 "host_registration": registered if args.register_mcp else "prepared-not-applied",
+                "workspace_sessions": workspace_patch_status,
             },
             ensure_ascii=False,
         )
