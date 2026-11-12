@@ -2,6 +2,10 @@ import asyncio
 import tempfile
 import time
 import unittest
+import re
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError
+from urllib.parse import urlencode, urlsplit
 from pathlib import Path
 from unittest.mock import patch
 
@@ -101,8 +105,85 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         await app.events.put({'method': 'bridge/disconnected'})
         await self.until(task_id, 'interrupted_unknown')
         with self.assertRaises(BridgeError) as caught:
-            await self.engine.call('codex_task_start',dict(mode='managed',cwd=str(self.root),prompt='repeat',request_id='new'))
+            self.engine.store.start(dict(mode='managed',cwd=str(self.root),prompt='repeat',request_id='new', thread_id='thread'))
         self.assertEqual('SESSION_BUSY', caught.exception.code)
+        self.assertEqual(task_id, caught.exception.task_id)
+
+    async def approval(self, task_id, app, wire_id=90):
+        await app.events.put({'id': wire_id, 'method': 'item/commandExecution/requestApproval',
+            'params': {'threadId': 'thread', 'turnId': 'turn', 'command': '<script>bad()</script>',
+                       'availableDecisions': ['accept', 'decline']}})
+        for _ in range(100):
+            pending = self.engine.store.pending_list(task_id)
+            match = next((p for p in pending if self.engine.pending_wire.get(p['id']) == wire_id), None)
+            if match and match.get('approval_url'):
+                return match
+            await asyncio.sleep(.02)
+        self.fail('No approval URL')
+
+    async def http(self, url, data=None, origin=None):
+        def request():
+            req = Request(url, data=urlencode(data).encode() if data is not None else None,
+                          headers={'Origin': origin} if origin else {})
+            try:
+                with urlopen(req, timeout=5) as reply:
+                    self.assertEqual('same-origin', reply.headers['Referrer-Policy'])
+                    self.assertIsNone(reply.headers.get('Access-Control-Allow-Origin'))
+                    return reply.status, reply.read().decode()
+            except HTTPError as error:
+                return error.code, error.read().decode()
+        return await asyncio.to_thread(request)
+
+    async def test_human_page_routes_once_and_keeps_other_approval_waiting(self):
+        task_id, app = await self.start_task()
+        first = await self.approval(task_id, app)
+        second = await self.approval(task_id, app, 91)
+        url = first['approval_url']
+        origin = 'http://' + urlsplit(url).netloc
+        status, page = await self.http(url)
+        self.assertEqual(200, status)
+        self.assertEqual(200, (await self.http(url, origin='null'))[0])
+        self.assertEqual(200, (await self.http(url, origin='https://external.example'))[0])
+        self.assertEqual([], app.sent)  # Navigation never grants a request.
+        self.assertIn('&lt;script&gt;', page)
+        self.assertNotIn('<script>', page)
+        csrf = re.search('name="csrf" value="([^"]+)"', page)[1]
+        data = {'csrf': csrf, 'decision': 'accept'}
+        self.assertEqual(403, (await self.http(url, data, 'http://evil.example'))[0])
+        self.assertEqual(403, (await self.http(url, data, 'null'))[0])
+        self.assertEqual(403, (await self.http(url, data))[0])
+        self.assertEqual([], app.sent)
+        self.assertEqual(200, (await self.http(url, data, origin))[0])
+        self.assertEqual([{'id': 90, 'result': {'decision': 'accept'}}], app.sent)
+        self.assertEqual('waiting_approval', self.engine.store.task(task_id)['state'])
+        self.assertEqual(409, (await self.http(url, data, origin))[0])
+        await app.events.put({'method': 'serverRequest/resolved', 'params': {'threadId': 'thread', 'requestId': 91}})
+        await self.until(task_id, 'running')
+        self.assertEqual(409, (await self.http(second['approval_url']))[0])
+
+    async def test_cancelled_approval_cannot_be_sent(self):
+        task_id, app = await self.start_task()
+        pending = await self.approval(task_id, app)
+        await self.engine.call('codex_task_cancel', dict(task_id=task_id, expected_turn_id='turn'))
+        await self.until(task_id, 'cancelled')
+        self.assertEqual(409, (await self.http(pending['approval_url']))[0])
+        self.assertEqual([], app.sent)
+
+    async def test_managed_same_workspace_runs_two_connections(self):
+        original = FakeApp.call
+        async def unique_call(app, method, params):
+            if method == 'thread/start':
+                return {'thread': {'id': 'thread-' + str(id(app))}}
+            return await original(app, method, params)
+        with patch.object(FakeApp, 'call', unique_call):
+            first, second = await asyncio.gather(*[
+                self.engine.call('codex_task_start', dict(mode='managed', cwd=str(self.root), prompt='test', request_id=str(i)))
+                for i in range(2)])
+            await self.until(first['task_id'], 'running')
+            await self.until(second['task_id'], 'running')
+            self.assertEqual(2, len(self.engine.connections))
+            self.assertNotEqual(self.engine.store.task(first['task_id'])['thread_id'],
+                                self.engine.store.task(second['task_id'])['thread_id'])
 
     async def test_second_frontend_routes_cancel_to_live_owner(self):
         task_id, app = await self.start_task()

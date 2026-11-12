@@ -125,10 +125,12 @@ class Store:
 
     @staticmethod
     def _lease(db, task):
-        for row in db.execute("SELECT * FROM leases WHERE task_id<>?", (task["id"],)):
-            if contains(row["cwd"], task["cwd"]) or contains(task["cwd"], row["cwd"]) or (
-                    task["thread_id"] and task["thread_id"] == row["thread_id"]):
-                raise BridgeError("SESSION_BUSY", "Workspace or thread has an active lease", retryable=True)
+        for row in db.execute("SELECT l.*, t.mode FROM leases l JOIN tasks t ON t.id=l.task_id WHERE l.task_id<>?", (task["id"],)):
+            workspace_conflict = (task['mode'] != 'managed' or row['mode'] != 'managed') and (
+                contains(row['cwd'], task['cwd']) or contains(task['cwd'], row['cwd']))
+            if workspace_conflict or (task['thread_id'] and task['thread_id'] == row['thread_id']):
+                raise BridgeError("SESSION_BUSY", "Workspace or thread has an active lease",
+                                  retryable=True, task_id=row['task_id'])
         db.execute("INSERT OR REPLACE INTO leases VALUES(?,?,?)",
                    (task["id"], task["cwd"], task["thread_id"]))
 
@@ -251,7 +253,7 @@ class Store:
                 db.execute("DELETE FROM leases WHERE task_id=?", (task_id,))
                 db.execute("UPDATE pending SET state='expired' WHERE task_id=? AND state IN ('waiting','responding')", (task_id,))
             else:
-                db.execute("UPDATE leases SET thread_id=? WHERE task_id=?", (thread_id, task_id))
+                self._lease(db, {**task, 'thread_id': thread_id})
             if state == 'interrupted_unknown':
                 db.execute("UPDATE commands SET state='unknown' WHERE task_id=? AND state IN ('queued','claimed')", (task_id,))
             self._event(db, self._task(db, task_id), "state", {"state": state})
@@ -302,8 +304,17 @@ class Store:
 
     def pending_list(self, task_id):
         with closing(self.connect()) as db:
-            return [{**dict(row), 'payload': json.loads(row['payload'])} for row in db.execute(
+            return [{**dict(row), 'payload': json.loads(row['payload']),
+                     **({'approval_url': json.loads(row['payload'])['approval_url']}
+                        if 'approval_url' in json.loads(row['payload']) else {})} for row in db.execute(
                 "SELECT * FROM pending WHERE task_id=? AND state IN ('waiting','responding')", (task_id,))]
+
+    def pending_url(self, request_id, url):
+        with self.transaction() as db:
+            row = db.execute('SELECT payload FROM pending WHERE id=?', (request_id,)).fetchone()
+            payload = json.loads(row['payload'])
+            payload['approval_url'] = url
+            db.execute('UPDATE pending SET payload=? WHERE id=?', (encode(payload), request_id))
 
     def pending_done(self, request_id):
         with self.transaction() as db:

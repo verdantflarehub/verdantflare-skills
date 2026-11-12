@@ -58,6 +58,18 @@ class StoreTests(unittest.TestCase):
         self.assertIsNone(self.store.claim('replacement'))
         self.assert_code('SESSION_BUSY', lambda: self.store.start(self.payload('retry-with-new-id')))
 
+    def test_managed_parallel_leases_are_atomic_and_thread_scoped(self):
+        def run(i):
+            return Store(self.store.path).start(self.payload(str(i), mode='managed', thread_id=None))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as workers:
+            tasks = list(workers.map(run, range(4)))
+        self.assertEqual(4, len({task['id'] for task in tasks}))
+        for i in range(4):
+            command = self.store.claim('owner')
+            self.store.transition(command['task_id'], 'owner', 'running', thread_id='thread-' + str(i), turn_id='turn')
+        self.assert_code('SESSION_BUSY', lambda: self.store.start(self.payload('same-thread', mode='managed', thread_id='thread-0')))
+        self.assert_code('SESSION_BUSY', lambda: self.store.start(self.payload('plugin')))
+
     def test_owner_fencing_and_heartbeat(self):
         task = self.store.start(self.payload())
         self.store.claim('one')

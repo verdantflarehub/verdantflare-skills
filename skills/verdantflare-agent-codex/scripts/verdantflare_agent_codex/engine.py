@@ -12,6 +12,7 @@ from .rpc import AppServer
 from .schema import validate
 from .snapshot import Snapshot, turn_result
 from .store import Store, TERMINAL, allowed_cwd
+from .approval_ui import ApprovalUI, decisions
 
 
 def public_task(task):
@@ -32,6 +33,8 @@ class Engine:
         self.heartbeat_worker = None
         self.recovery_attempted = set()
         self.stopping = False
+        self.approval_ui = None
+        self.approval_lock = asyncio.Lock()
 
     async def start(self):
         self.store.heartbeat(self.owner)
@@ -40,6 +43,8 @@ class Engine:
 
     async def close(self):
         self.stopping = True
+        if self.approval_ui:
+            await self.approval_ui.close()
         if self.heartbeat_worker:
             self.heartbeat_worker.cancel()
             with suppress(asyncio.CancelledError):
@@ -170,7 +175,9 @@ class Engine:
                     'managed': 'read_verified', 'threads': rows, 'filtered_out_count': filtered_out_count,
                     'next_cursor': result.get('nextCursor'),
                     'operations': ['capabilities', 'session_rename', 'start', 'status', 'result', 'continue', 'cancel', 'respond'],
-                    'permission_approval': 'human_ui_required'}
+                    'permission_approval': 'human_ui_required',
+                    'managed_approval': 'pending.approval_url',
+                    'managed_concurrency': {'scope': 'thread', 'limit': None, 'automatic_queue': False}}
         finally:
             if plugin:
                 await plugin.close()
@@ -341,7 +348,7 @@ class Engine:
             else:
                 await connection.send({'id': wire_id, 'result': command['payload']['response']})
             self.store.pending_done(pending_id)
-            self.store.transition(task['id'], self.owner, 'running')
+            self._refresh_waiting(task['id'])
         self.store.command_done(command['id'], self.owner, {'accepted': True})
 
     async def _next(self, task_id, connection):
@@ -373,7 +380,21 @@ class Engine:
                 kind = 'approval' if 'Approval' in method or 'approval' in method else 'input' if method == 'item/tool/requestUserInput' else 'other'
                 pending_id = self.store.pending_add(task_id, task['turn_id'], kind, {'method': method, 'params': params})
                 self.pending_wire[pending_id] = event['id']
-                self.store.transition(task_id, self.owner, 'waiting_approval' if kind == 'approval' else 'waiting_input')
+                if kind == 'approval':
+                    try:
+                        if self.approval_ui is None:
+                            self.approval_ui = ApprovalUI(self)
+                        url = self.approval_ui.register(task_id, pending_id)
+                        self.store.pending_url(pending_id, url)
+                    except OSError:
+                        self.store.append_event(task_id, 'approval_ui_unavailable', {'pending_request_id': pending_id})
+                self._refresh_waiting(task_id)
+            elif method == 'serverRequest/resolved':
+                for pending in self.store.pending_list(task_id):
+                    if self.pending_wire.get(pending['id']) == params.get('requestId'):
+                        self.store.pending_done(pending['id'])
+                        self.pending_wire.pop(pending['id'], None)
+                self._refresh_waiting(task_id)
             elif method == 'item/completed':
                 item = params['item']
                 items[item['id']] = item
@@ -388,6 +409,43 @@ class Engine:
                     state = 'timed_out'
                 self.store.transition(task_id, self.owner, state, result=turn_result(turn))
                 return
+
+    def _refresh_waiting(self, task_id):
+        task = self.store.task(task_id)
+        if task['state'] in TERMINAL or task['state'] in ('interrupted_unknown', 'cancelling'):
+            return
+        pending = self.store.pending_list(task_id)
+        state = 'waiting_approval' if any(p['kind'] == 'approval' for p in pending) else 'waiting_input' if pending else 'running'
+        self.store.transition(task_id, self.owner, state)
+
+    async def human_approval(self, task_id, pending_id, choice=None):
+        """Only the local human UI invokes this; MCP respond never enters this path."""
+        async with self.approval_lock:
+            task = self.store.task(task_id)
+            pending = next((p for p in self.store.pending_list(task_id) if p['id'] == pending_id), None)
+            connection = self.connections.get(task_id)
+            if (self.stopping or task['owner'] != self.owner or task['mode'] != 'managed'
+                    or task['state'] != 'waiting_approval' or task['deadline'] <= time.time()
+                    or not pending or pending['state'] != 'waiting' or pending['kind'] != 'approval'
+                    or pending['turn_id'] != task['turn_id'] or connection is None
+                    or pending_id not in self.pending_wire):
+                raise BridgeError('STALE_TURN', 'Approval is no longer active')
+            if choice is None:
+                return pending
+            options = decisions(pending['payload'])
+            if choice not in options:
+                raise BridgeError('INVALID_ARGUMENT', 'Unsupported approval decision')
+            # Consume before awaiting I/O: an uncertain send must never be replayed.
+            self.store.pending_done(pending_id)
+            wire_id = self.pending_wire.pop(pending_id)
+            try:
+                await connection.send({'id': wire_id, 'result': options[choice]})
+            except Exception:
+                self.store.transition(task_id, self.owner, 'interrupted_unknown', error={'code': 'APPROVAL_SEND_UNCONFIRMED'})
+                raise
+            self.store.append_event(task_id, 'human_approval_sent', {'pending_request_id': pending_id, 'decision': choice})
+            self._refresh_waiting(task_id)
+            return pending
 
     async def _watch_plugin(self, task_id, connection, snapshot, marker, owner):
         last_status = None
