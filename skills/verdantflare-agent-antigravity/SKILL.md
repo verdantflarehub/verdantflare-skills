@@ -13,6 +13,8 @@ description: 将 Google Antigravity（双子座）封装为标准 MCP 服务与 
 
 本技能将 VS Code 中的 Google Antigravity 扩展（底层由 `agy.exe --hub` 提供 `LanguageServerService` Connect-RPC 服务）与无头 `agy.exe` CLI 封装为统一的 `stdio` MCP 服务端及命令行工具。其他智能体（如负责方案与评审的智能体、负责底层工具链的智能体）可通过本技能默认向 **VS Code 前台 Antigravity 面板** 实时注入指令、新建或续接指定会话（`cascadeId`）、轮询执行状态并读取 `brain/<conversation-id>/` 下的产物与 `transcript.jsonl` 轨迹。本技能只负责跨智能体通信调度与 MCP 服务自身维护，不替代方案设计或人工审批。
 
+Agent 间委托统一先应用 `verdantflare-meta-agent`：绑定计划、稳定任务身份和关联变更，登记 Session 名称、原生地址、执行及回传目标，再按本技能能力派单。通用协作规则不替代下述宿主权限、互斥、防递归和轮次校验；投递受理不等于接收方处理或任务验收。
+
 ## 3. 按任务读取
 
 | 当前任务                                       | 读取资料                                     |
