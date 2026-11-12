@@ -2,10 +2,10 @@
 
 ## 1. 目录结构契约
 
-项目可以沿用工作区的 `.output/music-mv/<创作者>/<MV项目>/`，但目录只是 Project 工作副本；服务端身份由 Studio `project_id` 管理。项目分为“项目全局层”与“单元执行层”：
+项目使用工作区的 `.gdrive/output/music-mv/<创作者>/<MV项目>/`（跨机同步，取代旧 `.output/`），但目录只是 Project 工作副本；服务端身份由 Studio `project_id` 管理。项目分为“项目全局层”与“单元执行层”：
 
 ```text
-.output/music-mv/<创作者>/<MV项目>/
+.gdrive/output/music-mv/<创作者>/<MV项目>/
 ├── project.json                 # 领域 JSON：项目全局时钟与元数据
 ├── treatment.md                 # 顶层导演方案与叙事脉络
 ├── visualbible.md              # 视觉圣经与人物原案
