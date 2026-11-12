@@ -212,16 +212,19 @@ def _extract_update_event(
         tc_id = update.get("toolCallId") or update.get("id") or "tool"
         title = update.get("title") or update.get("name") or utype
         status = update.get("status")
+        metadata = (update.get('_meta') or {}).get('x.ai/tool') or {}
+        read_only = (update.get('kind') in {'read', 'search'} or metadata.get('read_only') is True
+                     or metadata.get('kind') in {'read', 'search'})
         raw_input = update.get("rawInput") or update.get("input") or {}
         if isinstance(raw_input, dict):
             cmd = raw_input.get("command") or raw_input.get("cmd")
             if isinstance(cmd, str) and not any(c.get("id") == tc_id for c in commands):
                 commands.append({"id": tc_id, "command": cmd, "status": status})
             fpath = raw_input.get("file_path") or raw_input.get("path")
-            if isinstance(fpath, str) and fpath not in file_changes:
+            if not read_only and isinstance(fpath, str) and fpath not in file_changes:
                 file_changes.append(fpath)
         locations = update.get("locations")
-        if isinstance(locations, list):
+        if not read_only and isinstance(locations, list):
             for loc in locations:
                 if isinstance(loc, dict) and isinstance(loc.get("path"), str):
                     if loc["path"] not in file_changes:
