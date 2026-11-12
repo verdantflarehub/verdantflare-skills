@@ -18,9 +18,33 @@ UUID = r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F
 
 
 class JobError(RuntimeError):
-    def __init__(self, code):
+    def __init__(self, code: str, message: str | None = None):
         self.code = code
-        super().__init__(code)
+        self.message = message
+        super().__init__(f'{code}: {message}' if message else code)
+
+
+def _extract_stream_error(stdout_bytes: bytes, stderr_bytes: bytes) -> str:
+    for line in (stdout_bytes or b'').decode('utf-8-sig', errors='replace').splitlines():
+        raw = line.strip()
+        if not raw:
+            continue
+        try:
+            evt = json.loads(raw)
+        except ValueError:
+            continue
+        if not isinstance(evt, dict):
+            continue
+        if evt.get('event') == 'result' and isinstance(evt.get('result'), dict):
+            err = str(evt['result'].get('error') or '').strip()
+            if err:
+                return err[:4000]
+        if evt.get('event') == 'error':
+            err = str(evt.get('error') or evt.get('message') or '').strip()
+            if err:
+                return err[:4000]
+    stderr_text = (stderr_bytes or b'').decode('utf-8', errors='replace').strip()
+    return stderr_text[:4000]
 
 
 def encode(value):
@@ -205,23 +229,34 @@ def run_job(jobs, job_id, *, command=None):
                     jobs.finish(job_id,'interrupted_unknown',{'answer':'','unresolved':['CLI deadline elapsed; native terminal outcome is unverified.']})
                     return
         if process.returncode!=0:
-            jobs.finish(job_id,'failed',{'answer':'','exit_code':process.returncode,'unresolved':['CLI exited unsuccessfully.']})
+            detail=_extract_stream_error(stdout,stderr)
+            reason=f'CLI exited with code {process.returncode}: {detail}' if detail else f'CLI exited unsuccessfully (code {process.returncode}).'
+            jobs.finish(job_id,'failed',{'answer':'','exit_code':process.returncode,'error':reason,'unresolved':[reason]})
             return
         events=[json.loads(line) for line in stdout.decode('utf-8-sig').splitlines() if line.strip()]
-        results=[event['result'] for event in events if event.get('event')=='result']
+        results=[event['result'] for event in events if event.get('event')=='result' and isinstance(event.get('result'),dict)]
         if len(results)!=1:
-            raise JobError('BACKEND_OUTCOME_UNVERIFIED')
+            detail=_extract_stream_error(stdout,stderr)
+            raise JobError('BACKEND_OUTCOME_UNVERIFIED',detail or 'CLI exited without emitting a single terminal result event.')
         output=results[0]
+        if output.get('status')=='ERROR' and not output.get('conversation_id'):
+            detail=str(output.get('error') or _extract_stream_error(b'',stderr) or 'CLI reported ERROR before starting conversation.').strip()
+            jobs.finish(job_id,'failed',{'answer':'','exit_code':0,'error':detail,'unresolved':[detail]})
+            return
         if output.get('conversation_id')!=args['conversation_id']:
             raise JobError('BACKEND_TARGET_MISMATCH')
         if output.get('status')!='SUCCESS' or not isinstance(output.get('response'),str):
-            raise JobError('BACKEND_OUTCOME_UNVERIFIED')
+            detail=str(output.get('error') or _extract_stream_error(b'',stderr) or '').strip()
+            raise JobError('BACKEND_OUTCOME_UNVERIFIED',detail or None)
         jobs.finish(job_id,'completed',{'answer':output['response'],'native_result':output,'exit_code':0})
     except Exception as error:
         if process is not None and process.poll() is None:
             process.terminate();process.communicate()
+        code=error.code if isinstance(error,JobError) else type(error).__name__
+        detail=error.message if isinstance(error,JobError) else str(error).strip()
+        reason=f'{code}: {detail}' if detail and detail!=code else code
         jobs.finish(job_id,'interrupted_unknown' if process else 'failed',
-                    {'answer':'','unresolved':[error.code if isinstance(error,JobError) else type(error).__name__]})
+                    {'answer':'','error':reason,'unresolved':[reason]})
 
 
 if __name__=='__main__':

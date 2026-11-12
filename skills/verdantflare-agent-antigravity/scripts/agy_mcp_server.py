@@ -9,10 +9,12 @@ Antigravity foreground panel, monitor execution, and inspect artifacts.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -20,12 +22,14 @@ from typing import Any
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from agy_jobs import JobError, call_tool as call_cli_job, tool_schemas as cli_job_schemas
 
 SERVER_NAME = "verdantflare-agent-antigravity"
 SERVER_VERSION = "1.0.0"
 DEFAULT_MODEL = "MODEL_PLACEHOLDER_M418"
 SERVICE_PREFIX = "/exa.language_server_pb.LanguageServerService/"
+_CLI_ASYNC_STARTUP_CHECK_SEC = 6.5
 
 
 def _gemini_home() -> Path:
@@ -218,67 +222,269 @@ def lsrpc_call(
         raise RuntimeError(f"LS RPC {method} connection error ({address}): {exc}") from exc
 
 
+def _strip_outer_quotes(value: str) -> str:
+    text = value.strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in ('"', "'"):
+        return text[1:-1]
+    return text
+
+
+def _tokenize_cmdline(cmdline: str) -> list[str]:
+    """Split a Windows or POSIX command line into raw tokens without altering backslashes."""
+    return re.findall(r'(?:"[^"]*"|\'[^\']*\'|\S+)+', cmdline or "")
+
+
+def _extract_cmdline_flag_values(cmdline: str, flag_names: tuple[str, ...]) -> list[str]:
+    """Extract repeatable `--flag=value` or `--flag value` arguments from a command line."""
+    tokens = _tokenize_cmdline(cmdline)
+    values: list[str] = []
+    idx = 0
+    while idx < len(tokens):
+        tok = _strip_outer_quotes(tokens[idx])
+        if tok in flag_names:
+            if idx + 1 < len(tokens):
+                nxt = _strip_outer_quotes(tokens[idx + 1])
+                if nxt and not nxt.startswith("--"):
+                    values.append(nxt)
+                    idx += 2
+                    continue
+        else:
+            for flag in flag_names:
+                prefix = flag + "="
+                if tok.startswith(prefix):
+                    rhs = _strip_outer_quotes(tok[len(prefix) :])
+                    if rhs:
+                        values.append(rhs)
+                    break
+        idx += 1
+    return values
+
+
+def _has_hub_flag(cmdline: str) -> bool:
+    for raw_tok in _tokenize_cmdline(cmdline):
+        tok = _strip_outer_quotes(raw_tok)
+        if tok == "--hub" or tok.startswith("--hub-port") or tok.startswith("--hub_port"):
+            return True
+    return False
+
+
+def _resolve_app_data_dir(app_data_arg: str | None = None) -> Path:
+    raw = (app_data_arg or "").strip() or "antigravity"
+    candidate = Path(raw).expanduser()
+    return candidate.resolve() if candidate.is_absolute() else (_gemini_home() / candidate).resolve()
+
+
+def _read_hub_discovery_file(port: int | str, app_data_dir: Path | None = None) -> dict[str, Any] | None:
+    """Read CSRF token and metadata from `~/.gemini/<app_data_dir>/daemon/hub_<port>.json`."""
+    base_dir = app_data_dir or _resolve_app_data_dir()
+    disc_file = base_dir / "daemon" / f"hub_{port}.json"
+    if not disc_file.is_file():
+        return None
+    try:
+        data = json.loads(disc_file.read_text(encoding="utf-8", errors="replace"))
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    csrf = str(data.get("csrfToken") or "").strip()
+    if not csrf:
+        return None
+    http_port = data.get("httpPort")
+    if http_port is not None and str(http_port) != str(port):
+        return None
+    return data
+
+
+def _is_pid_alive(pid: int | None) -> bool:
+    """Check if an OS process ID is currently alive without sending signals."""
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+    if os.name == "nt":
+        try:
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+            kernel32.OpenProcess.restype = ctypes.c_void_p
+            kernel32.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+            kernel32.GetExitCodeProcess.restype = ctypes.c_int
+            kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+            kernel32.CloseHandle.restype = ctypes.c_int
+
+            handle = kernel32.OpenProcess(0x1000, 0, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+            if not handle:
+                return ctypes.get_last_error() == 5  # ERROR_ACCESS_DENIED => alive
+            try:
+                exit_code = ctypes.c_uint32(0)
+                ok = kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+                return bool(ok and exit_code.value == 259)  # STILL_ACTIVE
+            finally:
+                kernel32.CloseHandle(handle)
+        except Exception:
+            return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+
+
+def _parse_hub_process(pid: int | None, cmdline: str) -> dict[str, Any] | None:
+    """Parse an `agy --hub` process command line, resolving CSRF token from CLI or daemon discovery JSON."""
+    if not _has_hub_flag(cmdline):
+        return None
+    ports = _extract_cmdline_flag_values(cmdline, ("--hub-port", "--hub_port"))
+    if not ports or not ports[0].isdigit():
+        return None
+    port_str = ports[0]
+    csrfs = _extract_cmdline_flag_values(cmdline, ("--csrf_token", "--csrf-token"))
+    app_dirs = _extract_cmdline_flag_values(cmdline, ("--app_data_dir", "--app-data-dir"))
+    app_data_path = _resolve_app_data_dir(app_dirs[0] if app_dirs else None)
+
+    mounted_workspaces: list[str] = []
+    for raw_dir in _extract_cmdline_flag_values(cmdline, ("--add-dir",)):
+        try:
+            uri = path_to_workspace_uri(raw_dir)
+            if uri not in mounted_workspaces:
+                mounted_workspaces.append(uri)
+        except Exception:
+            continue
+
+    csrf_token = csrfs[0] if csrfs else ""
+    source = "process"
+    disc: dict[str, Any] | None = None
+    if not csrf_token:
+        disc = _read_hub_discovery_file(port_str, app_data_path)
+        if disc:
+            csrf_token = str(disc["csrfToken"]).strip()
+            source = "process+daemon"
+    if not csrf_token:
+        return None
+
+    return {
+        "pid": pid,
+        "address": f"localhost:{port_str}",
+        "port": int(port_str),
+        "csrf_token": csrf_token,
+        "source": source,
+        "mounted_workspaces": mounted_workspaces,
+        "ls_version": (disc or {}).get("lsVersion"),
+    }
+
+
+def _scan_daemon_hub_files(
+    seen_ports: set[str],
+    excluded_pids: set[int],
+    app_data_dir: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Fallback scan of `daemon/hub_*.json` when OS process enumeration yields no Hub entries."""
+    daemon_dir = (app_data_dir or _resolve_app_data_dir()) / "daemon"
+    if not daemon_dir.is_dir():
+        return []
+    found: list[dict[str, Any]] = []
+    for jf in sorted(daemon_dir.glob("hub_*.json")):
+        try:
+            data = json.loads(jf.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        http_port = data.get("httpPort")
+        csrf_token = str(data.get("csrfToken") or "").strip()
+        pid = data.get("pid")
+        if not csrf_token or not isinstance(http_port, int) or http_port <= 0:
+            continue
+        port_str = str(http_port)
+        if port_str in seen_ports:
+            continue
+        if isinstance(pid, int):
+            if pid in excluded_pids or not _is_pid_alive(pid):
+                continue
+        seen_ports.add(port_str)
+        found.append(
+            {
+                "pid": pid if isinstance(pid, int) else None,
+                "address": f"localhost:{port_str}",
+                "port": http_port,
+                "csrf_token": csrf_token,
+                "source": "daemon",
+                "mounted_workspaces": [],
+                "ls_version": data.get("lsVersion"),
+            }
+        )
+    return found
+
+
 def discover_hubs() -> list[dict[str, Any]]:
     """Discover all running `agy.exe --hub` instances and enrich with trajectory summaries."""
     candidates: list[dict[str, Any]] = []
     seen_ports: set[str] = set()
+    non_hub_agy_pids: set[int] = set()
+    process_scan_found_hub = False
 
     env_addr = os.environ.get("ANTIGRAVITY_LS_ADDRESS", "").strip()
     env_csrf = os.environ.get("ANTIGRAVITY_CSRF_TOKEN", "").strip()
-    if env_addr and env_csrf:
+    if env_addr:
         port_str = env_addr.split(":")[-1]
-        seen_ports.add(port_str)
-        candidates.append(
-            {
-                "pid": None,
-                "address": env_addr,
-                "port": int(port_str) if port_str.isdigit() else 0,
-                "csrf_token": env_csrf,
-                "source": "env",
-            }
-        )
+        effective_csrf = env_csrf
+        source = "env"
+        if not effective_csrf and port_str.isdigit():
+            disc = _read_hub_discovery_file(port_str)
+            if disc:
+                effective_csrf = str(disc["csrfToken"]).strip()
+                source = "env+daemon"
+        if effective_csrf:
+            seen_ports.add(port_str)
+            candidates.append(
+                {
+                    "pid": None,
+                    "address": env_addr,
+                    "port": int(port_str) if port_str.isdigit() else 0,
+                    "csrf_token": effective_csrf,
+                    "source": source,
+                    "mounted_workspaces": [],
+                }
+            )
 
     if os.name == "nt":
         for proc in _query_windows_agy_processes():
+            raw_pid = proc.get("ProcessId")
+            pid = int(raw_pid) if isinstance(raw_pid, int) or (isinstance(raw_pid, str) and raw_pid.isdigit()) else None
             cmdline = proc.get("CommandLine") or ""
-            port_m = re.search(r"--hub-port=(\d+)", cmdline)
-            csrf_m = re.search(r"--csrf_token=([A-Za-z0-9_-]+)", cmdline)
-            if port_m and csrf_m:
-                port_str = port_m.group(1)
+            parsed = _parse_hub_process(pid, cmdline)
+            if parsed is not None:
+                process_scan_found_hub = True
+                port_str = str(parsed["port"])
                 if port_str not in seen_ports:
                     seen_ports.add(port_str)
-                    candidates.append(
-                        {
-                            "pid": proc.get("ProcessId"),
-                            "address": f"localhost:{port_str}",
-                            "port": int(port_str),
-                            "csrf_token": csrf_m.group(1),
-                            "source": "process",
-                        }
-                    )
+                    candidates.append(parsed)
+            elif pid is not None:
+                non_hub_agy_pids.add(pid)
     else:
         try:
             out = subprocess.check_output(["ps", "-eo", "pid,args"], text=True, timeout=5)
             for line in out.splitlines():
-                if "--hub" in line and "--hub-port=" in line:
-                    port_m = re.search(r"--hub-port=(\d+)", line)
-                    csrf_m = re.search(r"--csrf_token=([A-Za-z0-9_-]+)", line)
-                    pid_m = re.match(r"^\s*(\d+)", line)
-                    if port_m and csrf_m:
-                        port_str = port_m.group(1)
-                        if port_str not in seen_ports:
-                            seen_ports.add(port_str)
-                            candidates.append(
-                                {
-                                    "pid": int(pid_m.group(1)) if pid_m else None,
-                                    "address": f"localhost:{port_str}",
-                                    "port": int(port_str),
-                                    "csrf_token": csrf_m.group(1),
-                                    "source": "process",
-                                }
-                            )
+                pid_m = re.match(r"^\s*(\d+)\s+(.*)$", line)
+                if not pid_m:
+                    continue
+                pid = int(pid_m.group(1))
+                args_str = pid_m.group(2)
+                parsed = _parse_hub_process(pid, args_str)
+                if parsed is not None:
+                    process_scan_found_hub = True
+                    port_str = str(parsed["port"])
+                    if port_str not in seen_ports:
+                        seen_ports.add(port_str)
+                        candidates.append(parsed)
+                elif re.search(r"(?:^|[\\/])agy(?:\.exe)?(?:\s|$)", args_str):
+                    non_hub_agy_pids.add(pid)
         except Exception:
             pass
+
+    if not process_scan_found_hub:
+        candidates.extend(_scan_daemon_hub_files(seen_ports, non_hub_agy_pids))
 
     alive_hubs: list[dict[str, Any]] = []
     for item in candidates:
@@ -291,7 +497,8 @@ def discover_hubs() -> list[dict[str, Any]]:
                 timeout=3.0,
             )
             summaries = trajs.get("trajectorySummaries") or {}
-            workspaces: set[str] = set()
+            mounted_ws = set(item.get("mounted_workspaces") or [])
+            workspaces: set[str] = set(mounted_ws)
             latest_ts = ""
             running_count = 0
             for cid, summary in summaries.items():
@@ -307,6 +514,7 @@ def discover_hubs() -> list[dict[str, Any]]:
             item["conversation_count"] = len(summaries)
             item["running_count"] = running_count
             item["latest_modified_time"] = latest_ts
+            item["mounted_workspaces"] = sorted(mounted_ws)
             item["workspaces"] = sorted(workspaces)
             item["summaries"] = summaries
             alive_hubs.append(item)
@@ -336,19 +544,34 @@ def select_hub(
     """
     active_hubs = hubs if hubs is not None else discover_hubs()
     if not active_hubs:
-        raise JobError('OFFLINE')
+        raise JobError(
+            "OFFLINE",
+            "No running Antigravity Hub (`agy.exe --hub`) found. "
+            "Ensure the VS Code Google Antigravity panel is open or use mode='cli'.",
+        )
     if conversation_id:
         for hub in active_hubs:
             if conversation_id in (hub.get("summaries") or {}):
-                if strict_workspace and workspace and not any(workspace_matches_uri(path_to_workspace_uri(workspace),uri) for uri in hub.get('workspaces',[])):
-                    raise JobError('WORKSPACE_DENIED')
+                if strict_workspace and workspace and not any(
+                    workspace_matches_uri(path_to_workspace_uri(workspace), uri)
+                    for uri in hub.get("workspaces", [])
+                ):
+                    raise JobError("WORKSPACE_DENIED")
                 chosen = dict(hub)
                 chosen["workspace_matched"] = True
                 chosen["matched_by"] = "conversation_id"
                 return chosen
     if workspace:
         target_uri = path_to_workspace_uri(workspace)
-        # 1. Exact workspace URI match
+        # 1a. Exact match on mounted `--add-dir` workspaces first
+        for hub in active_hubs:
+            for ws_uri in hub.get("mounted_workspaces") or []:
+                if workspace_matches_uri(target_uri, ws_uri) == "exact":
+                    chosen = dict(hub)
+                    chosen["workspace_matched"] = True
+                    chosen["matched_by"] = "workspace_exact"
+                    return chosen
+        # 1b. Exact match on all known hub workspaces
         for hub in active_hubs:
             for ws_uri in hub.get("workspaces") or []:
                 if workspace_matches_uri(target_uri, ws_uri) == "exact":
@@ -356,7 +579,15 @@ def select_hub(
                     chosen["workspace_matched"] = True
                     chosen["matched_by"] = "workspace_exact"
                     return chosen
-        # 2. Subdirectory / parent prefix match
+        # 2a. Subdirectory / parent prefix match on mounted workspaces first
+        for hub in active_hubs:
+            for ws_uri in hub.get("mounted_workspaces") or []:
+                if workspace_matches_uri(target_uri, ws_uri) == "prefix":
+                    chosen = dict(hub)
+                    chosen["workspace_matched"] = True
+                    chosen["matched_by"] = "workspace_prefix"
+                    return chosen
+        # 2b. Subdirectory / parent prefix match on all known hub workspaces
         for hub in active_hubs:
             for ws_uri in hub.get("workspaces") or []:
                 if workspace_matches_uri(target_uri, ws_uri) == "prefix":
@@ -495,9 +726,12 @@ def tool_agy_hub_status() -> dict[str, Any]:
             "pid": h.get("pid"),
             "address": h.get("address"),
             "port": h.get("port"),
+            "source": h.get("source"),
+            "ls_version": h.get("ls_version"),
             "conversation_count": h.get("conversation_count"),
             "running_count": h.get("running_count"),
             "latest_modified_time": h.get("latest_modified_time"),
+            "mounted_workspaces": h.get("mounted_workspaces") or [],
             "workspaces": h.get("workspaces"),
         }
         for h in hubs
@@ -527,16 +761,19 @@ def tool_agy_list_conversations(
         for cid, info in summaries.items():
             if cid in seen_ids:
                 continue
-            ws_list = [
+            meta = info.get("trajectoryMetadata") or {}
+            raw_ws = [
                 w.get("workspaceFolderAbsoluteUri", "")
                 for w in (info.get("workspaces") or [])
                 if w.get("workspaceFolderAbsoluteUri")
-            ]
+            ] + [u for u in (meta.get("workspaceUris") or []) if u]
+            ws_list = list(dict.fromkeys(raw_ws))
+            effective_ws_for_filter = ws_list or list(hub.get("mounted_workspaces") or [])
             if target_uri:
-                if not any(workspace_matches_uri(target_uri, u) is not None for u in ws_list):
+                if not any(workspace_matches_uri(target_uri, u) is not None for u in effective_ws_for_filter):
                     continue
             seen_ids.add(cid)
-            proj_id = (info.get("trajectoryMetadata") or {}).get("projectId") or None
+            proj_id = meta.get("projectId") or None
             items.append(
                 {
                     "conversation_id": cid,
@@ -561,6 +798,138 @@ def tool_agy_list_conversations(
     }
 
 
+def _cli_dispatch_dir() -> Path:
+    d = _gemini_home() / "antigravity" / "cli_dispatch"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _safe_unlink(path: Path | None) -> None:
+    if path is None:
+        return
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _prune_cli_dispatch_dir(dispatch_dir: Path, keep_recent: int = 40) -> None:
+    try:
+        files = sorted(
+            (p for p in dispatch_dir.iterdir() if p.is_file()),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+    except OSError:
+        return
+    for old_file in files[keep_recent:]:
+        _safe_unlink(old_file)
+
+
+def _resolve_executable_agy_binary() -> tuple[str | None, str | None]:
+    candidate = _agy_binary()
+    if candidate.is_absolute() or candidate.parent != Path("."):
+        if candidate.is_file():
+            return str(candidate), None
+        return None, f"Antigravity CLI binary not found at {candidate.as_posix()}"
+    found = shutil.which(str(candidate))
+    if found:
+        return found, None
+    return None, f"Antigravity CLI binary {str(candidate)!r} not found in PATH or ~/.gemini/bin"
+
+
+def _parse_cli_output(stdout_text: str) -> dict[str, Any]:
+    """Parse `stream-json` or `json` CLI stdout for terminal conversation_id, status, response, and error."""
+    conv_id = ""
+    status = ""
+    response_text = ""
+    err_text = ""
+    found_json = False
+
+    for line in (stdout_text or "").splitlines():
+        raw = line.strip()
+        if not raw:
+            continue
+        try:
+            obj = json.loads(raw)
+        except ValueError:
+            continue
+        if not isinstance(obj, dict):
+            continue
+        found_json = True
+        if obj.get("event") == "result" and isinstance(obj.get("result"), dict):
+            res = obj["result"]
+            conv_id = str(res.get("conversation_id") or conv_id)
+            status = str(res.get("status") or status)
+            if isinstance(res.get("response"), str):
+                response_text = res["response"]
+            if res.get("error"):
+                err_text = str(res["error"])
+        elif obj.get("event") == "error":
+            err_text = str(obj.get("error") or obj.get("message") or err_text)
+        elif "status" in obj or "conversation_id" in obj or "error" in obj:
+            conv_id = str(obj.get("conversation_id") or conv_id)
+            status = str(obj.get("status") or status)
+            if isinstance(obj.get("response"), str):
+                response_text = obj["response"]
+            if obj.get("error"):
+                err_text = str(obj["error"])
+
+    return {
+        "found_json": found_json,
+        "conversation_id": conv_id.strip(),
+        "status": status.strip(),
+        "response": response_text,
+        "error": err_text.strip(),
+    }
+
+
+def _read_log_error_tail(log_path: Path | None, max_chars: int = 1200) -> str:
+    if log_path is None or not log_path.is_file():
+        return ""
+    try:
+        lines = [ln.strip() for ln in log_path.read_text(encoding="utf-8", errors="replace").splitlines() if ln.strip()]
+    except Exception:
+        return ""
+    if not lines:
+        return ""
+    err_lines = [
+        ln
+        for ln in lines
+        if (
+            ln.startswith(("E", "F"))
+            or any(k in ln.lower() for k in ("error", "fatal", "panic", "failed", "unauthenticated", "denied"))
+        )
+        and "cs path /usr/bin/cs invalid" not in ln
+        and "not found in any store: file does not exist" not in ln
+    ]
+    chosen = err_lines[-6:] if err_lines else lines[-5:]
+    return " | ".join(chosen)[:max_chars]
+
+
+def _format_cli_failure(
+    returncode: int | None,
+    parsed: dict[str, Any],
+    stdout_text: str,
+    stderr_text: str,
+    log_path: Path | None = None,
+) -> str:
+    if parsed.get("error"):
+        return str(parsed["error"]).strip()
+    stderr_clean = (stderr_text or "").strip()
+    if stderr_clean:
+        return stderr_clean[:2000]
+    if parsed.get("status") and parsed["status"] != "SUCCESS":
+        return f"Antigravity CLI reported status={parsed['status']!r} (exit code {returncode}) without starting a valid turn."
+    stdout_clean = (stdout_text or "").strip()
+    if stdout_clean and not parsed.get("found_json"):
+        return f"Antigravity CLI exited with code {returncode}: {stdout_clean[:1000]}"
+    log_tail = _read_log_error_tail(log_path)
+    if log_tail:
+        return f"Antigravity CLI exited (code {returncode}) without generating a conversation; log tail: {log_tail}"
+    return f"Antigravity CLI exited (code {returncode}) immediately without generating a conversation or diagnostic output."
+
+
 def tool_agy_dispatch_task(
     prompt: str,
     conversation_id: str | None = None,
@@ -579,51 +948,248 @@ def tool_agy_dispatch_task(
         raise ValueError("prompt must be a non-empty string")
 
     effective_ws = workspace or os.getcwd()
-    ws_uri = path_to_workspace_uri(effective_ws)
+    effective_ws_path = Path(effective_ws).expanduser().resolve()
+    ws_uri = path_to_workspace_uri(effective_ws_path)
 
     if mode == "cli":
-        cmd = [str(_agy_binary()), "--print", prompt, "--output-format", "json"]
+        if os.environ.get("VERDANTFLARE_AGENT_ANTIGRAVITY_DEPTH"):
+            raise JobError("RECURSIVE_DELEGATION_DENIED", "Nested Antigravity CLI dispatch is forbidden.")
+        if not effective_ws_path.is_dir():
+            return {
+                "ok": False,
+                "mode": "cli",
+                "returncode": None,
+                "error": f"Workspace directory does not exist: {effective_ws_path.as_posix()}",
+                "project_id": project_id,
+                "workspace_uri": ws_uri,
+                "skip_permissions": skip_permissions,
+            }
+        agy_exec, bin_err = _resolve_executable_agy_binary()
+        if not agy_exec:
+            return {
+                "ok": False,
+                "mode": "cli",
+                "returncode": None,
+                "error": bin_err or "Antigravity CLI binary not found.",
+                "project_id": project_id,
+                "workspace_uri": ws_uri,
+                "skip_permissions": skip_permissions,
+            }
+
+        dispatch_dir = _cli_dispatch_dir()
+        _prune_cli_dispatch_dir(dispatch_dir)
+        run_tag = f"cli_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
+        ls_log_file = dispatch_dir / f"{run_tag}.ls.log"
+
+        cmd = [
+            agy_exec,
+            "--input-format",
+            "stream-json",
+            "--output-format",
+            "stream-json",
+            "--log-file",
+            str(ls_log_file),
+        ]
         if skip_permissions:
             cmd.append("--dangerously-skip-permissions")
+        if model and model != DEFAULT_MODEL:
+            cmd.extend(["--model", model])
         if conversation_id:
             cmd.extend(["--conversation", conversation_id])
         elif project_id:
             cmd.extend(["--project", project_id])
         if workspace:
-            cmd.extend(["--add-dir", str(Path(workspace).expanduser().resolve())])
-        if not wait:
-            proc = subprocess.Popen(
-                cmd,
-                cwd=str(Path(effective_ws).expanduser().resolve()),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+            cmd.extend(["--add-dir", str(effective_ws_path)])
+
+        stdin_payload = (
+            json.dumps(
+                {"event": "user", "message": {"role": "user", "content": prompt}},
+                ensure_ascii=False,
             )
+            + "\n"
+        )
+        child_env = dict(os.environ, VERDANTFLARE_AGENT_ANTIGRAVITY_DEPTH="1")
+
+        if not wait:
+            stdin_file = dispatch_dir / f"{run_tag}.stdin.jsonl"
+            stdout_file = dispatch_dir / f"{run_tag}.stdout.jsonl"
+            stderr_file = dispatch_dir / f"{run_tag}.stderr.log"
+            stdin_file.write_text(stdin_payload, encoding="utf-8")
+
+            popen_kwargs: dict[str, Any] = {
+                "cwd": str(effective_ws_path),
+                "env": child_env,
+            }
+            if os.name == "nt":
+                popen_kwargs["creationflags"] = (
+                    getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+                    | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
+                )
+            else:
+                popen_kwargs["start_new_session"] = True
+
+            try:
+                with (
+                    stdin_file.open("rb") as in_fh,
+                    stdout_file.open("wb") as out_fh,
+                    stderr_file.open("wb") as err_fh,
+                ):
+                    proc = subprocess.Popen(
+                        cmd,
+                        stdin=in_fh,
+                        stdout=out_fh,
+                        stderr=err_fh,
+                        **popen_kwargs,
+                    )
+            except Exception as exc:
+                _safe_unlink(stdin_file)
+                return {
+                    "ok": False,
+                    "mode": "cli",
+                    "returncode": None,
+                    "error": f"Failed to launch Antigravity CLI: {exc}",
+                    "project_id": project_id,
+                    "workspace_uri": ws_uri,
+                    "skip_permissions": skip_permissions,
+                }
+
+            check_deadline = time.monotonic() + max(0.0, float(_CLI_ASYNC_STARTUP_CHECK_SEC))
+            while time.monotonic() < check_deadline:
+                if proc.poll() is not None:
+                    break
+                time.sleep(0.1)
+
+            if proc.poll() is not None:
+                _safe_unlink(stdin_file)
+                stdout_text = stdout_file.read_text(encoding="utf-8", errors="replace") if stdout_file.is_file() else ""
+                stderr_text = stderr_file.read_text(encoding="utf-8", errors="replace") if stderr_file.is_file() else ""
+                parsed = _parse_cli_output(stdout_text)
+                if proc.returncode == 0 and parsed["status"] == "SUCCESS" and bool(parsed["conversation_id"]):
+                    _safe_unlink(ls_log_file)
+                    return {
+                        "ok": True,
+                        "mode": "cli",
+                        "async_pid": proc.pid,
+                        "returncode": 0,
+                        "status": "SUCCESS",
+                        "conversation_id": parsed["conversation_id"],
+                        "last_response": parsed["response"],
+                        "stdout": stdout_text.strip(),
+                        "stderr": stderr_text.strip(),
+                        "project_id": project_id,
+                        "workspace_uri": ws_uri,
+                        "skip_permissions": skip_permissions,
+                    }
+                err_msg = _format_cli_failure(proc.returncode, parsed, stdout_text, stderr_text, ls_log_file)
+                return {
+                    "ok": False,
+                    "mode": "cli",
+                    "async_pid": proc.pid,
+                    "returncode": proc.returncode,
+                    "status": parsed["status"] or "ERROR",
+                    "conversation_id": parsed["conversation_id"] or conversation_id,
+                    "error": err_msg,
+                    "stdout": stdout_text.strip(),
+                    "stderr": stderr_text.strip(),
+                    "stdout_path": stdout_file.as_posix(),
+                    "stderr_path": stderr_file.as_posix(),
+                    "log_path": ls_log_file.as_posix(),
+                    "project_id": project_id,
+                    "workspace_uri": ws_uri,
+                    "skip_permissions": skip_permissions,
+                }
+
             return {
                 "ok": True,
                 "mode": "cli",
                 "async_pid": proc.pid,
+                "status": "RUNNING",
                 "conversation_id": conversation_id,
                 "project_id": project_id,
                 "workspace_uri": ws_uri,
                 "skip_permissions": skip_permissions,
+                "stdout_path": stdout_file.as_posix(),
+                "stderr_path": stderr_file.as_posix(),
+                "log_path": ls_log_file.as_posix(),
             }
-        proc_res = subprocess.run(
-            cmd,
-            cwd=str(Path(effective_ws).expanduser().resolve()),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=max(10, int(timeout_sec)),
-            check=False,
-        )
+
+        eff_timeout = max(10, int(timeout_sec))
+        run_kwargs: dict[str, Any] = {}
+        if os.name == "nt":
+            run_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        try:
+            proc_res = subprocess.run(
+                cmd,
+                input=stdin_payload,
+                cwd=str(effective_ws_path),
+                env=child_env,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=eff_timeout,
+                check=False,
+                **run_kwargs,
+            )
+        except subprocess.TimeoutExpired as exc:
+            out_partial = (exc.stdout or "") if isinstance(exc.stdout, str) else ""
+            err_partial = (exc.stderr or "") if isinstance(exc.stderr, str) else ""
+            _safe_unlink(ls_log_file)
+            return {
+                "ok": False,
+                "mode": "cli",
+                "timed_out": True,
+                "returncode": None,
+                "error": f"Antigravity CLI timed out after {eff_timeout}s.",
+                "stdout": out_partial.strip(),
+                "stderr": err_partial.strip(),
+                "project_id": project_id,
+                "workspace_uri": ws_uri,
+                "skip_permissions": skip_permissions,
+            }
+        except Exception as exc:
+            _safe_unlink(ls_log_file)
+            return {
+                "ok": False,
+                "mode": "cli",
+                "returncode": None,
+                "error": f"Failed to execute Antigravity CLI: {exc}",
+                "project_id": project_id,
+                "workspace_uri": ws_uri,
+                "skip_permissions": skip_permissions,
+            }
+
+        parsed = _parse_cli_output(proc_res.stdout)
+        is_ok = proc_res.returncode == 0 and parsed["status"] == "SUCCESS" and bool(parsed["conversation_id"])
+        if is_ok:
+            _safe_unlink(ls_log_file)
+            return {
+                "ok": True,
+                "mode": "cli",
+                "returncode": 0,
+                "status": "SUCCESS",
+                "conversation_id": parsed["conversation_id"],
+                "last_response": parsed["response"],
+                "stdout": proc_res.stdout.strip(),
+                "stderr": proc_res.stderr.strip(),
+                "project_id": project_id,
+                "workspace_uri": ws_uri,
+                "skip_permissions": skip_permissions,
+            }
+
+        err_msg = _format_cli_failure(proc_res.returncode, parsed, proc_res.stdout, proc_res.stderr, ls_log_file)
+        _safe_unlink(ls_log_file)
         return {
-            "ok": proc_res.returncode == 0,
+            "ok": False,
             "mode": "cli",
             "returncode": proc_res.returncode,
+            "status": parsed["status"] or "ERROR",
+            "conversation_id": parsed["conversation_id"] or conversation_id,
+            "error": err_msg,
             "stdout": proc_res.stdout.strip(),
             "stderr": proc_res.stderr.strip(),
             "project_id": project_id,
+            "workspace_uri": ws_uri,
             "skip_permissions": skip_permissions,
         }
 
@@ -749,6 +1315,7 @@ def tool_agy_dispatch_task(
     result["timed_out"] = timed_out
     if timed_out:
         result["ok"] = False
+        result["error"] = f"Timed out after {max(5, int(timeout_sec))}s waiting for conversation {conversation_id} to become idle."
     result["artifacts"] = list_brain_artifacts(conversation_id)
     return result
 
@@ -1162,6 +1729,7 @@ def handle_mcp_request(msg: dict[str, Any]) -> dict[str, Any] | None:
             else:
                 raise ValueError(f"Unknown tool: {t_name}")
 
+            is_tool_err = bool(t_name == "agy_dispatch_task" and isinstance(res, dict) and res.get("ok") is False)
             return {
                 "jsonrpc": "2.0",
                 "id": req_id,
@@ -1172,7 +1740,7 @@ def handle_mcp_request(msg: dict[str, Any]) -> dict[str, Any] | None:
                             "text": json.dumps(res, ensure_ascii=False, indent=2),
                         }
                     ],
-                    "isError": False,
+                    "isError": is_tool_err,
                 },
             }
 
@@ -1182,10 +1750,19 @@ def handle_mcp_request(msg: dict[str, Any]) -> dict[str, Any] | None:
             "error": {"code": -32601, "message": f"Method not found: {method}"},
         }
     except Exception as exc:
-        if isinstance(exc,JobError):
-            error={'code':exc.code,'retryable':False}
-            return {'jsonrpc':'2.0','id':req_id,'result':{'isError':True,'structuredContent':error,
-                    'content':[{'type':'text','text':json.dumps(error)}]}}
+        if isinstance(exc, JobError):
+            error: dict[str, Any] = {"code": exc.code, "retryable": False}
+            if getattr(exc, "message", None):
+                error["message"] = exc.message
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "isError": True,
+                    "structuredContent": error,
+                    "content": [{"type": "text", "text": json.dumps(error, ensure_ascii=False)}],
+                },
+            }
         return {
             "jsonrpc": "2.0",
             "id": req_id,
@@ -1301,6 +1878,7 @@ def main(argv: list[str] | None = None) -> int:
     p_disp.add_argument("--workspace", help="Workspace path")
     p_disp.add_argument("--project", dest="project_id", help="Optional Antigravity Project ID override")
     p_disp.add_argument("--mode", choices=["panel", "cli"], default="panel")
+    p_disp.add_argument("--model", default=DEFAULT_MODEL, help="Optional model override")
     p_disp.add_argument("--focus-panel", action="store_true")
     p_disp.add_argument("--no-wait", action="store_true")
     p_disp.add_argument("--timeout", type=int, default=300)
@@ -1340,6 +1918,7 @@ def main(argv: list[str] | None = None) -> int:
             focus_panel=args.focus_panel,
             wait=not args.no_wait,
             timeout_sec=args.timeout,
+            model=args.model,
             skip_permissions=args.skip_permissions,
             strict_workspace=args.strict_workspace,
         )
@@ -1359,6 +1938,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     print(json.dumps(out, ensure_ascii=False, indent=2))
+    if args.subcommand == "dispatch" and isinstance(out, dict) and out.get("ok") is False:
+        return 1
     return 0
 
 

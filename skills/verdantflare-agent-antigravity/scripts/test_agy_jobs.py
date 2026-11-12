@@ -102,10 +102,22 @@ class DurableCLITests(unittest.TestCase):
 
     def test_nonzero_cli_exit_is_failure_not_empty_success(self):
         task=self.jobs.submit(self.args,launch=False)
-        run_job(self.jobs,task['task_id'],command=[sys.executable,'-c','raise SystemExit(4)'])
+        run_job(self.jobs,task['task_id'],command=[sys.executable,'-c','import sys; sys.stderr.write("fatal backend auth failure\\n"); raise SystemExit(4)'])
         result=self.jobs.result(task['task_id'])
         self.assertEqual(result['state'],'failed')
-        self.assertEqual(json.loads(result['content_json'])['exit_code'],4)
+        payload=json.loads(result['content_json'])
+        self.assertEqual(payload['exit_code'],4)
+        self.assertIn('fatal backend auth failure',payload['error'])
+        self.assertTrue(any('fatal backend auth failure' in item for item in payload['unresolved']))
+
+    def test_stream_json_error_before_conversation_reports_explicit_reason(self):
+        task=self.jobs.submit(self.args,launch=False)
+        code="import json; print(json.dumps({'event':'result','result':{'conversation_id':'','status':'ERROR','error':'Conversation quota exceeded'}}))"
+        run_job(self.jobs,task['task_id'],command=[sys.executable,'-c',code])
+        result=self.jobs.result(task['task_id'])
+        self.assertEqual(result['state'],'failed')
+        payload=json.loads(result['content_json'])
+        self.assertIn('Conversation quota exceeded',payload['error'])
 
     def test_panel_busy_or_unreadable_never_sends(self):
         import agy_mcp_server as server
