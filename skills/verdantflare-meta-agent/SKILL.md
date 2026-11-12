@@ -13,18 +13,21 @@ description: 规范 AI Agent 之间基于计划的委托、Session 命名与身�
 
 ## 2. 按任务读取
 
-| 当前任务               | 读取资料                                     |
-| :--------------------- | :------------------------------------------- |
-| 判断是否适用、选择分支 | [分类与边界](references/01.base-category.md) |
-| 执行操作与失败恢复     | [执行流程](references/01.base-workflow.md)   |
-| 核对约束、默认值与例外 | [规则约束](references/01.base-rules.md)      |
-| 验证、门禁与交付报告   | [验收标准](references/01.base-acceptance.md) |
+| 当前任务                         | 读取资料                                     |
+| :------------------------------- | :------------------------------------------- |
+| 判断是否适用、选择分支           | [分类与边界](references/01.base-category.md) |
+| 执行操作与失败恢复               | [执行流程](references/01.base-workflow.md)   |
+| 核对约束、默认值与例外           | [规则约束](references/01.base-rules.md)      |
+| 验证、门禁与交付报告             | [验收标准](references/01.base-acceptance.md) |
+| 本机账本、消息 CLI 与持久 worker | [运行时接口](references/runtime.md)          |
 
 先读当前任务对应专册，不要求通读全部专册。
 
 ## 3. 工具与命令
 
 [交接检查器](scripts/check_handoff.py) 只读验证交接字段和工作区路径；[交接样例](resources/handoff.example.json) 展示输入格式。Python 3.10 及以上，仅用标准库。
+
+[协作运行时](scripts/agent_runtime.py) 提供工作区绑定账本和持久 worker；宿主适配器须在配置中明确选择，缺少适配器时返回错误，不自动换宿主。
 
 ```text
 python scripts/check_handoff.py --workspace . --input handoff.json
