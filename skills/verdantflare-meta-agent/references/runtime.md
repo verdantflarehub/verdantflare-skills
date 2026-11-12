@@ -33,6 +33,8 @@ register 使用交接检查器的完整对象，验证文件与路径后登记�
 
 sessions 返回原生地址及 display_name；这里的名称是逻辑名，不代表宿主标签已改。rename 输入 session_key、name，仅改变本机逻辑名。
 
+bind 输入 session_key、receipt 和 expected_turn_id。receipt 含真实 session_id、task_id、turn_id；首次绑定的 expected_turn_id 为 null，更换已有绑定时必须匹配先前轮次。bind 只登记已获得的后端收据，不创建会话；适配器调用前还会向服务核对会话、模式和当前轮次。
+
 relink 输入 plan_id、plan_name、plan_path 和 tasks 数组；每项任务含 task_key、task_label、change_path。它核对新文件存在后更新当前映射，保留旧交接和消息快照，不递增任务修订或重新执行任务。编号变化后按需 rename 展示名称。
 
 ## 4. 消息、回执与结果
@@ -54,3 +56,13 @@ migrate 使用 --message-id 指定消息，输入 expected_generation。只迁�
 delivering 租约到期变为 unknown，先核对原请求，不自动重新派单。已投递消息仅查询原任务；观察失败保留收据和游标，显示 OBSERVATION_UNAVAILABLE。等待人工审批不作终态，不自动批准。
 
 失效的 CLI 输入返回非零退出码和固定错误码，不回显原始异常路径。日志、数据库与宿主结果检查分别进行；静态检查和模拟结果不证明目标宿主在线或全局安装完成。
+
+## 6. Codex 适配
+
+agent=codex 加载内置 Codex MCP 适配器。plugin 使用明确 thread_id 启动一轮，managed 必须先 bind 已有受管 task_id 和 turn_id，再调用 task_continue；不自动创建替代会话、不更改模型或权限。初始化专用受管会话按 Codex 调度技能执行，取得真实原生 ID 后登记。
+
+外部写入前保存工具名和参数，request_id 在重试期间固定。queued 的 task_id 立即保存，turn_id 未确认前不记为 delivered。恢复时有收据先查原任务；无收据仅在服务同键幂等契约允许时重发完全相同参数，不因用户重命名、重新编号或配置变化生成另一个请求。
+
+结果只读取收据对应的 turn_id，完整拼接分页并验证每页身份和游标推进。适配器要求接收方最终答复中提供匹配的 VF_AGENT_ACK JSON 行，普通“完成”或其他消息的回执不被接受。通知中的工作区和用户目录按占位符脱敏，原始结果保留在本机受控账本及后端。
+
+逻辑名称通过 sessions 回读。原生命名使用 Codex 调度服务的 codex_session_rename，传入明确的 thread_id、cwd、name；原生 API 回读一致才返回 native。共享 rename 仍只改逻辑名，调用者分别维护两者，不把旧版服务的缺失工具隐式降级为成功。服务在线读取、真实受管投递和插件写入须分别验证；不能因为 capabilities 声称 read_verified 就报告插件写入成功。

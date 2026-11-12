@@ -55,6 +55,8 @@ class Store:
             CREATE TABLE IF NOT EXISTS events(
                 seq INTEGER PRIMARY KEY AUTOINCREMENT, time REAL NOT NULL, kind TEXT NOT NULL,
                 subject TEXT NOT NULL, detail TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS bindings(key TEXT PRIMARY KEY, generation INTEGER NOT NULL, receipt TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS adapter_journal(message_id TEXT PRIMARY KEY, request TEXT NOT NULL, accepted TEXT);
         """)
         try:
             with self.transaction():
@@ -88,7 +90,46 @@ class Store:
         row = self.db.execute("SELECT * FROM sessions WHERE key=?", (key,)).fetchone()
         if not row:
             raise Conflict("SESSION_NOT_REGISTERED")
-        return {**json.loads(row["endpoint"]), "display_name": row["name"]}
+        value = {**json.loads(row["endpoint"]), "display_name": row["name"]}
+        binding = self.db.execute("SELECT * FROM bindings WHERE key=?", (key,)).fetchone()
+        if binding and binding["generation"] == value["generation"]:
+            value["binding"] = json.loads(binding["receipt"])
+        return value
+
+    def bind(self, session_key, receipt, expected_turn_id=None):
+        with self.transaction():
+            current = self.session(session_key)
+            if not isinstance(receipt, dict) or set(receipt) != {"session_id", "task_id", "turn_id"}:
+                raise Conflict("INVALID_BINDING")
+            for key in receipt:
+                text(receipt[key], key)
+            if receipt["session_id"] != current["native_session_id"]:
+                raise Conflict("BINDING_SESSION_MISMATCH")
+            prior = current.get("binding")
+            if prior == receipt:
+                return
+            if prior and prior["turn_id"] != expected_turn_id:
+                raise Conflict("STALE_BINDING")
+            self.db.execute("INSERT OR REPLACE INTO bindings VALUES(?,?,?)", (session_key, current["generation"], encode(receipt)))
+            self.event("backend_bound", session_key, {"generation": current["generation"]})
+
+    def prepared_request(self, message_id):
+        row = self.db.execute("SELECT * FROM adapter_journal WHERE message_id=?", (message_id,)).fetchone()
+        return {"request": json.loads(row["request"]), "accepted": json.loads(row["accepted"]) if row["accepted"] else None} if row else None
+
+    def prepare_request(self, message_id, request):
+        with self.transaction():
+            self.get(message_id)
+            previous = self.prepared_request(message_id)
+            if previous and previous["request"] != request:
+                raise Conflict("FROZEN_REQUEST_CONFLICT")
+            self.db.execute("INSERT OR IGNORE INTO adapter_journal(message_id,request) VALUES(?,?)", (message_id, encode(request)))
+
+    def accepted_request(self, message_id, accepted):
+        with self.transaction():
+            if not self.prepared_request(message_id):
+                raise Conflict("REQUEST_NOT_PREPARED")
+            self.db.execute("UPDATE adapter_journal SET accepted=? WHERE message_id=?", (encode(accepted), message_id))
 
     def sessions(self):
         return [self.session(row[0]) for row in self.db.execute("SELECT key FROM sessions ORDER BY key")]
@@ -353,15 +394,19 @@ class Store:
                 raise Conflict("RECEIPT_ROUTE_MISMATCH")
             self.db.execute("UPDATE messages SET state='delivered',receipt=?,error=NULL,lease_until=NULL WHERE id=?",
                             (encode(receipt), message_id))
+            self.db.execute("INSERT OR REPLACE INTO bindings VALUES(?,?,?)",
+                            (row["body"]["recipient"], row["route_generation"], encode(receipt)))
             self.event("delivered", message_id)
 
     def delivery_error(self, message_id, token, *, known_unsent=False, reason="UNKNOWN_DELIVERY"):
-        allowed = {"SESSION_BUSY", "OFFLINE", "UNSUPPORTED_CAPABILITY", "UNKNOWN_DELIVERY", "ADAPTER_MISSING"}
+        allowed = {"SESSION_BUSY", "OFFLINE", "UNSUPPORTED_CAPABILITY", "UNKNOWN_DELIVERY", "ADAPTER_MISSING", "APPROVAL_REQUIRES_UI"}
         if reason not in allowed:
             reason = "UNKNOWN_DELIVERY"
         with self.transaction():
             row = self._claimed(message_id, token)
             state = "retry_wait" if known_unsent else "unknown"
+            if known_unsent and reason in {"UNSUPPORTED_CAPABILITY", "APPROVAL_REQUIRES_UI"}:
+                state = "rejected"
             delay = min(300, 5 * 2 ** min(row["attempts"] - 1, 10))
             self.db.execute("UPDATE messages SET state=?,due=?,error=?,lease_until=NULL WHERE id=?",
                             (state, self.clock() + delay, reason, message_id))

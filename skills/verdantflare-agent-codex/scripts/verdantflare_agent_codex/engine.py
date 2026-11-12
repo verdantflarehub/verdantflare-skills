@@ -61,6 +61,8 @@ class Engine:
         args = validate(name, arguments)
         if name == 'codex_capabilities':
             return await self.capabilities(args)
+        if name == 'codex_session_rename':
+            return await self.rename_session(args)
         if name == 'codex_task_start':
             if os.environ.get('VERDANTFLARE_AGENT_CODEX_DEPTH'):
                 raise BridgeError('WORKSPACE_DENIED', 'Recursive delegation to this service is disabled')
@@ -108,6 +110,28 @@ class Engine:
                 raise BridgeError('APPROVAL_REQUIRES_UI', 'This request must be answered in the host UI')
         return public_task(self.store.enqueue(operation, args))
 
+    async def rename_session(self, args):
+        cwd = allowed_cwd(args['cwd'], self.config['allowed_roots'])
+        binary = resolve_codex_binary(self.config.get('codex'), self.config.get('extension'))
+        app = await AppServer(binary).start()
+        try:
+            params = {'threadId': args['thread_id'], 'includeTurns': False}
+            def check(result):
+                thread = result.get('thread', {})
+                if thread.get('id') != args['thread_id'] or not thread.get('cwd'):
+                    raise BridgeError('WORKSPACE_DENIED', 'Thread identity could not be verified')
+                if allowed_cwd(thread['cwd'], self.config['allowed_roots']) != cwd:
+                    raise BridgeError('WORKSPACE_DENIED', 'Thread belongs to another workspace')
+                return thread
+            check(await app.call('thread/read', params))
+            await app.call('thread/name/set', {'threadId': args['thread_id'], 'name': args['name']})
+            thread = check(await app.call('thread/read', params))
+            if thread.get('name') != args['name']:
+                raise BridgeError('BACKEND_ERROR', 'Native name readback did not match; inspect before retrying')
+            return {'thread_id': args['thread_id'], 'name': thread['name'], 'naming': 'native'}
+        finally:
+            await app.close()
+
     async def capabilities(self, args):
         cwd = allowed_cwd(args['cwd'], self.config['allowed_roots']) if args.get('cwd') else None
         codex_bin = resolve_codex_binary(self.config.get('codex'), self.config.get('extension'))
@@ -145,7 +169,7 @@ class Engine:
                     'plugin': 'read_verified' if any(r['owner_reachable'] for r in rows) else ('discovered' if plugin else 'unavailable'),
                     'managed': 'read_verified', 'threads': rows, 'filtered_out_count': filtered_out_count,
                     'next_cursor': result.get('nextCursor'),
-                    'operations': ['capabilities', 'start', 'status', 'result', 'continue', 'cancel', 'respond'],
+                    'operations': ['capabilities', 'session_rename', 'start', 'status', 'result', 'continue', 'cancel', 'respond'],
                     'permission_approval': 'human_ui_required'}
         finally:
             if plugin:

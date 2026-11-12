@@ -88,6 +88,7 @@ class Worker:
 
     def adapter(self, message):
         endpoint = self.store.session(message["body"]["recipient"])
+        endpoint["workspace"] = str(self.store.workspace)
         return self.adapters.get(endpoint["service"]), endpoint
 
     async def _heartbeat(self, message):

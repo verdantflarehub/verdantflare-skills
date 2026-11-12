@@ -14,6 +14,9 @@ def obj(properties, required=()):
 
 
 SCHEMAS = {
+    "codex_session_rename": obj({"thread_id": ID, "cwd": TEXT,
+        "name": {"type": "string", "minLength": 1, "maxLength": 256}},
+        ("thread_id", "cwd", "name")),
     "codex_capabilities": obj({"cwd": TEXT, "cursor": {"type": "string", "minLength": 1, "maxLength": 8192},
         "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20}}),
     "codex_task_start": obj({"request_id": ID, "mode": {"type": "string", "enum": ["plugin", "managed"]},

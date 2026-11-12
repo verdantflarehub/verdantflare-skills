@@ -20,7 +20,7 @@ def read_json(path):
     return json.loads(raw.decode("utf-8"), object_pairs_hook=unique_pairs)
 
 
-def adapters_from_config(config):
+def adapters_from_config(config, store):
     if not isinstance(config, dict) or set(config) != {"services"} or not isinstance(config["services"], dict):
         raise Conflict("INVALID_SERVICE_CONFIG")
     adapters = {}
@@ -36,7 +36,7 @@ def adapters_from_config(config):
             module = importlib.import_module(".adapters." + settings["agent"], __package__)
         except ModuleNotFoundError:
             raise Conflict("ADAPTER_NOT_IMPLEMENTED") from None
-        adapters[service] = module.create(argv)
+        adapters[service] = module.create(argv, store)
     return adapters
 
 
@@ -47,7 +47,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workspace", required=True)
     parser.add_argument("--database", required=True)
-    parser.add_argument("command", choices=("register", "enqueue", "status", "sessions", "rename", "relink", "ack", "report", "takeover", "migrate", "run"))
+    parser.add_argument("command", choices=("register", "enqueue", "status", "sessions", "rename", "relink", "bind", "ack", "report", "takeover", "migrate", "run"))
     parser.add_argument("--input", help="UTF-8 JSON arguments; run reads service configuration")
     parser.add_argument("--message-id")
     args = parser.parse_args()
@@ -67,6 +67,11 @@ def main():
             if set(data) != {"session_key", "name"}:
                 raise Conflict("INVALID_RENAME_FIELDS")
             output = store.rename(data["session_key"], data["name"])
+        elif args.command == "bind":
+            if not isinstance(data, dict) or set(data) != {"session_key", "receipt", "expected_turn_id"}:
+                raise Conflict("INVALID_BINDING_FIELDS")
+            store.bind(**data)
+            output = {"bound": True}
         elif args.command == "relink":
             if set(data) != {"plan_id", "plan_name", "plan_path", "tasks"}:
                 raise Conflict("INVALID_RELINK_FIELDS")
@@ -89,7 +94,7 @@ def main():
             store.migrate(args.message_id, data["expected_generation"])
             output = {"migrated": True}
         else:
-            adapters = adapters_from_config(data)
+            adapters = adapters_from_config(data, store)
             asyncio.run(Worker(store, adapters).run())
             return 0
         print(json.dumps(output, ensure_ascii=False, allow_nan=False))
