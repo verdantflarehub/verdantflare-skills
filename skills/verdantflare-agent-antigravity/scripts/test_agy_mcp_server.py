@@ -85,7 +85,7 @@ class TestAgyMcpServer(unittest.TestCase):
         )
         resp = json.loads(proc.stdout.decode("utf-8").strip())
         self.assertEqual(resp["id"], 10)
-        self.assertEqual(len(resp["result"]["tools"]), 6)
+        self.assertEqual(len(resp["result"]["tools"]), 9)
 
         # 2. Content-Length framing (with extra header before Content-Length) + malformed JSON recovery
         body = json.dumps({"jsonrpc": "2.0", "id": 11, "method": "ping"}).encode("utf-8")

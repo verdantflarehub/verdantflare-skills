@@ -73,16 +73,26 @@ def _owner_pid_alive(owner: str | None) -> bool:
     pid = int(pid_str)
     if os.name == "nt":
         import ctypes
-        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+        from ctypes import wintypes
+        api = ctypes.WinDLL('kernel32', use_last_error=True)
+        api.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        api.OpenProcess.restype = wintypes.HANDLE
+        api.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        api.GetExitCodeProcess.restype = wintypes.BOOL
+        api.CloseHandle.argtypes = [wintypes.HANDLE]
+        api.CloseHandle.restype = wintypes.BOOL
+        handle = api.OpenProcess(0x1000, False, pid)
         if not handle:
-            return False
+            # Only ERROR_INVALID_PARAMETER proves this PID does not exist.
+            # Access denial is not evidence of death; heartbeat still applies.
+            return ctypes.get_last_error() != 87
         try:
-            code = ctypes.c_ulong()
-            if ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+            code = wintypes.DWORD()
+            if api.GetExitCodeProcess(handle, ctypes.byref(code)):
                 return code.value == 259
             return True
         finally:
-            ctypes.windll.kernel32.CloseHandle(handle)
+            api.CloseHandle(handle)
     try:
         os.kill(pid, 0)
         return True
@@ -184,7 +194,7 @@ class Store:
                    (command_id, task_id, operation, encode(payload), time.time()))
         db.execute("INSERT INTO requests VALUES(?,?,?,?)", (request_id, digest, task_id, command_id))
 
-    def start(self, payload):
+    def start(self, payload, *, owner=None):
         digest = self._digest("start", payload)
         with self.transaction() as db:
             replay = self._replay(db, payload["request_id"], digest)
@@ -195,14 +205,14 @@ class Store:
             sid = payload.get("session_id") or payload.get("thread_id")
             db.execute("INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                        (task_id, payload["mode"], payload["cwd"], sid, None,
-                        "queued", now, now + timeout, timeout, None, now, None))
+                        "queued", now, now + timeout, timeout, owner, now, None))
             task = self._task(db, task_id)
             self._lease(db, task)
             self._command(db, "start", payload, task_id, payload["request_id"], digest)
             self._event(db, task, "queued", {})
             return task
 
-    def enqueue(self, operation, payload):
+    def enqueue(self, operation, payload, *, owner=None):
         digest = self._digest(operation, payload)
         with self.transaction() as db:
             if operation != "cancel":
@@ -218,20 +228,13 @@ class Store:
                 ).fetchone():
                     raise BridgeError("SESSION_BUSY", "Previous turn is not finished")
                 self._lease(db, task)
-                db.execute("UPDATE tasks SET state='queued',owner=NULL,turn_id=NULL,error=NULL,deadline=?,updated=? WHERE id=?",
-                           (time.time() + task["timeout"], time.time(), task["id"]))
+                db.execute("UPDATE tasks SET state='queued',owner=?,turn_id=NULL,error=NULL,deadline=?,updated=? WHERE id=?",
+                           (owner, time.time() + task["timeout"], time.time(), task["id"]))
             elif operation == "cancel":
                 if task["state"] in TERMINAL or task["state"] == "cancelling":
                     return task
                 if task["state"] == "interrupted_unknown":
-                    now = time.time()
-                    db.execute("UPDATE tasks SET state='cancelled',owner=NULL,updated=? WHERE id=?", (now, task["id"]))
-                    db.execute("DELETE FROM leases WHERE task_id=?", (task["id"],))
-                    if task["turn_id"]:
-                        db.execute("UPDATE turns SET state='cancelled' WHERE task_id=? AND turn_id=?", (task["id"], task["turn_id"]))
-                    task = self._task(db, task["id"])
-                    self._event(db, task, "state", {"state": "cancelled", "reconciled_from": "interrupted_unknown"})
-                    return task
+                    raise BridgeError("BACKEND_DISCONNECTED", "Unknown backend outcome requires terminal evidence; cancellation is not confirmed")
                 if task["state"] in ("queued", "starting", "recovering"):
                     raise BridgeError("STALE_TURN", "Current execution has no confirmed cancellable turn")
                 db.execute("UPDATE tasks SET state='cancelling',updated=? WHERE id=?", (time.time(), task["id"]))
@@ -254,6 +257,12 @@ class Store:
     def heartbeat(self, owner):
         with self.transaction() as db:
             db.execute("INSERT OR REPLACE INTO owners VALUES(?,?)", (owner, time.time()))
+
+    def assert_idle_for_naming(self, cwd, session_id):
+        with closing(self.connect()) as db:
+            for row in db.execute('SELECT * FROM leases'):
+                if row['thread_id'] == session_id or contains(row['cwd'], cwd) or contains(cwd, row['cwd']):
+                    raise BridgeError('SESSION_BUSY', 'Session or workspace has an active or unresolved task')
 
     def claim(self, owner):
         with self.transaction() as db:
@@ -290,7 +299,7 @@ class Store:
             if turn_id and state not in ("queued", "starting"):
                 db.execute("INSERT INTO turns VALUES(?,?,?,?) ON CONFLICT(task_id,turn_id) DO UPDATE SET state=excluded.state,result=COALESCE(excluded.result,turns.result)",
                            (task_id, turn_id, state, encode(result) if result is not None else None))
-            if state in TERMINAL or state == "interrupted_unknown":
+            if state in TERMINAL:
                 db.execute("DELETE FROM leases WHERE task_id=?", (task_id,))
                 db.execute("UPDATE pending SET state='expired' WHERE task_id=? AND state IN ('waiting','responding')", (task_id,))
             else:
@@ -310,13 +319,19 @@ class Store:
                 hb = task.get("owner_hb")
                 if hb is None or hb < stale_before or not _owner_pid_alive(task["owner"]):
                     lost_count += 1
+                    if task['state'] == 'queued' and db.execute("SELECT 1 FROM commands WHERE task_id=? AND state='queued' AND operation IN ('start','continue')", (task['id'],)).fetchone():
+                        # The transaction proves no worker claimed or submitted it.
+                        db.execute('UPDATE tasks SET owner=NULL,updated=? WHERE id=?', (time.time(), task['id']))
+                        self._event(db, task, 'owner_lost_unsubmitted', {'retry_safe': True})
+                        continue
                     db.execute("UPDATE tasks SET state='interrupted_unknown',owner=NULL,updated=? WHERE id=?", (time.time(), task["id"]))
-                    db.execute("DELETE FROM leases WHERE task_id=?", (task["id"],))
+                    if task["turn_id"]:
+                        db.execute("UPDATE turns SET state='interrupted_unknown' WHERE task_id=? AND turn_id=?", (task["id"], task["turn_id"]))
                     db.execute("UPDATE pending SET state='expired' WHERE task_id=? AND state IN ('waiting','responding')", (task["id"],))
                     db.execute("UPDATE commands SET state='unknown' WHERE task_id=? AND state IN ('queued','claimed')", (task["id"],))
                     self._event(db, task, "owner_lost", {"previous_state": task["state"]})
             db.execute(
-                "DELETE FROM leases WHERE task_id IN (SELECT id FROM tasks WHERE state IN ('completed','failed','cancelled','timed_out','interrupted_unknown'))"
+                "DELETE FROM leases WHERE task_id IN (SELECT id FROM tasks WHERE state IN ('completed','failed','cancelled','timed_out'))"
             )
             return lost_count
 

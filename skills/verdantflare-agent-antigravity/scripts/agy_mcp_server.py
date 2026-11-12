@@ -20,6 +20,7 @@ from typing import Any
 import urllib.error
 import urllib.parse
 import urllib.request
+from agy_jobs import JobError, call_tool as call_cli_job, tool_schemas as cli_job_schemas
 
 SERVER_NAME = "verdantflare-agent-antigravity"
 SERVER_VERSION = "1.0.0"
@@ -335,13 +336,12 @@ def select_hub(
     """
     active_hubs = hubs if hubs is not None else discover_hubs()
     if not active_hubs:
-        raise RuntimeError(
-            "No running Antigravity Hub (`agy.exe --hub`) found. "
-            "Ensure the VS Code Google Antigravity extension is open or use mode='cli'."
-        )
+        raise JobError('OFFLINE')
     if conversation_id:
         for hub in active_hubs:
             if conversation_id in (hub.get("summaries") or {}):
+                if strict_workspace and workspace and not any(workspace_matches_uri(path_to_workspace_uri(workspace),uri) for uri in hub.get('workspaces',[])):
+                    raise JobError('WORKSPACE_DENIED')
                 chosen = dict(hub)
                 chosen["workspace_matched"] = True
                 chosen["matched_by"] = "conversation_id"
@@ -678,7 +678,9 @@ def tool_agy_dispatch_task(
             pre_steps = (pre_traj.get("trajectory") or {}).get("steps") or []
             baseline_steps = max(baseline_steps, int(pre_traj.get("numTotalSteps", len(pre_steps))))
         except Exception:
-            pass
+            raise JobError('OBSERVATION_UNAVAILABLE') from None
+        if pre_traj.get('status') != 'CASCADE_RUN_STATUS_IDLE':
+            raise JobError('SESSION_BUSY')
 
     try:
         lsrpc_call(addr, csrf, "SetBrowserOpenConversation", {"cascadeId": conversation_id}, timeout=3.0)
@@ -792,12 +794,15 @@ def tool_agy_read_transcript(
     start_step: int = 0,
     end_step: int = 50,
     include_thinking: bool = False,
+    source: str = 'auto',
 ) -> dict[str, Any]:
     """Read trajectory steps from live Hub or local transcript.jsonl."""
     if not conversation_id:
         raise ValueError("conversation_id is required")
     transcript_file = _brain_root() / conversation_id / ".system_generated" / "logs" / "transcript.jsonl"
-    if transcript_file.is_file():
+    if source not in {'auto','hub'}:
+        raise ValueError('Unsupported transcript source')
+    if source == 'auto' and transcript_file.is_file():
         lines = transcript_file.read_text(encoding="utf-8", errors="replace").splitlines()
         total = len(lines)
         s_idx = max(0, int(start_step))
@@ -1071,6 +1076,11 @@ MCP_TOOLS: list[dict[str, Any]] = [
 ]
 
 
+MCP_TOOLS.extend(cli_job_schemas())
+next(tool for tool in MCP_TOOLS if tool['name']=='agy_read_transcript')['inputSchema']['properties']['source'] = {
+    'type':'string','enum':['auto','hub'],'description':'Use hub for stable native step indexes during exact-turn reconciliation.'}
+
+
 def handle_mcp_request(msg: dict[str, Any]) -> dict[str, Any] | None:
     """Process a single JSON-RPC 2.0 request and return a JSON-RPC 2.0 response (or None for notifications)."""
     method = msg.get("method", "")
@@ -1108,7 +1118,9 @@ def handle_mcp_request(msg: dict[str, Any]) -> dict[str, Any] | None:
         if method == "tools/call":
             t_name = params.get("name", "")
             t_args = params.get("arguments") or {}
-            if t_name == "agy_hub_status":
+            if t_name in {'agy_cli_task_start','agy_cli_task_status','agy_cli_task_result'}:
+                res = call_cli_job(t_name,t_args)
+            elif t_name == "agy_hub_status":
                 res = tool_agy_hub_status()
             elif t_name == "agy_list_conversations":
                 res = tool_agy_list_conversations(
@@ -1140,6 +1152,7 @@ def handle_mcp_request(msg: dict[str, Any]) -> dict[str, Any] | None:
                     start_step=int(t_args.get("start_step", 0)),
                     end_step=int(t_args.get("end_step", 50)),
                     include_thinking=bool(t_args.get("include_thinking", False)),
+                    source=t_args.get('source','auto'),
                 )
             elif t_name == "agy_cancel_conversation":
                 res = tool_agy_cancel_conversation(
@@ -1169,6 +1182,10 @@ def handle_mcp_request(msg: dict[str, Any]) -> dict[str, Any] | None:
             "error": {"code": -32601, "message": f"Method not found: {method}"},
         }
     except Exception as exc:
+        if isinstance(exc,JobError):
+            error={'code':exc.code,'retryable':False}
+            return {'jsonrpc':'2.0','id':req_id,'result':{'isError':True,'structuredContent':error,
+                    'content':[{'type':'text','text':json.dumps(error)}]}}
         return {
             "jsonrpc": "2.0",
             "id": req_id,

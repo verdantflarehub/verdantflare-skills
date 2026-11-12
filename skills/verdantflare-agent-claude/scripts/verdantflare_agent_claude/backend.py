@@ -100,12 +100,11 @@ def _extract_transcript_summary(jsonl_path: Path) -> dict | None:
     sid = jsonl_path.stem
     cwd = None
     title = None
+    custom_title = None
     first_user = None
     try:
         with jsonl_path.open("r", encoding="utf-8", errors="replace") as fh:
             for idx, line in enumerate(fh):
-                if idx > 120 and cwd and (title or first_user):
-                    break
                 line = line.strip()
                 if not line:
                     continue
@@ -118,8 +117,14 @@ def _extract_transcript_summary(jsonl_path: Path) -> dict | None:
                 if not cwd and isinstance(rec.get("cwd"), str):
                     cwd = rec["cwd"]
                 rtype = rec.get("type")
-                if rtype in ("ai-title", "custom-title") and isinstance(rec.get("title"), str):
-                    title = rec["title"].strip()
+                if rtype == 'custom-title':
+                    value = rec.get('customTitle', rec.get('title'))
+                    if isinstance(value, str) and value.strip():
+                        custom_title = value.strip()
+                elif rtype == 'ai-title':
+                    value = rec.get('title', rec.get('aiTitle'))
+                    if isinstance(value, str) and value.strip():
+                        title = value.strip()
                 elif rtype == "user" and not first_user:
                     msg = rec.get("message")
                     if isinstance(msg, dict):
@@ -136,7 +141,7 @@ def _extract_transcript_summary(jsonl_path: Path) -> dict | None:
     return {
         "session_id": sid,
         "cwd": cwd,
-        "title": title or first_user or sid,
+        "title": custom_title or title or first_user or sid,
         "updated_at": int(stat.st_mtime * 1000),
         "transcript_path": str(jsonl_path),
     }
@@ -199,6 +204,45 @@ def locate_transcript_path(claude_dir: Path, cwd: str, session_id: str) -> Path:
             if b.is_dir() and b.name.lower() == target_bucket.lower():
                 return b / f"{session_id}.jsonl"
     return projects_dir / target_bucket / f"{session_id}.jsonl"
+
+
+async def rename_session(*, claude_binary, claude_dir, cwd, session_id, name):
+    """Use native control requests, never transcript edits or model prompts."""
+    env = dict(os.environ)
+    env.pop('CLAUDECODE', None)
+    process = await asyncio.create_subprocess_exec(
+        claude_binary, '-p', '--input-format', 'stream-json', '--output-format', 'stream-json',
+        '--verbose', '--resume', session_id, cwd=cwd, env=env,
+        stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL, limit=16 * 1024 * 1024,
+        creationflags=0x08000000 if os.name == 'nt' else 0)
+    try:
+        async with asyncio.timeout(30):
+            for request in ({'subtype': 'initialize'}, {'subtype': 'rename_session', 'title': name, 'source': 'host', 'session_id': session_id}):
+                rid = str(uuid.uuid4())
+                frame = {'type': 'control_request', 'request_id': rid, 'request': request}
+                process.stdin.write((json.dumps(frame, ensure_ascii=False)+'\n').encode('utf-8'))
+                await process.stdin.drain()
+                while True:
+                    line = await process.stdout.readline()
+                    if not line:
+                        raise BridgeError('BACKEND_DISCONNECTED', 'Native naming connection closed; inspect before retrying')
+                    event = json.loads(line)
+                    response = event.get('response', {})
+                    if event.get('type') == 'control_response' and response.get('request_id') == rid:
+                        if response.get('subtype') != 'success':
+                            raise BridgeError('BACKEND_ERROR', 'Native naming request was rejected')
+                        break
+            summary = _extract_transcript_summary(locate_transcript_path(claude_dir, cwd, session_id))
+            if not summary or summary['title'] != name:
+                raise BridgeError('BACKEND_ERROR', 'Native name readback did not match; inspect before retrying')
+            return {'session_id': session_id, 'name': name, 'naming': 'native'}
+    except TimeoutError:
+        raise BridgeError('BACKEND_TIMEOUT', 'Native naming outcome unknown; inspect before retrying') from None
+    finally:
+        if process.returncode is None:
+            process.terminate()
+        await process.wait()
 
 
 def send_pipe_message(pipe_path: str, peer_token: str, session_id: str, turn_uuid: str, prompt: str) -> None:

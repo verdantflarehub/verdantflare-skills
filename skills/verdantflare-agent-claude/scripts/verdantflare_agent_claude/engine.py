@@ -16,6 +16,9 @@ from .backend import (
     resolve_claude_binary,
     run_managed_turn,
     run_panel_turn,
+    rename_session,
+    locate_transcript_path,
+    _extract_transcript_summary,
 )
 from .errors import BridgeError
 from .schema import validate
@@ -73,6 +76,16 @@ class Engine:
         args = validate(name, arguments or {})
         if name == "claude_capabilities":
             return await self.capabilities(args)
+        if name == 'claude_session_rename':
+            cwd = allowed_cwd(args['cwd'], self.config['allowed_roots'])
+            self.store.assert_idle_for_naming(cwd, args['session_id'])
+            if args['session_id'] in find_live_panel_sessions(self.claude_dir):
+                raise BridgeError('SESSION_BUSY', 'Close the live session before starting a native naming connection')
+            summary = _extract_transcript_summary(locate_transcript_path(self.claude_dir, cwd, args['session_id']))
+            if not summary or not summary.get('cwd') or allowed_cwd(summary['cwd'], self.config['allowed_roots']) != cwd:
+                raise BridgeError('WORKSPACE_DENIED', 'Existing session workspace could not be verified')
+            return await rename_session(claude_binary=resolve_claude_binary(self.config.get('claude'), self.config.get('extension')),
+                                        claude_dir=self.claude_dir, cwd=cwd, session_id=args['session_id'], name=args['name'])
         if name == "claude_task_start":
             if os.environ.get("VERDANTFLARE_AGENT_CLAUDE_DEPTH"):
                 raise BridgeError("WORKSPACE_DENIED", "Recursive delegation to this service is disabled")
@@ -87,7 +100,7 @@ class Engine:
                     raise BridgeError("OWNER_UNAVAILABLE", "Target VS Code Claude Code panel session is not reachable")
                 if live["status"] != "idle":
                     raise BridgeError("SESSION_BUSY", f"Target VS Code Claude Code panel session is {live['status']}", retryable=True)
-            task = self.store.start(args)
+            task = self.store.start(args, owner=self.owner)
             return public_task(task)
         if name == "claude_task_status":
             task = self.store.task(args["task_id"])
@@ -119,7 +132,7 @@ class Engine:
                     "Panel mode does not kill the user's VS Code Claude Code session; stop the turn in the panel UI",
                     task_id=task["id"],
                 )
-        return public_task(self.store.enqueue(operation, args))
+        return public_task(self.store.enqueue(operation, args, owner=self.owner))
 
     async def capabilities(self, args: dict) -> dict:
         cwd = allowed_cwd(args["cwd"], self.config["allowed_roots"]) if args.get("cwd") else None
@@ -152,7 +165,7 @@ class Engine:
             "threads": page,
             "filtered_out_count": filtered_out_count,
             "next_cursor": next_cursor,
-            "operations": ["capabilities", "start", "status", "result", "continue", "cancel", "respond"],
+            "operations": ["capabilities", "session_rename", "start", "status", "result", "continue", "cancel", "respond"],
             "permission_approval": "human_ui_required",
             "permission_modes": {
                 "panel": "human_ui_required",

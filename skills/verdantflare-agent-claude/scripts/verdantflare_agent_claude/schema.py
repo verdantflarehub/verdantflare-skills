@@ -18,6 +18,10 @@ def obj(properties, required=()):
 
 
 SCHEMAS = {
+    "claude_session_rename": obj({
+        "session_id": {"type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"},
+        "cwd": TEXT, "name": {"type": "string", "minLength": 1, "maxLength": 256}},
+        ("session_id", "cwd", "name")),
     "claude_capabilities": obj(
         {
             "cwd": TEXT,

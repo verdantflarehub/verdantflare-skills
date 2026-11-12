@@ -11,7 +11,7 @@ description: 通过本机 MCP 服务向指定 VS Code Claude Code（克劳德）
 
 ## 2. 范围与边界
 
-其他智能体通过七项 MCP 工具委托 Claude Code（克劳德），跟踪持久任务并回收结果。支持向指定的 VS Code Claude Code 面板在线会话注入任务（`panel`），也支持显式选择受管 CLI 流式会话（`managed`）。运行时自动发现最新已安装扩展与内置 CLI，不锁定扩展版本号。
+其他智能体通过八项 MCP 工具命名会话、委托 Claude Code（克劳德），跟踪持久任务并回收结果。支持向指定的 VS Code Claude Code 面板在线会话注入任务（`panel`），也支持显式选择受管 CLI 流式会话（`managed`）。运行时自动发现最新已安装扩展与内置 CLI，不锁定扩展版本号。
 
 本技能不代替人工决策或生产发布授权。调用者先确认工作区与目标会话状态，不能把离线历史 `.jsonl` 可读等同于 VS Code 面板会话在线可控。
 

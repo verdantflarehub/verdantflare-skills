@@ -100,7 +100,7 @@ class StoreAndSchemaTests(unittest.TestCase):
         with self.assertRaises(BridgeError):
             validate("claude_task_start", {"request_id": "r1", "cwd": "C:/test", "prompt": "中" * 30000, "mode": "managed"})
 
-    def test_lost_owner_releases_lease_and_allows_cancel(self):
+    def test_lost_owner_retains_lease_and_cannot_fabricate_cancel(self):
         task = self.store.start(self.payload("r-lost"))
         claimed = self.store.claim("dead-owner")
         self.assertIsNotNone(claimed)
@@ -108,12 +108,37 @@ class StoreAndSchemaTests(unittest.TestCase):
         self.assertEqual(1, self.store.mark_lost_owners(time.time() + 10))
         self.assertEqual("interrupted_unknown", self.store.task(task["id"])["state"])
         self.assertFalse(self.store.result(task["id"])["ready"])
-        # New task in same workspace must not be blocked by interrupted_unknown
-        t2 = self.store.start(self.payload("r-new", session_id="sess-b", thread_id="sess-b"))
-        self.assertEqual("queued", t2["state"])
-        # Cancelling interrupted_unknown reconciles it to cancelled
-        reconciled = self.store.enqueue("cancel", {"task_id": task["id"], "expected_turn_id": "turn-lost"})
-        self.assertEqual("cancelled", reconciled["state"])
+        self.assert_code('SESSION_BUSY', lambda: self.store.start(self.payload("r-new", session_id="sess-b", thread_id="sess-b")))
+        self.assert_code('BACKEND_DISCONNECTED', lambda: self.store.enqueue("cancel", {"task_id": task["id"], "expected_turn_id": "turn-lost"}))
+        self.assertEqual('interrupted_unknown', self.store.result(task['id'])['state'])
+
+    def test_submission_owner_prevents_foreign_worker_claim(self):
+        other = Store(self.store.path)
+        task = self.store.start(self.payload('pinned'), owner='submitter')
+        self.assertIsNone(other.claim('unrelated-client'))
+        self.assertEqual(task['id'], self.store.claim('submitter')['task_id'])
+        self.store.transition(task['id'], 'submitter', 'completed', thread_id='sess-a', turn_id='turn-1', result={'answer':'done'})
+        self.store.enqueue('continue', {'task_id':task['id'], 'request_id':'next', 'expected_turn_id':'turn-1', 'prompt':'next'}, owner='new-submitter')
+        self.assertIsNone(other.claim('submitter'))
+        self.assertIsNone(other.claim('unrelated-client'))
+        self.assertEqual(task['id'], other.claim('new-submitter')['task_id'])
+
+    def test_explicit_unknown_transition_retains_lease(self):
+        task = self.store.start(self.payload('explicit-unknown'))
+        self.store.claim('worker')
+        self.store.transition(task['id'], 'worker', 'running', thread_id='sess-a', turn_id='turn-1')
+        self.store.transition(task['id'], 'worker', 'interrupted_unknown')
+        self.store.mark_lost_owners(time.time()+60)
+        self.assert_code('SESSION_BUSY', lambda: self.store.start(self.payload('replacement')))
+
+    def test_dead_owner_before_claim_preserves_single_unsent_command(self):
+        task = self.store.start(self.payload('not-submitted'), owner='lost-submitter')
+        self.assertEqual(1, self.store.mark_lost_owners(time.time()+60))
+        self.assertEqual('queued', self.store.task(task['id'])['state'])
+        command = self.store.claim('recovery-worker')
+        self.assertEqual(task['id'], command['task_id'])
+        self.assertIsNone(self.store.claim('other-worker'))
+        self.assert_code('SESSION_BUSY', lambda: self.store.start(self.payload('replacement')))
 
 
 class BackendAndEngineTests(unittest.IsolatedAsyncioTestCase):

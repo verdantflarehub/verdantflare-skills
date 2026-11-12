@@ -67,7 +67,21 @@ agent=codex 加载内置 Codex MCP 适配器。plugin 使用明确 thread_id 启
 
 逻辑名称通过 sessions 回读。原生命名使用 Codex 调度服务的 codex_session_rename，传入明确的 thread_id、cwd、name；原生 API 回读一致才返回 native。共享 rename 仍只改逻辑名，调用者分别维护两者，不把旧版服务的缺失工具隐式降级为成功。服务在线读取、真实受管投递和插件写入须分别验证；不能因为 capabilities 声称 read_verified 就报告插件写入成功。
 
-## 7. Grok 适配
+## 7. Claude 适配
+
+agent=claude 加载 Claude MCP 适配器。panel 使用明确 session_id；managed 有绑定时继续 task_id 和预期轮次，无绑定时以明确 session_id 恢复已存在会话，不创建替代目标。panel 的取消保留 UI 要求，不切换模式或自动批准权限。结果及回执沿用第 6 章的精确轮次和分页核验。
+
+原生命名通过 claude_session_rename 独立执行，读取最新 customTitle 验证；共享 rename 仅调整逻辑名。受理连接须保持在线，未知后端任务保留原收据，不通过新建会话或改名掩盖。源码独立服务验收与已安装共享服务、面板 UI 验收分别记录。
+
+## 8. Antigravity 适配
+
+agent=antigravity 的 cli 模式使用 agy_cli_task_start/status/result，恢复明确 conversation_id；任务在源码服务的持久账本和后台 worker 中执行。服务合成的 turn_id 对应唯一请求，原生会话 ID 必须回读匹配。取消没有可验证原生终态接口时拒绝，不靠杀进程冒充成功。
+
+panel 模式使用既有 Hub 工具，提交前冻结基线与提示词；响应丢失后只读核对 source=hub 的原生步骤。唯一匹配输入之后、下一条用户输入之前的回复才属于该轮；重复匹配或游标变化拒绝结项。没有匹配输入也不能证明未提交，因此不自动重发。会话忙碌不改派到 cli，焦点保持 focus_panel=false。
+
+逻辑名称在 sessions 与交接头展示；当前未验证 Antigravity 原生改名入口，不声称宿主标题已修改。CLI 工作目录由进程 cwd 与 --add-dir 指定，原生历史归属未由 CLI 输出独立证明；使用明确登记并已核对来源的会话。
+
+## 9. Grok 适配
 
 agent=grok 使用 ACP 或 headless 的明确 session_id。有后端任务绑定时以 expected_turn_id 续接，无绑定时恢复指定原生会话，不新建替代目标。headless 续接使用原生 --resume，--session-id 只用于新会话指定 ID，不能混用。结果与回执按照第 6 章核验。
 
