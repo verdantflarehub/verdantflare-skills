@@ -1,0 +1,43 @@
+{
+  "plan_id": "example-plan",
+  "plan_name": "示例计划",
+  "plan_path": "docs/plan/example.plan.md",
+  "task_key": "review-contract",
+  "task_label": "T1.1",
+  "change_path": "docs/changes/change_review-contract.md",
+  "assignment_id": "example-review-001",
+  "revision": 1,
+  "sender": {
+    "session_key": "coordinator",
+    "service": "local-codex",
+    "agent": "codex",
+    "mode": "plugin",
+    "native_session_id": "example-coordinator-id",
+    "generation": 1
+  },
+  "recipient": {
+    "session_key": "reviewer",
+    "service": "local-claude",
+    "agent": "claude",
+    "mode": "panel",
+    "native_session_id": "example-reviewer-id",
+    "generation": 1
+  },
+  "reply_to": {
+    "session_key": "coordinator",
+    "service": "local-codex",
+    "agent": "codex",
+    "mode": "plugin",
+    "native_session_id": "example-coordinator-id",
+    "generation": 1
+  },
+  "goal": "审阅已登记契约并报告可定位的问题",
+  "inputs": ["docs/design/example.md"],
+  "allowed_write_paths": ["docs/changes/change_review-contract.md"],
+  "constraints": ["不得修改契约或操作其他会话"],
+  "deliverables": ["docs/changes/change_review-contract.md"],
+  "verification": ["逐项对照计划完成条件，核对链接与契约一致性"],
+  "completion_criteria": ["审阅结论可追溯到具体章节及证据"],
+  "authorization": "读取计划中的真实用户授权记录；本样例不是授权",
+  "closeout_owner": "coordinator"
+}

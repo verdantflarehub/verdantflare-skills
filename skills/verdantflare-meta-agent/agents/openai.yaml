@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Meta Agent"
+  short_description: "Coordinate plan-bound agents, sessions, handoffs and receipts"
+  default_prompt: "Use $verdantflare-meta-agent to bind delegated work to its plan, identify sessions, validate handoffs, and close the result and review loop."
