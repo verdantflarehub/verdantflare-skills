@@ -327,6 +327,8 @@ async def run_acp_turn(
 
             if msg.get("method") == "session/update" and isinstance(msg.get("params"), dict):
                 if collect_updates:
+                    if msg['params'].get('sessionId') != active_session_id:
+                        raise BridgeError('BACKEND_TARGET_MISMATCH', 'ACP update belongs to another session')
                     upd = msg["params"].get("update")
                     if isinstance(upd, dict):
                         parsed = _extract_update_event(upd, texts, commands, file_changes, media_paths)
@@ -411,6 +413,8 @@ async def run_acp_turn(
                 }
             )
             load_res = await read_until_id(2)
+            if load_res.get('sessionId') not in (None, active_session_id):
+                raise BridgeError('BACKEND_TARGET_MISMATCH', 'ACP load returned another session')
             active_session_id = load_res.get("sessionId") or active_session_id
         else:
             await send_rpc(
@@ -490,9 +494,9 @@ async def run_headless_turn(
         tf.write(prompt)
         prompt_file_path = Path(tf.name)
 
-    cmd = [grok_binary, "-p", "--output-format", "json", "--prompt-file", str(prompt_file_path)]
+    cmd = [grok_binary, "--output-format", "json", "--prompt-file", str(prompt_file_path)]
     if session_id:
-        cmd.extend(["--session-id", session_id])
+        cmd.extend(["--resume", session_id])
 
     env = dict(os.environ)
     env["VERDANTFLARE_AGENT_GROK_DEPTH"] = "1"
@@ -537,15 +541,18 @@ async def run_headless_turn(
         raise BridgeError("BACKEND_DISCONNECTED", err_txt or f"Grok CLI exited with {proc.returncode}")
 
     out_txt = stdout_b.decode("utf-8", errors="replace").strip()
-    parsed_sid = session_id
-    answer = out_txt
     try:
         data = json.loads(out_txt)
-        if isinstance(data, dict):
-            parsed_sid = data.get("session_id") or data.get("sessionId") or parsed_sid
-            answer = str(data.get("result") or data.get("answer") or data.get("text") or out_txt)
-    except Exception:
-        pass
+    except ValueError:
+        raise BridgeError('BACKEND_OUTCOME_UNVERIFIED', 'Headless result is not JSON') from None
+    if not isinstance(data, dict):
+        raise BridgeError('BACKEND_OUTCOME_UNVERIFIED', 'Headless result is not an object')
+    parsed_sid = data.get('session_id') or data.get('sessionId')
+    if not isinstance(parsed_sid, str) or not parsed_sid or (session_id and parsed_sid != session_id):
+        raise BridgeError('BACKEND_TARGET_MISMATCH', 'Headless result has no matching native identity')
+    answer = data.get('result', data.get('answer', data.get('text')))
+    if not isinstance(answer, str) or data.get('is_error') is True:
+        raise BridgeError('BACKEND_OUTCOME_UNVERIFIED', 'Headless result is not a successful text outcome')
     media_paths = list(dict.fromkeys(MEDIA_PATH_RE.findall(answer)))
     return {
         "cancelled": False,

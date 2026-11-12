@@ -92,7 +92,7 @@ class StoreAndSchemaTests(unittest.TestCase):
         with self.assertRaises(BridgeError):
             validate("grok_task_start", {"request_id": "r1", "mode": "acp", "cwd": "C:/test", "prompt": "中" * 30000})
 
-    def test_lost_owner_releases_lease_and_allows_cancel(self):
+    def test_lost_owner_retains_lease_and_rejects_unproven_cancel(self):
         task = self.store.start(self.payload("g-lost"))
         claimed = self.store.claim("dead-owner")
         self.assertIsNotNone(claimed)
@@ -100,10 +100,21 @@ class StoreAndSchemaTests(unittest.TestCase):
         self.assertEqual(1, self.store.mark_lost_owners(10**12))
         self.assertEqual("interrupted_unknown", self.store.task(task["id"])["state"])
         self.assertFalse(self.store.result(task["id"])["ready"])
-        t2 = self.store.start(self.payload("g-new", session_id="gsess-b", thread_id="gsess-b"))
-        self.assertEqual("queued", t2["state"])
-        reconciled = self.store.enqueue("cancel", {"task_id": task["id"], "expected_turn_id": "gturn-lost"})
-        self.assertEqual("cancelled", reconciled["state"])
+        self.assert_code("SESSION_BUSY", lambda: self.store.start(self.payload("g-new", session_id="gsess-b", thread_id="gsess-b")))
+        self.assert_code("SESSION_BUSY", lambda: self.store.enqueue("cancel", {"task_id": task["id"], "expected_turn_id": "gturn-lost"}))
+        self.assertIsNone(self.store.claim("replacement"))
+
+    def test_submitter_pinning_and_unclaimed_owner_recovery(self):
+        task=self.store.start(self.payload(),owner="first")
+        self.assertIsNone(self.store.claim("second"))
+        self.store.mark_lost_owners(10**12)
+        claimed=self.store.claim("second")
+        self.assertEqual(claimed['task_id'],task['id'])
+        self.assertIsNone(self.store.claim("third"))
+        self.store.mark_lost_owners(10**12)
+        self.assertEqual(self.store.task(task['id'])['state'],'interrupted_unknown')
+        self.assertIsNone(self.store.claim("third"))
+
 
 
 class BackendAndEngineTests(unittest.IsolatedAsyncioTestCase):

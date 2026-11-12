@@ -66,3 +66,11 @@ agent=codex 加载内置 Codex MCP 适配器。plugin 使用明确 thread_id 启
 结果只读取收据对应的 turn_id，完整拼接分页并验证每页身份和游标推进。适配器要求接收方最终答复中提供匹配的 VF_AGENT_ACK JSON 行，普通“完成”或其他消息的回执不被接受。通知中的工作区和用户目录按占位符脱敏，原始结果保留在本机受控账本及后端。
 
 逻辑名称通过 sessions 回读。原生命名使用 Codex 调度服务的 codex_session_rename，传入明确的 thread_id、cwd、name；原生 API 回读一致才返回 native。共享 rename 仍只改逻辑名，调用者分别维护两者，不把旧版服务的缺失工具隐式降级为成功。服务在线读取、真实受管投递和插件写入须分别验证；不能因为 capabilities 声称 read_verified 就报告插件写入成功。
+
+## 7. Grok 适配
+
+agent=grok 使用 ACP 或 headless 的明确 session_id。有后端任务绑定时以 expected_turn_id 续接，无绑定时恢复指定原生会话，不新建替代目标。headless 续接使用原生 --resume，--session-id 只用于新会话指定 ID，不能混用。结果与回执按照第 6 章核验。
+
+服务把新任务及续接固定给受理 worker；未领取命令才允许 owner 丢失后恢复。已提交未知结果继续占用工作区与会话，不用 cancel 将未知强行标为完成。受理连接必须保持在线；退出后的未知任务先核对原始终态证据。
+
+逻辑名称通过 sessions 展示。ACP 专用初始化提示词第一行可作为 AFK Pilot 的 autoName；同步保留现有 customName 和 pinned。元数据与三份原生轨迹存在证明注册和可检索条件，不单独证明 UI 已渲染。headless 会话不作为 AFK Pilot 面板展示验收。

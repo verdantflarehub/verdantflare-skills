@@ -78,7 +78,7 @@ class Engine:
             replay = self.store.replay("start", args)
             if replay:
                 return public_task(replay)
-            task = self.store.start(args)
+            task = self.store.start(args, owner=self.owner)
             return public_task(task)
         if name == "grok_task_status":
             task = self.store.task(args["task_id"])
@@ -100,7 +100,7 @@ class Engine:
         operation = name.removeprefix("grok_task_")
         if operation == "respond":
             raise BridgeError("APPROVAL_REQUIRES_UI", "Interactive approvals must be handled in the AFK Pilot UI")
-        return public_task(self.store.enqueue(operation, args))
+        return public_task(self.store.enqueue(operation, args, owner=self.owner))
 
     async def capabilities(self, args: dict) -> dict:
         cwd = allowed_cwd(args["cwd"], self.config["allowed_roots"]) if args.get("cwd") else None
@@ -218,6 +218,8 @@ class Engine:
                 )
 
             final_sid = outcome.get("session_id") or session_id
+            if session_id and final_sid != session_id:
+                raise BridgeError('BACKEND_TARGET_MISMATCH', 'Backend returned another session')
             if outcome.get("cancelled") or is_cancelling():
                 self.store.transition(task_id, self.owner, "cancelled", thread_id=final_sid, result=outcome)
             else:
@@ -231,7 +233,7 @@ class Engine:
             current = self.store.task(task_id)
             if current["state"] not in TERMINAL and current["state"] != "interrupted_unknown":
                 detail = error.as_dict() if isinstance(error, BridgeError) else {"code": "INTERNAL_ERROR", "message": type(error).__name__}
-                target_state = "timed_out" if isinstance(error, BridgeError) and error.code == "BACKEND_TIMEOUT" else ("failed" if not submitted or isinstance(error, BridgeError) else "interrupted_unknown")
+                target_state = "interrupted_unknown" if submitted else "failed"
                 self.store.transition(task_id, self.owner, target_state, error=detail)
                 self.store.command_done(command["id"], self.owner, detail)
         finally:

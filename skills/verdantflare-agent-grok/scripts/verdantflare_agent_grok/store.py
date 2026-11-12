@@ -12,7 +12,7 @@ import uuid
 
 from .errors import BridgeError
 
-ACTIVE = ("queued", "starting", "running", "waiting_input", "waiting_approval", "cancelling")
+ACTIVE = ("queued", "starting", "running", "waiting_input", "waiting_approval", "cancelling", "interrupted_unknown")
 TERMINAL = ("completed", "failed", "cancelled", "timed_out")
 
 
@@ -61,16 +61,26 @@ def _owner_pid_alive(owner: str | None) -> bool:
     pid = int(pid_str)
     if os.name == "nt":
         import ctypes
-        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+        from ctypes import wintypes
+        api = ctypes.WinDLL('kernel32', use_last_error=True)
+        api.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        api.OpenProcess.restype = wintypes.HANDLE
+        api.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        api.GetExitCodeProcess.restype = wintypes.BOOL
+        api.CloseHandle.argtypes = [wintypes.HANDLE]
+        api.CloseHandle.restype = wintypes.BOOL
+        handle = api.OpenProcess(0x1000, False, pid)
         if not handle:
-            return False
+            # Only ERROR_INVALID_PARAMETER proves this PID does not exist.
+            # Access denial is not evidence of death; heartbeat still applies.
+            return ctypes.get_last_error() != 87
         try:
-            code = ctypes.c_ulong()
-            if ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+            code = wintypes.DWORD()
+            if api.GetExitCodeProcess(handle, ctypes.byref(code)):
                 return code.value == 259
             return True
         finally:
-            ctypes.windll.kernel32.CloseHandle(handle)
+            api.CloseHandle(handle)
     try:
         os.kill(pid, 0)
         return True
@@ -178,7 +188,7 @@ class Store:
                 """
                 SELECT t.id, t.owner, o.heartbeat AS owner_hb
                 FROM tasks t LEFT JOIN owners o ON t.owner = o.id
-                WHERE t.state IN ('starting','running','waiting_input','waiting_approval','cancelling')
+                WHERE t.state IN ('queued','starting','running','waiting_input','waiting_approval','cancelling')
                   AND t.owner IS NOT NULL
                 """
             ).fetchall()
@@ -187,6 +197,11 @@ class Store:
                 hb = row["owner_hb"]
                 if hb is None or hb < stale_before or not _owner_pid_alive(row["owner"]):
                     lost_count += 1
+                    if db.execute("SELECT 1 FROM commands WHERE task_id=? AND state='queued' AND operation IN ('start','continue')", (row['id'],)).fetchone() and self._task(db,row['id'])['state']=='queued':
+                        db.execute("UPDATE tasks SET owner=NULL WHERE id=?", (row['id'],))
+                        self._event(db,row['id'],'owner_lost_unsubmitted',{'retry_safe':True})
+                        continue
+                    db.execute("UPDATE commands SET state='unknown' WHERE task_id=? AND state IN ('queued','claimed')", (row['id'],))
                     self._state(db, row["id"], "interrupted_unknown", error={"code": "BACKEND_DISCONNECTED"})
             return lost_count
 
@@ -200,7 +215,7 @@ class Store:
                 raise BridgeError("REQUEST_CONFLICT", "request_id was already used with different arguments")
             return self._task(db, prior["task_id"])
 
-    def start(self, payload: dict) -> dict:
+    def start(self, payload: dict, *, owner=None) -> dict:
         digest = fingerprint("start", payload)
         now = time.time()
         with self.transaction() as db:
@@ -220,7 +235,7 @@ class Store:
                     )
             task_id = str(uuid.uuid4())
             db.execute(
-                "INSERT INTO tasks VALUES(?,?,?,?,?,?,NULL,?,?,?,NULL,NULL)",
+                "INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?,?,NULL,NULL)",
                 (
                     task_id,
                     "queued",
@@ -228,6 +243,7 @@ class Store:
                     payload["cwd"],
                     payload.get("thread_id"),
                     None,
+                    owner,
                     now + payload["timeout_seconds"],
                     now,
                     now,
@@ -238,7 +254,7 @@ class Store:
             self._event(db, task_id, "queued", {"mode": payload["mode"], "session_id": payload.get("thread_id")})
             return self._task(db, task_id)
 
-    def enqueue(self, operation: str, payload: dict) -> dict:
+    def enqueue(self, operation: str, payload: dict, *, owner=None) -> dict:
         with self.transaction() as db:
             task = self._task(db, payload["task_id"])
             if "request_id" in payload:
@@ -249,10 +265,6 @@ class Store:
                         raise BridgeError("REQUEST_CONFLICT", "request_id was already used with different arguments")
                     return self._task(db, prior["task_id"])
             if task["state"] == "interrupted_unknown":
-                if operation == "cancel":
-                    if task["turn_id"] != payload.get("expected_turn_id"):
-                        raise BridgeError("STALE_TURN", "expected_turn_id does not match the active turn", task_id=task["id"])
-                    return self._state(db, task["id"], "cancelled")
                 raise BridgeError("SESSION_BUSY", "Task outcome is unknown and requires reconciliation before mutation", task_id=task["id"])
             if operation != "continue" and task["turn_id"] != payload.get("expected_turn_id"):
                 raise BridgeError("STALE_TURN", "expected_turn_id does not match the active turn", task_id=task["id"])
@@ -266,8 +278,8 @@ class Store:
                         raise BridgeError("SESSION_BUSY", "Workspace or session lease is currently busy", retryable=True, task_id=task["id"])
                 now = time.time()
                 db.execute(
-                    "UPDATE tasks SET state='queued', owner=NULL, deadline=?, updated=?, result=NULL, error=NULL WHERE id=?",
-                    (now + payload["timeout_seconds"], now, task["id"]),
+                    "UPDATE tasks SET state='queued', owner=?, deadline=?, updated=?, result=NULL, error=NULL WHERE id=?",
+                    (owner, now + payload["timeout_seconds"], now, task["id"]),
                 )
             elif operation == "cancel":
                 if task["state"] in TERMINAL:
