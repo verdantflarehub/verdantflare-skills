@@ -331,12 +331,15 @@ class Store:
             return cursor.rowcount == 1
 
     def submission_marker(self, task_id):
+        return (self.submission(task_id) or {}).get('client_message_id')
+
+    def submission(self, task_id):
         with closing(self.connect()) as db:
             row = db.execute("""SELECT payload FROM events WHERE task_id=? AND kind='submission'
                 AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE task_id=?
                     AND kind IN ('queued','continue_queued')),0)
                 ORDER BY seq DESC LIMIT 1""", (task_id, task_id)).fetchone()
-            return json.loads(row[0])['client_message_id'] if row else None
+            return json.loads(row[0]) if row else None
 
     def replay(self, operation, payload):
         with self.transaction() as db:

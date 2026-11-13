@@ -13,6 +13,7 @@ from .schema import validate
 from .snapshot import Snapshot, turn_result
 from .store import Store, TERMINAL, allowed_cwd
 from .approval_ui import ApprovalUI, decisions
+from .permissions import PermissionSelection, assert_effective_selection, assert_supported_thread, effective_permissions, assert_no_pending_permission_conflict
 
 
 def public_task(task):
@@ -176,6 +177,7 @@ class Engine:
                     'next_cursor': result.get('nextCursor'),
                     'operations': ['capabilities', 'session_rename', 'start', 'status', 'result', 'continue', 'cancel', 'respond'],
                     'permission_approval': 'human_ui_required',
+                    'permission_inheritance': 'host-selection-native-turn-context-v1',
                     'managed_approval': 'pending.approval_url',
                     'managed_concurrency': {'scope': 'thread', 'limit': None, 'automatic_queue': False}}
         finally:
@@ -232,7 +234,10 @@ class Engine:
                 self.connections[task['id']] = connection
                 owner = await connection.follow(task['thread_id'])
                 snapshot = await self._snapshot(connection)
-                marker = self.store.submission_marker(task['id'])
+                submission = self.store.submission(task['id']) or {}
+                marker = submission.get('client_message_id')
+                selection = (PermissionSelection(submission['permission_mode'], '')
+                             if submission.get('permission_mode') else None)
                 turn = next((t for t in snapshot.turns() if marker and (t.get('params') or {}).get('clientUserMessageId') == marker), None)
                 if not turn or not turn.get('turnId'):
                     raise BridgeError('BACKEND_DISCONNECTED', 'Cannot correlate uncertain submission; no replay performed')
@@ -240,7 +245,7 @@ class Engine:
                 # Reuse the exact captured snapshot, then follow subsequent revisions.
                 connection.events.put_nowait({'method': 'plugin/state', 'params': {'change': {
                     'type': 'snapshot', 'revision': snapshot.revision, 'conversationState': snapshot.state}}})
-                await self._watch_plugin(task['id'], connection, Snapshot(), marker, owner)
+                await self._watch_plugin(task['id'], connection, Snapshot(), marker, owner, selection)
             else:
                 codex_bin = resolve_codex_binary(self.config.get('codex'), self.config.get('extension'))
                 connection = await AppServer(codex_bin).start()
@@ -281,25 +286,46 @@ class Engine:
                     if event.get('method') == 'plugin/state':
                         snapshot.apply(event['params']['change'])
                 snapshot.assert_idle(task['cwd'])
+                assert_supported_thread(snapshot.state)
+                database, selection = await connection.permission_selection(task['thread_id'], owner)
+                # Model-settings read waits for the owner's pending settings
+                # writes. Apply their queued broadcasts before validating again.
+                while not connection.events.empty():
+                    event = connection.events.get_nowait()
+                    if event.get('method') == 'bridge/disconnected':
+                        raise BridgeError('BACKEND_DISCONNECTED', 'Plugin disconnected before permission submission')
+                    if event.get('method') == 'plugin/state':
+                        snapshot.apply(event['params']['change'])
+                snapshot.assert_idle(task['cwd'])
+                assert_supported_thread(snapshot.state)
+                assert_no_pending_permission_conflict(snapshot.state, snapshot.turns(), selection)
+                self.store.append_event(task_id, 'permission_selection', {
+                    'source': 'vscode-local-explicit-selection', 'mode': selection.mode,
+                    'expected': selection.request_fields()})
                 marker = str(uuid.uuid4())
-                self.store.append_event(task_id, 'submission', {'client_message_id': marker})
+                await connection.check_permission_selection(task['thread_id'], owner, database, selection)
+                self.store.append_event(task_id, 'submission', {
+                    'client_message_id': marker, 'permission_mode': selection.mode})
                 submitted = True
                 await connection.follower('thread-follower-start-turn', task['thread_id'], {
                     'turnStart': {'request': {'threadId': task['thread_id'],
                         'input': [{'type': 'text', 'text': prompt, 'text_elements': []}],
-                        'clientUserMessageId': marker}, 'context': {'inheritThreadSettings': True}}}, expected_owner=owner)
+                        'clientUserMessageId': marker, **selection.request_fields()},
+                        'context': {'inheritThreadSettings': True}}}, expected_owner=owner)
                 self.store.command_done(command['id'], self.owner, {'accepted': True})
-                await self._watch_plugin(task_id, connection, snapshot, marker, owner)
+                await self._watch_plugin(task_id, connection, snapshot, marker, owner, selection)
             else:
                 codex_bin = resolve_codex_binary(self.config.get('codex'), self.config.get('extension'))
                 connection = await AppServer(codex_bin).start()
                 self.connections[task_id] = connection
                 if task['thread_id']:
-                    await connection.call('thread/resume', {'threadId': task['thread_id']})
+                    reply = await connection.call('thread/resume', {'threadId': task['thread_id']})
                     thread_id = task['thread_id']
                 else:
                     reply = await connection.call('thread/start', {'cwd': task['cwd']})
                     thread_id = reply['thread']['id']
+                self.store.append_event(task_id, 'effective_permissions', {
+                    'source': 'managed-app-server', 'actual': effective_permissions(reply)})
                 self.store.transition(task_id, self.owner, 'starting', thread_id=thread_id)
                 submitted = True
                 reply = await connection.call('turn/start', {'threadId': thread_id,
@@ -447,16 +473,27 @@ class Engine:
             self._refresh_waiting(task_id)
             return pending
 
-    async def _watch_plugin(self, task_id, connection, snapshot, marker, owner):
+    async def _watch_plugin(self, task_id, connection, snapshot, marker, owner, selection=None):
         last_status = None
         bound_turn = None
+        permission_checked = False
+        permission_error = None
+        snapshot_recovered = False
         while True:
             event = await self._next(task_id, connection)
             if event.get('method') == 'bridge/disconnected':
                 raise BridgeError('BACKEND_DISCONNECTED', 'Plugin disconnected')
             if event.get('method') != 'plugin/state':
                 continue
-            snapshot.apply(event['params']['change'])
+            try:
+                snapshot.apply(event['params']['change'])
+            except BridgeError as error:
+                if snapshot_recovered or error.code != 'BACKEND_DISCONNECTED':
+                    raise
+                snapshot_recovered = True
+                self.store.append_event(task_id, 'snapshot_recovery', {'reason': error.code})
+                snapshot.apply(await connection.resnapshot(self.store.task(task_id)['thread_id'], owner))
+                self.store.append_event(task_id, 'snapshot_recovered', {'revision': snapshot.revision})
             task = self.store.task(task_id)
             turns = snapshot.turns()
             turn = next((t for t in turns if (t.get('params') or {}).get('clientUserMessageId') == marker), None)
@@ -469,6 +506,21 @@ class Engine:
             status = turn.get('status')
             if task['turn_id'] != turn_id:
                 self.store.transition(task_id, self.owner, 'running', turn_id=turn_id)
+            if selection is not None and not permission_checked:
+                permission_checked = True
+                try:
+                    actual = assert_effective_selection(selection, await connection.effective_turn_permissions(
+                        task['thread_id'], turn_id, task['cwd']))
+                    self.store.append_event(task_id, 'effective_permissions', {
+                        'source': 'plugin-native-turn-context', 'actual': actual})
+                except BridgeError as error:
+                    permission_error = error.as_dict()
+                    self.store.append_event(task_id, 'permission_mismatch', permission_error)
+                    if status not in ('completed', 'failed', 'interrupted'):
+                        # A submitted turn can already have produced side effects.
+                        # Keep the lease until the native terminal state is observed.
+                        self.store.transition(task_id, self.owner, 'cancelling')
+                        await connection.interrupt(task['thread_id'], turn_id, owner)
             if status != last_status:
                 self.store.append_event(task_id, 'plugin_turn_status', {'status': status})
                 last_status = status
@@ -476,7 +528,12 @@ class Engine:
                 state = {'completed': 'completed', 'failed': 'failed', 'interrupted': 'cancelled'}[status]
                 if state == 'cancelled' and time.time() >= task['deadline']:
                     state = 'timed_out'
-                self.store.transition(task_id, self.owner, state, result=turn_result(turn))
+                if permission_error:
+                    result = turn_result(turn)
+                    result['unresolved'].append(permission_error)
+                    self.store.transition(task_id, self.owner, 'failed', result=result, error=permission_error)
+                else:
+                    self.store.transition(task_id, self.owner, state, result=turn_result(turn))
                 return
             requests = [r for r in snapshot.state.get('requests', [])
                         if r.get('params', {}).get('turnId') == turn_id]

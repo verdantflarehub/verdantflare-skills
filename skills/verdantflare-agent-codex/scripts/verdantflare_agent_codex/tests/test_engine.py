@@ -24,7 +24,10 @@ class FakeApp:
     async def close(self): pass
     async def send(self, message): self.sent.append(message)
     async def call(self, method, params):
-        if method == 'thread/start': return {'thread': {'id': 'thread'}}
+        if method in ('thread/start', 'thread/resume'):
+            return {'thread': {'id': 'thread'}, 'approvalPolicy': 'on-request',
+                    'approvalsReviewer': 'user', 'sandbox': {'type': 'workspaceWrite'},
+                    'activePermissionProfile': {'id': ':workspace', 'extends': None}}
         if method == 'turn/start': return {'turn': {'id': 'turn'}}
         if method == 'thread/list': return {'data': getattr(self, 'threads', []), 'nextCursor': None}
         if method == 'turn/interrupt':
@@ -169,11 +172,29 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(409, (await self.http(pending['approval_url']))[0])
         self.assertEqual([], app.sent)
 
+    async def test_declined_approval_is_forwarded_once_and_never_reported_as_execution(self):
+        task_id, app = await self.start_task()
+        pending = await self.approval(task_id, app)
+        # Protocol fixture only: no real approval or executable backend is used.
+        await self.engine.human_approval(task_id, pending['id'], 'decline')
+        self.assertEqual([{'id': 90, 'result': {'decision': 'decline'}}], app.sent)
+        with self.assertRaises(BridgeError):
+            await self.engine.human_approval(task_id, pending['id'], 'decline')
+        await app.events.put({'method': 'turn/completed', 'params': {'threadId': 'thread',
+            'turn': {'id': 'turn', 'status': 'failed', 'error': {'message': 'Command approval declined'}}}})
+        await self.until(task_id, 'failed')
+        result = self.engine.store.result(task_id)['result']
+        self.assertEqual([], result['commands'])
+        self.assertTrue(result['unresolved'])
+        self.assertEqual(1, len(app.sent))
+
     async def test_managed_same_workspace_runs_two_connections(self):
         original = FakeApp.call
         async def unique_call(app, method, params):
             if method == 'thread/start':
-                return {'thread': {'id': 'thread-' + str(id(app))}}
+                reply = await original(app, method, params)
+                reply['thread']['id'] = 'thread-' + str(id(app))
+                return reply
             return await original(app, method, params)
         with patch.object(FakeApp, 'call', unique_call):
             first, second = await asyncio.gather(*[

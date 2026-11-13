@@ -1,10 +1,12 @@
 """Dynamic Codex VS Code plugin IPC adapter without extension version locking."""
 from pathlib import Path
+import asyncio
 import json
 import os
 import shutil
 from .rpc import JsonlProcess
 from .errors import BridgeError
+from .permissions import default_vscode_database, read_selection, assert_selection_current, rollout_path, read_turn_permissions
 
 
 def _latest_vscode_extension(prefix: str) -> Path | None:
@@ -103,10 +105,60 @@ class Plugin(JsonlProcess):
             raise BridgeError('OWNER_UNAVAILABLE', 'Plugin did not return model settings')
         return result['settings']
 
+    async def permission_selection(self, thread_id, owner):
+        # Wait for host-side settings updates and recheck the exact live owner.
+        await self.follower('thread-follower-read-model-settings', thread_id, expected_owner=owner)
+        database = await asyncio.to_thread(default_vscode_database, self.extension)
+        return database, await asyncio.to_thread(read_selection, database)
+
+    async def check_permission_selection(self, thread_id, owner, database, selection):
+        if await self.owner(thread_id) != owner:
+            raise BridgeError('OWNER_UNAVAILABLE', 'Plugin ownership changed before permission submission')
+        await asyncio.to_thread(assert_selection_current, database, selection)
+
+    async def effective_turn_permissions(self, thread_id, turn_id, cwd):
+        path = await asyncio.to_thread(rollout_path, thread_id, cwd)
+        deadline = asyncio.get_running_loop().time() + 5
+        while True:
+            actual = await asyncio.to_thread(read_turn_permissions, path, turn_id)
+            if actual is not None:
+                return actual
+            if asyncio.get_running_loop().time() >= deadline:
+                raise BridgeError('PERMISSIONS_UNAVAILABLE', 'Native turn permission evidence did not arrive')
+            await asyncio.sleep(.1)
+
     async def follow(self, thread_id):
         owner = await self.owner(thread_id)
         await self.call('subscribe', {'thread_id': thread_id, 'owner': owner})
         return owner
+
+    async def resnapshot(self, thread_id, owner):
+        """Refresh observation only; never replay a turn after a malformed patch."""
+        if await self.owner(thread_id) != owner:
+            raise BridgeError('OWNER_UNAVAILABLE', 'Plugin ownership changed during state recovery')
+        await self.call('unsubscribe', {'thread_id': thread_id})
+        while not self.events.empty():
+            event = self.events.get_nowait()
+            if event.get('method') == 'bridge/disconnected':
+                raise BridgeError('BACKEND_DISCONNECTED', 'Plugin disconnected during state recovery')
+        await self.call('subscribe', {'thread_id': thread_id, 'owner': owner})
+        deadline = asyncio.get_running_loop().time() + 10
+        while True:
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                raise BridgeError('BACKEND_TIMEOUT', 'Plugin recovery snapshot did not arrive')
+            try:
+                event = await asyncio.wait_for(self.events.get(), remaining)
+            except TimeoutError:
+                raise BridgeError('BACKEND_TIMEOUT', 'Plugin recovery snapshot did not arrive') from None
+            if event.get('method') == 'bridge/disconnected':
+                raise BridgeError('BACKEND_DISCONNECTED', 'Plugin disconnected during state recovery')
+            if event.get('method') == 'plugin/state':
+                change = event['params']['change']
+                if change.get('type') == 'snapshot':
+                    if await self.owner(thread_id) != owner:
+                        raise BridgeError('OWNER_UNAVAILABLE', 'Plugin ownership changed during state recovery')
+                    return change
 
     async def interrupt(self, thread_id, turn_id, owner):
         if not turn_id:
