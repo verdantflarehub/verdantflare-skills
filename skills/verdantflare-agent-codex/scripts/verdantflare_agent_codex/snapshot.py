@@ -70,11 +70,13 @@ class Snapshot:
     def assert_idle(self, cwd):
         from .store import canonical
         if self.state is None or self.state.get('threadRuntimeStatus', {}).get('type') not in ('idle',):
-            raise BridgeError('SESSION_BUSY', 'Plugin thread is active or its state is uncertain')
+            raise BridgeError('SESSION_BUSY', 'Plugin thread is active or its state is uncertain',
+                              reason='state_unknown' if self.state is None else 'thread_active')
         if canonical(self.state['cwd']) != cwd:
             raise BridgeError('WORKSPACE_DENIED', 'Plugin thread workspace differs from requested workspace')
         if self.state.get('requests') or any(t.get('status') == 'inProgress' for t in self.turns()):
-            raise BridgeError('SESSION_BUSY', 'Plugin thread has active work or pending requests')
+            raise BridgeError('SESSION_BUSY', 'Plugin thread has active work or pending requests',
+                              reason='pending_request' if self.state.get('requests') else 'thread_active')
 
 
 def turn_result(turn):

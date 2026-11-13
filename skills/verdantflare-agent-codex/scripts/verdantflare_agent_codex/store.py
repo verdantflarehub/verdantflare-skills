@@ -1,4 +1,4 @@
-"""Durable tasks, idempotent commands, and cross-process workspace leases."""
+"""Durable tasks, idempotent commands, and cross-process thread leases."""
 from contextlib import closing, contextmanager
 from pathlib import Path
 import hashlib
@@ -125,12 +125,12 @@ class Store:
 
     @staticmethod
     def _lease(db, task):
-        for row in db.execute("SELECT l.*, t.mode FROM leases l JOIN tasks t ON t.id=l.task_id WHERE l.task_id<>?", (task["id"],)):
-            workspace_conflict = (task['mode'] != 'managed' or row['mode'] != 'managed') and (
-                contains(row['cwd'], task['cwd']) or contains(task['cwd'], row['cwd']))
-            if workspace_conflict or (task['thread_id'] and task['thread_id'] == row['thread_id']):
-                raise BridgeError("SESSION_BUSY", "Workspace or thread has an active lease",
-                                  retryable=True, task_id=row['task_id'])
+        if task['thread_id']:
+            row = db.execute("SELECT task_id FROM leases WHERE thread_id=? AND task_id<>?",
+                             (task['thread_id'], task['id'])).fetchone()
+            if row:
+                raise BridgeError("SESSION_BUSY", "Thread has an active lease", retryable=True,
+                                  task_id=row['task_id'], reason='thread_lease')
         db.execute("INSERT OR REPLACE INTO leases VALUES(?,?,?)",
                    (task["id"], task["cwd"], task["thread_id"]))
 
@@ -183,7 +183,7 @@ class Store:
                 if task["state"] not in TERMINAL or db.execute(
                     "SELECT 1 FROM pending WHERE task_id=? AND state='waiting'", (task["id"],)
                 ).fetchone():
-                    raise BridgeError("SESSION_BUSY", "Previous turn is not finished")
+                    raise BridgeError("SESSION_BUSY", "Previous turn is not finished", reason="thread_active")
                 self._lease(db, task)
                 db.execute("UPDATE tasks SET state='queued',owner=NULL,turn_id=NULL,error=NULL,deadline=?,updated=? WHERE id=?",
                            (time.time() + task["timeout"], time.time(), task["id"]))
@@ -259,9 +259,9 @@ class Store:
             self._event(db, self._task(db, task_id), "state", {"state": state})
 
     def mark_lost_owners(self, stale_before):
-        """Never replay a claimed write; uncertainty retains its workspace lease."""
+        """Never replay a claimed write; uncertainty retains its thread lease."""
         with self.transaction() as db:
-            rows = db.execute("""SELECT t.* FROM tasks t LEFT JOIN owners o ON t.owner=o.id
+            rows = db.execute("""SELECT t.*, o.heartbeat AS last_heartbeat FROM tasks t LEFT JOIN owners o ON t.owner=o.id
                 WHERE t.owner IS NOT NULL AND (o.heartbeat IS NULL OR o.heartbeat<?)
                 AND t.state NOT IN ('completed','failed','cancelled','timed_out','interrupted_unknown')""",
                 (stale_before,)).fetchall()
@@ -269,7 +269,9 @@ class Store:
                 task = dict(row)
                 db.execute("UPDATE tasks SET state='interrupted_unknown',updated=? WHERE id=?", (time.time(), task["id"]))
                 db.execute("UPDATE commands SET state='unknown' WHERE task_id=? AND state IN ('queued','claimed')", (task["id"],))
-                self._event(db, task, "owner_lost", {"previous_state": task["state"]})
+                self._event(db, task, "owner_lost", {"previous_state": task["state"],
+                    "reason": "worker_heartbeat_expired", "worker_instance": task["owner"],
+                    "last_heartbeat": task["last_heartbeat"], "thread_id": task["thread_id"]})
             return len(rows)
 
     def task(self, task_id):
@@ -326,9 +328,24 @@ class Store:
 
     def claim_recovery(self, task_id, owner):
         with self.transaction() as db:
-            cursor = db.execute("UPDATE tasks SET owner=?,state='recovering',updated=? WHERE id=? AND state='interrupted_unknown'",
-                                (owner, time.time(), task_id))
-            return cursor.rowcount == 1
+            task = self._task(db, task_id)
+            if task['state'] != 'interrupted_unknown':
+                return False
+            last = db.execute("SELECT payload FROM events WHERE task_id=? AND kind='recovery_attempt' "
+                              "AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE task_id=? "
+                              "AND kind IN ('queued','continue_queued')),0) ORDER BY seq DESC LIMIT 1",
+                              (task_id, task_id)).fetchone()
+            prior = json.loads(last[0]) if last else {}
+            now = time.time()
+            if prior.get('next_attempt_at', 0) > now:
+                return False
+            attempt = prior.get('attempt', 0) + 1
+            delay = (1, 2, 5, 10, 30)[min(attempt - 1, 4)]
+            db.execute("UPDATE tasks SET owner=?,state='recovering',updated=? WHERE id=?",
+                       (owner, now, task_id))
+            self._event(db, task, 'recovery_attempt', {'attempt': attempt,
+                'next_attempt_at': now + delay, 'worker_instance': owner})
+            return True
 
     def submission_marker(self, task_id):
         return (self.submission(task_id) or {}).get('client_message_id')

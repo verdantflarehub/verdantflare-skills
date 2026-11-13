@@ -5,8 +5,11 @@ import json
 import os
 import time
 import uuid
+import threading
 
 from .errors import BridgeError
+from .build_info import SERVICE_BUILD
+from .recovery import read_native_result
 from .plugin import Plugin, detect_codex_plugin_version, resolve_codex_binary
 from .rpc import AppServer
 from .schema import validate
@@ -30,15 +33,20 @@ class Engine:
         self.runs = {}
         self.connections = {}
         self.pending_wire = {}
+        self.db_calls = set()
         self.worker = None
         self.heartbeat_worker = None
-        self.recovery_attempted = set()
+        self.heartbeat_stop = threading.Event()
+        self.heartbeat_interval = 5
+        self.heartbeat_thread = None
         self.stopping = False
         self.approval_ui = None
         self.approval_lock = asyncio.Lock()
 
     async def start(self):
         self.store.heartbeat(self.owner)
+        self.heartbeat_thread = threading.Thread(target=self._pulse, daemon=True)
+        self.heartbeat_thread.start()
         self.worker = asyncio.create_task(self._work())
         self.heartbeat_worker = asyncio.create_task(self._heartbeat())
 
@@ -58,10 +66,16 @@ class Engine:
         for task_id, run in list(self.runs.items()):
             run.cancel()
         for run in list(self.runs.values()):
-            with suppress(asyncio.CancelledError):
+            with suppress(asyncio.CancelledError, BridgeError):
                 await run
         for connection in list(self.connections.values()):
             await connection.close()
+        if self.db_calls:
+            await asyncio.gather(*list(self.db_calls), return_exceptions=True)
+        self.heartbeat_stop.set()
+        if self.heartbeat_thread:
+            await asyncio.to_thread(self.heartbeat_thread.join)
+
 
     async def call(self, name, arguments):
         args = validate(name, arguments)
@@ -80,7 +94,7 @@ class Engine:
                 connection = await Plugin(self.config['node'], self.config['extension']).start()
                 try:
                     await connection.follow(args['thread_id'])
-                    snapshot = await self._snapshot(connection)
+                    snapshot = await self._snapshot(connection, args['thread_id'])
                     snapshot.assert_idle(args['cwd'])
                 finally:
                     await connection.close()
@@ -171,7 +185,10 @@ class Engine:
                 rows.append({'thread_id': thread['id'], 'title': thread.get('name') or thread.get('preview'),
                              'cwd': thread['cwd'], 'owner_reachable': reachable})
             plugin_ver = detect_codex_plugin_version(self.config.get('extension'))
-            return {'version': '0.1.0', 'plugin_version': plugin_ver,
+            return {'version': '0.2.0', 'plugin_version': plugin_ver,
+                    'service_build': dict(SERVICE_BUILD), 'worker_instance': self.owner,
+                    'plugin_concurrency': {'scope': 'thread', 'limit': None, 'automatic_queue': False},
+                    'recovery_protocol': 'thread-recovery-v1',
                     'plugin': 'read_verified' if any(r['owner_reachable'] for r in rows) else ('discovered' if plugin else 'unavailable'),
                     'managed': 'read_verified', 'threads': rows, 'filtered_out_count': filtered_out_count,
                     'next_cursor': result.get('nextCursor'),
@@ -195,7 +212,7 @@ class Engine:
                         previous = self.runs.get(task_id)
                         if previous:
                             await previous
-                        self.runs[task_id] = asyncio.create_task(self._execute(command))
+                        self._track(task_id, self._execute(command))
                     else:
                         await self._control(command)
                 except BridgeError as error:
@@ -204,25 +221,57 @@ class Engine:
             else:
                 await asyncio.sleep(0.1)
 
+    async def _db(self, operation, *args):
+        future = asyncio.create_task(asyncio.to_thread(operation, *args))
+        self.db_calls.add(future)
+        future.add_done_callback(self.db_calls.discard)
+        return await asyncio.shield(future)
+
+    def _pulse(self):
+        # SQLite waits and IPC work on the event loop cannot suppress our liveness.
+        while not self.heartbeat_stop.wait(self.heartbeat_interval):
+            try:
+                self.store.heartbeat(self.owner)
+            except Exception:
+                # Recovery fencing still prevents a stale worker from committing.
+                continue
+
+    def _track(self, task_id, coroutine):
+        run = asyncio.create_task(coroutine)
+        self.runs[task_id] = run
+        def done(future):
+            if self.runs.get(task_id) is future:
+                self.runs.pop(task_id, None)
+            if not future.cancelled():
+                future.exception()  # Retrieve errors; execution records their task outcome.
+        run.add_done_callback(done)
+
     async def _heartbeat(self):
         while True:
-            self.store.heartbeat(self.owner)
-            self.store.mark_lost_owners(time.time() - 30)
-            for task in self.store.recoverable():
-                if task['id'] in self.recovery_attempted or task['id'] in self.runs:
+            await self._db(self.store.mark_lost_owners, time.time() - 30)
+            for task in await self._db(self.store.recoverable):
+                if task['id'] in self.runs:
                     continue
-                self.recovery_attempted.add(task['id'])
-                if self.store.claim_recovery(task['id'], self.owner):
-                    self.runs[task['id']] = asyncio.create_task(self._recover(task))
-            await asyncio.sleep(5)
+                if await self._db(self.store.claim_recovery, task['id'], self.owner):
+                    self._track(task['id'], self._recover(self.store.task(task['id'])))
+            await asyncio.sleep(1)
 
-    async def _snapshot(self, connection):
+    @staticmethod
+    def _state_event(event, thread_id):
+        return (event.get('method') == 'plugin/state'
+                and event.get('params', {}).get('conversationId') == thread_id)
+
+    async def _snapshot(self, connection, thread_id):
         snapshot = Snapshot()
+        deadline = asyncio.get_running_loop().time() + 15
         while snapshot.state is None:
-            event = await asyncio.wait_for(connection.events.get(), 15)
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                raise BridgeError('BACKEND_TIMEOUT', 'Matching plugin snapshot did not arrive')
+            event = await asyncio.wait_for(connection.events.get(), remaining)
             if event.get('method') == 'bridge/disconnected':
                 raise BridgeError('BACKEND_DISCONNECTED', 'Plugin disconnected before snapshot')
-            if event.get('method') == 'plugin/state':
+            if self._state_event(event, thread_id):
                 snapshot.apply(event['params']['change'])
         return snapshot
 
@@ -233,17 +282,28 @@ class Engine:
                 connection = await Plugin(self.config['node'], self.config['extension']).start()
                 self.connections[task['id']] = connection
                 owner = await connection.follow(task['thread_id'])
-                snapshot = await self._snapshot(connection)
+                snapshot = await self._snapshot(connection, task['thread_id'])
                 submission = self.store.submission(task['id']) or {}
                 marker = submission.get('client_message_id')
                 selection = (PermissionSelection(submission['permission_mode'], '')
                              if submission.get('permission_mode') else None)
-                turn = next((t for t in snapshot.turns() if marker and (t.get('params') or {}).get('clientUserMessageId') == marker), None)
+                if selection is None:
+                    raise BridgeError('RECOVERY_UNCONFIRMED', 'Captured permission selection is absent')
+                turn = next((t for t in snapshot.turns() if
+                    (task['turn_id'] and t.get('turnId') == task['turn_id']) or
+                    (not task['turn_id'] and marker and (t.get('params') or {}).get('clientUserMessageId') == marker)), None)
+                if turn is None:
+                    await connection.follower('thread-follower-load-complete-history', task['thread_id'], expected_owner=owner)
+                    snapshot = Snapshot()
+                    snapshot.apply(await connection.resnapshot(task['thread_id'], owner))
+                    turn = next((t for t in snapshot.turns() if
+                        (task['turn_id'] and t.get('turnId') == task['turn_id']) or
+                        (not task['turn_id'] and marker and (t.get('params') or {}).get('clientUserMessageId') == marker)), None)
                 if not turn or not turn.get('turnId'):
                     raise BridgeError('BACKEND_DISCONNECTED', 'Cannot correlate uncertain submission; no replay performed')
                 self.store.transition(task['id'], self.owner, 'running', turn_id=turn['turnId'])
                 # Reuse the exact captured snapshot, then follow subsequent revisions.
-                connection.events.put_nowait({'method': 'plugin/state', 'params': {'change': {
+                connection.events.put_nowait({'method': 'plugin/state', 'params': {'conversationId': task['thread_id'], 'change': {
                     'type': 'snapshot', 'revision': snapshot.revision, 'conversationState': snapshot.state}}})
                 await self._watch_plugin(task['id'], connection, Snapshot(), marker, owner, selection)
             else:
@@ -258,9 +318,40 @@ class Engine:
                     raise BridgeError('BACKEND_DISCONNECTED', 'Managed turn terminal state is unconfirmed')
                 state = {'completed': 'completed', 'failed': 'failed', 'interrupted': 'cancelled'}[turn['status']]
                 self.store.transition(task['id'], self.owner, state, result=turn_result(turn))
+        except asyncio.CancelledError:
+            with suppress(BridgeError):
+                self.store.transition(task['id'], self.owner, 'interrupted_unknown', error={'code': 'WORKER_STOPPED'})
+            raise
         except Exception as error:
-            self.store.transition(task['id'], self.owner, 'interrupted_unknown', error={
-                'code': error.code if isinstance(error, BridgeError) else 'RECOVERY_UNCONFIRMED'})
+            recovered = False
+            if task['mode'] == 'plugin':
+                if isinstance(error, BridgeError) and error.code == 'OWNER_UNAVAILABLE':
+                    self.store.append_event(task['id'], 'plugin_owner_unavailable', {'thread_id': task['thread_id']})
+                app = None
+                try:
+                    current = self.store.task(task['id'])
+                    if current['owner'] != self.owner or current['state'] in TERMINAL:
+                        return
+                    captured = self.store.submission(task['id']) or {}
+                    if not current['thread_id'] or not current['turn_id'] or not captured.get('permission_mode'):
+                        raise BridgeError('RECOVERY_UNCONFIRMED', 'Exact turn or captured permissions are unavailable')
+                    app = await AppServer(resolve_codex_binary(self.config.get('codex'), self.config.get('extension'))).start()
+                    probe = Plugin(self.config['node'], self.config['extension'])
+                    state, result, actual = await read_native_result(app, probe, current, captured)
+                    self.store.append_event(task['id'], 'result_recovered', {'source': 'native_history',
+                        'thread_id': current['thread_id'], 'turn_id': current['turn_id'], 'actual_permissions': actual})
+                    self.store.transition(task['id'], self.owner, state, result=result)
+                    recovered = True
+                except Exception as fallback_error:
+                    self.store.append_event(task['id'], 'recovery_unconfirmed', {
+                        'code': getattr(fallback_error, 'code', 'RECOVERY_UNCONFIRMED')})
+                finally:
+                    if app:
+                        await app.close()
+            if not recovered:
+                with suppress(BridgeError):
+                    self.store.transition(task['id'], self.owner, 'interrupted_unknown', error={
+                        'code': error.code if isinstance(error, BridgeError) else 'RECOVERY_UNCONFIRMED'})
         finally:
             if connection:
                 await connection.close()
@@ -278,13 +369,7 @@ class Engine:
                 connection = await Plugin(self.config['node'], self.config['extension']).start()
                 self.connections[task_id] = connection
                 owner = await connection.follow(task['thread_id'])
-                snapshot = Snapshot()
-                while snapshot.state is None:
-                    event = await asyncio.wait_for(connection.events.get(), 15)
-                    if event.get('method') == 'bridge/disconnected':
-                        raise BridgeError('BACKEND_DISCONNECTED', 'Plugin disconnected before start')
-                    if event.get('method') == 'plugin/state':
-                        snapshot.apply(event['params']['change'])
+                snapshot = await self._snapshot(connection, task['thread_id'])
                 snapshot.assert_idle(task['cwd'])
                 assert_supported_thread(snapshot.state)
                 database, selection = await connection.permission_selection(task['thread_id'], owner)
@@ -294,7 +379,7 @@ class Engine:
                     event = connection.events.get_nowait()
                     if event.get('method') == 'bridge/disconnected':
                         raise BridgeError('BACKEND_DISCONNECTED', 'Plugin disconnected before permission submission')
-                    if event.get('method') == 'plugin/state':
+                    if self._state_event(event, task['thread_id']):
                         snapshot.apply(event['params']['change'])
                 snapshot.assert_idle(task['cwd'])
                 assert_supported_thread(snapshot.state)
@@ -357,10 +442,30 @@ class Engine:
         connection = self.connections.get(task['id'])
         if connection is None:
             raise BridgeError('BACKEND_DISCONNECTED', 'Task connection is unavailable')
+        plugin_owner = None
+        if task['mode'] == 'plugin':
+            plugin_owner = await connection.owner(task['thread_id'])
+            if plugin_owner != getattr(connection, 'bound_owner', None):
+                change = await connection.resnapshot(task['thread_id'], plugin_owner)
+                checked = Snapshot()
+                checked.apply(change)
+                turn = next((t for t in checked.turns() if t.get('turnId') == task['turn_id']), None)
+                if not turn or turn.get('status') != 'inProgress':
+                    raise BridgeError('STALE_TURN', 'Reconnected owner has no matching active turn')
+                if command['operation'] == 'respond':
+                    wire = self.pending_wire.get(command['payload']['pending_request_id'])
+                    if not any(r.get('id') == wire and r.get('params', {}).get('turnId') == task['turn_id']
+                               for r in checked.state.get('requests', [])):
+                        raise BridgeError('STALE_TURN', 'Pending input no longer belongs to the reconnected turn')
+                connection.bound_owner = plugin_owner
+                connection.events.put_nowait({'method': 'plugin/state', 'params': {
+                    'conversationId': task['thread_id'], 'change': change}})
+            current = self.store.task(task['id'])
+            if current['owner'] != self.owner or current['turn_id'] != task['turn_id'] or current['state'] in TERMINAL:
+                raise BridgeError('STALE_TURN', 'Task changed while reconnecting control')
         if command['operation'] == 'cancel':
             if task['mode'] == 'plugin':
-                owner = await connection.owner(task['thread_id'])
-                await connection.interrupt(task['thread_id'], task['turn_id'], owner)
+                await connection.interrupt(task['thread_id'], task['turn_id'], plugin_owner)
             else:
                 await connection.call('turn/interrupt', {'threadId': task['thread_id'], 'turnId': task['turn_id']})
         elif command['operation'] == 'respond':
@@ -370,7 +475,7 @@ class Engine:
                 raise BridgeError('APPROVAL_REQUIRES_UI', 'Response requires the original host UI')
             if task['mode'] == 'plugin':
                 await connection.follower('thread-follower-submit-user-input', task['thread_id'], {
-                    'requestId': wire_id, 'response': command['payload']['response']})
+                    'requestId': wire_id, 'response': command['payload']['response']}, expected_owner=plugin_owner)
             else:
                 await connection.send({'id': wire_id, 'result': command['payload']['response']})
             self.store.pending_done(pending_id)
@@ -378,6 +483,8 @@ class Engine:
         self.store.command_done(command['id'], self.owner, {'accepted': True})
 
     async def _next(self, task_id, connection):
+        if not connection.events.empty():
+            return connection.events.get_nowait()
         task = self.store.task(task_id)
         timeout = task['deadline'] - time.time()
         if timeout <= 0:
@@ -475,7 +582,7 @@ class Engine:
 
     async def _watch_plugin(self, task_id, connection, snapshot, marker, owner, selection=None):
         last_status = None
-        bound_turn = None
+        bound_turn = self.store.task(task_id)['turn_id']
         permission_checked = False
         permission_error = None
         snapshot_recovered = False
@@ -483,7 +590,9 @@ class Engine:
             event = await self._next(task_id, connection)
             if event.get('method') == 'bridge/disconnected':
                 raise BridgeError('BACKEND_DISCONNECTED', 'Plugin disconnected')
-            if event.get('method') != 'plugin/state':
+            if not self._state_event(event, self.store.task(task_id)['thread_id']):
+                if not event and await connection.owner(self.store.task(task_id)['thread_id']) != owner:
+                    raise BridgeError('OWNER_UNAVAILABLE', 'Plugin ownership changed')
                 continue
             try:
                 snapshot.apply(event['params']['change'])
@@ -496,7 +605,9 @@ class Engine:
                 self.store.append_event(task_id, 'snapshot_recovered', {'revision': snapshot.revision})
             task = self.store.task(task_id)
             turns = snapshot.turns()
-            turn = next((t for t in turns if (t.get('params') or {}).get('clientUserMessageId') == marker), None)
+            turn = next((t for t in turns if marker and (t.get('params') or {}).get('clientUserMessageId') == marker), None)
+            if turn and bound_turn and turn.get('turnId') != bound_turn:
+                raise BridgeError('RECOVERY_UNCONFIRMED', 'Submission marker changed turn identity')
             if turn is None and bound_turn:
                 turn = next((t for t in turns if t.get('turnId') == bound_turn), None)
             if not turn or not turn.get('turnId'):

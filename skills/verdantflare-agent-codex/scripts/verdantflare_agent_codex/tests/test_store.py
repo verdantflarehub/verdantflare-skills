@@ -68,7 +68,7 @@ class StoreTests(unittest.TestCase):
             command = self.store.claim('owner')
             self.store.transition(command['task_id'], 'owner', 'running', thread_id='thread-' + str(i), turn_id='turn')
         self.assert_code('SESSION_BUSY', lambda: self.store.start(self.payload('same-thread', mode='managed', thread_id='thread-0')))
-        self.assert_code('SESSION_BUSY', lambda: self.store.start(self.payload('plugin')))
+        self.store.start(self.payload('plugin'))
 
     def test_owner_fencing_and_heartbeat(self):
         task = self.store.start(self.payload())

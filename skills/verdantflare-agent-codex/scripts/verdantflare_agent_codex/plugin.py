@@ -119,8 +119,12 @@ class Plugin(JsonlProcess):
     async def effective_turn_permissions(self, thread_id, turn_id, cwd):
         path = await asyncio.to_thread(rollout_path, thread_id, cwd)
         deadline = asyncio.get_running_loop().time() + 5
+        searched_history = False
         while True:
             actual = await asyncio.to_thread(read_turn_permissions, path, turn_id)
+            if actual is None and not searched_history:
+                searched_history = True
+                actual = await asyncio.to_thread(read_turn_permissions, path, turn_id, full_history=True)
             if actual is not None:
                 return actual
             if asyncio.get_running_loop().time() >= deadline:
@@ -130,6 +134,7 @@ class Plugin(JsonlProcess):
     async def follow(self, thread_id):
         owner = await self.owner(thread_id)
         await self.call('subscribe', {'thread_id': thread_id, 'owner': owner})
+        self.bound_owner = owner
         return owner
 
     async def resnapshot(self, thread_id, owner):
@@ -153,7 +158,7 @@ class Plugin(JsonlProcess):
                 raise BridgeError('BACKEND_TIMEOUT', 'Plugin recovery snapshot did not arrive') from None
             if event.get('method') == 'bridge/disconnected':
                 raise BridgeError('BACKEND_DISCONNECTED', 'Plugin disconnected during state recovery')
-            if event.get('method') == 'plugin/state':
+            if event.get('method') == 'plugin/state' and event.get('params', {}).get('conversationId') == thread_id:
                 change = event['params']['change']
                 if change.get('type') == 'snapshot':
                     if await self.owner(thread_id) != owner:

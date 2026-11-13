@@ -97,33 +97,23 @@ def read_selection(database):
 
 
 def assert_no_pending_permission_conflict(state, turns, selection):
-    """A changed thread setting must not be overwritten by an older preference.
+    """Never overwrite a thread's current policy with a shared host preference.
 
-    Historical UI params are used only to detect ambiguity and reject submission,
-    never as proof of effective authorization.
+    The turns argument is retained for callers; historical choices do not grant
+    authority to replace the current thread selection.
     """
-    if not turns:
-        return
-    latest = state.get('latestThreadSettings') or {}
-    previous = turns[-1].get('params') or {}
-    def profile(value):
-        active = value.get('activePermissionProfile')
-        if isinstance(active, dict):
-            return active.get('id')
-        if value.get('permissions') is not None:
-            return value['permissions']
-        sandbox = value.get('sandboxPolicy') or {}
-        return {'readOnly': ':read-only', 'workspaceWrite': ':workspace',
-                'dangerFullAccess': ':danger-full-access'}.get(sandbox.get('type'))
     expected = selection.request_fields()
-    for key, current, historical, selected in (
-        ('permissions', profile(latest), profile(previous), expected['permissions']),
-        ('approvalPolicy', latest.get('approvalPolicy'), previous.get('approvalPolicy'), expected['approvalPolicy']),
-        ('approvalsReviewer', latest.get('approvalsReviewer'), previous.get('approvalsReviewer'), expected['approvalsReviewer']),
-    ):
-        if current is not None and current != historical and current != selected:
-            raise BridgeError('PERMISSIONS_CONFLICT',
-                              'Pending thread permission settings conflict with the persisted host selection; no turn was submitted')
+    for source in (state.get('latestThreadSettings') or {}, state.get('currentPermissions') or {}):
+        active = source.get('activePermissionProfile') or {}
+        profile = active.get('id') or source.get('permissions')
+        if not profile:
+            raise BridgeError('PERMISSIONS_UNAVAILABLE', 'Current thread permission selection is unavailable')
+        for current, selected in ((profile, expected['permissions']),
+                                  (source.get('approvalPolicy'), expected['approvalPolicy']),
+                                  (source.get('approvalsReviewer'), expected['approvalsReviewer'])):
+            if current is not None and current != selected:
+                raise BridgeError('PERMISSIONS_CONFLICT',
+                                  'Current thread permissions conflict with the host selection; no turn was submitted')
 
 
 def default_vscode_database(extension):
@@ -245,33 +235,35 @@ def rollout_path(thread_id, cwd, codex_home=None):
     return matches.pop()
 
 
-def read_turn_permissions(path, turn_id):
-    """Read a bounded tail; never mistake requested UI params for effective policy."""
+def read_turn_permissions(path, turn_id, *, full_history=False):
+    """Find the latest exact turn context; historical recovery can stream the full log."""
     try:
+        context = None
         with Path(path).open('rb') as stream:
-            stream.seek(0, 2)
-            size = stream.tell()
-            stream.seek(max(0, size - 8 * 1024 * 1024))
-            if stream.tell():
-                stream.readline()  # discard a possibly partial first record
-            lines = stream.read().splitlines()
-        for line in reversed(lines):
-            try:
-                entry = json.loads(line)
-            except (ValueError, UnicodeDecodeError):
-                continue  # writer may still be completing the last record
-            if not isinstance(entry, dict):
-                continue
-            context = entry.get('payload', {})
-            if entry.get('type') != 'turn_context' or not isinstance(context, dict) or context.get('turn_id') != turn_id:
-                continue
-            sandbox = deepcopy(context.get('sandbox_policy'))
-            if not isinstance(sandbox, dict):
-                raise BridgeError('PERMISSIONS_UNAVAILABLE', 'Native turn sandbox policy is incomplete')
-            sandbox['type'] = {'danger-full-access': 'dangerFullAccess', 'workspace-write': 'workspaceWrite',
-                               'read-only': 'readOnly', 'external-sandbox': 'externalSandbox'}.get(sandbox.get('type'), sandbox.get('type'))
-            return effective_permissions({'sandboxPolicy': sandbox,
-                'approvalPolicy': context.get('approval_policy'), 'approvalsReviewer': context.get('approvals_reviewer')})
+            if not full_history:
+                stream.seek(0, 2)
+                stream.seek(max(0, stream.tell() - 8 * 1024 * 1024))
+                if stream.tell():
+                    stream.readline()
+            for line in stream:
+                try:
+                    entry = json.loads(line)
+                except (ValueError, UnicodeDecodeError):
+                    continue
+                if not isinstance(entry, dict):
+                    continue
+                candidate = entry.get('payload')
+                if (entry.get('type') == 'turn_context' and isinstance(candidate, dict)
+                        and candidate.get('turn_id') == turn_id):
+                    context = candidate
+        if context is None:
+            return None
+        sandbox = deepcopy(context.get('sandbox_policy'))
+        if not isinstance(sandbox, dict):
+            raise BridgeError('PERMISSIONS_UNAVAILABLE', 'Native turn sandbox policy is incomplete')
+        sandbox['type'] = {'danger-full-access': 'dangerFullAccess', 'workspace-write': 'workspaceWrite',
+                           'read-only': 'readOnly', 'external-sandbox': 'externalSandbox'}.get(sandbox.get('type'), sandbox.get('type'))
+        return effective_permissions({'sandboxPolicy': sandbox,
+            'approvalPolicy': context.get('approval_policy'), 'approvalsReviewer': context.get('approvals_reviewer')})
     except OSError:
         return None
-    return None
