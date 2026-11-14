@@ -6,14 +6,14 @@
 
 各技能使用独立不可变标签，Release附独立ZIP和SHA256SUMS。安装到当前客户端后在下一回合加载；发布不代表Center Catalog或Studio Runtime已安装，也不代替媒体听审。
 
-| 技能 | 固定版本 |
-| --- | --- |
+| 技能                         | 固定版本                                                                                                       |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `x-verdantflare-short-drama` | [0.2.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/x-verdantflare-short-drama-v0.2.0) |
-| `verdantflare-video` | [0.5.4](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-video-v0.5.4) |
-| `verdantflare-music` | [0.6.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-music-v0.6.0) |
-| `verdantflare-speech` | [0.3.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-speech-v0.3.0) |
-| `verdantflare-project` | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-project-v0.1.0) |
-| `verdantflare-artifact` | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-artifact-v0.1.0) |
+| `verdantflare-video`         | [0.5.4](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-video-v0.5.4)         |
+| `verdantflare-music`         | [0.6.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-music-v0.6.0)         |
+| `verdantflare-speech`        | [0.3.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-speech-v0.3.0)        |
+| `verdantflare-project`       | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-project-v0.1.0)       |
+| `verdantflare-artifact`      | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-artifact-v0.1.0)      |
 
 使用 `$skill-installer` 从对应标签的 `skills/<技能名称>` 安装。已有目录先备份再升级；不覆盖个人配置或项目素材。Speech 0.3.0 包含参考登记、实验性声谱融合及音色设计路由；Music 0.5.0 包含配乐计划检查。VoxCPM2 尚未完成 GPU 验证或开放 Studio 调用，音乐生成以实时预检为准。
 
@@ -108,14 +108,18 @@ STUDIO_MCP_BEARER_TOKEN=<绑定真实Core主体的会话令牌>
 
 [`verdantflare-video`](skills/verdantflare-video/SKILL.md) 通过Studio选择宿主已接入的视频模型和渠道，执行生成、查询、恢复与下载。用户未指定时解析当前宿主默认值并确认可用性；不把H3-VDN、Sol或fal写成跨环境固定默认，也不静默换渠道。
 
-H3 Ref2VA业务模型为 `minimax-h3-ref2va`。现有网关创建工具为 `video.create`，配套 `video.status`、`video.result`；以本次真实会话发现的注册名和参数为准。fal是否配置、时长和画幅是否支持，需要分别核实，不能只看工具Schema的默认值。
+H3 Ref2VA业务模型为 `minimax-h3-ref2va`。现有网关创建工具为 `video.create`，配套 `video.preflight`、`video.regenerate_2k`、`video.interpolate`、`video.status`、`video.result`；以本次真实会话发现的注册名和参数为准。本地 5090 H3 按基础模型拆分独立路由（`0.5.6` 开发版）：默认路由 `h3-fasth3`（独立服务 `video-minimax-h3-fasth3`，固定唯一档位 `fasth3-nvfp4` 8-NFE QAD），冷备路由 `h3-singularity`（独立服务 `video-minimax-h3-singularity`，固定唯一档位 `du-0` 4-NFE，默认 `replicas: 0`）；支持通过 `postprocess.regenerate_2k`（独立服务 `video-minimax-h3-regenerate-2k`，`budget_1440p` / `exact_2x`）与 `postprocess.interpolate`（`rife_2x` 48 FPS）串联全链路交付，或对既有 24 FPS H3 视频单独调用 `video.regenerate_2k`，细则见 [H3 5090 加速与 2K 重生成指南](skills/verdantflare-video/references/h3-fast-2k.md)。fal是否配置、时长和画幅是否支持，需要分别核实，不能只看工具Schema的默认值。
 
 ### 安装与使用
 
-已发布版本：`verdantflare-video-v0.5.4`。该版按真实动态能力处理模型、逐模式参数与报价，保留安全错误和原任务恢复，并核对原生结果 SHA-256／大小。0.5.4 补充已实测的媒体数量、大小与解码边界；本轮真实生成使用 0.5.3，最终说明由宿主显式载入 0.5.4。固定标签不包含后续本地更新，也不表示其他客户端已自动安装。
+最新不可变发布标签仍为 `verdantflare-video-v0.5.4`（补充媒体数量、大小与解码边界）；当前 `dev` 分支已演进至 `0.5.6`（新增 `h3-fasth3` / `h3-singularity` 独立路由拆分与 `regenerate_2k` 串联及独立工具支持，尚未打新 Release 标签）。固定标签不包含后续 `dev` 更新，也不表示其他客户端已自动安装。
 
 ```text
+# 安装已发布不可变标签（0.5.4）
 使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.5.4/skills/verdantflare-video 安装 Skill。
+
+# 安装当前 dev 研发版（0.5.6，含 H3 FastH3 与 2K IC 重生成）
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/dev/skills/verdantflare-video 安装 Skill。
 ```
 
 ```text

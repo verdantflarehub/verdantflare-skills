@@ -33,12 +33,10 @@
 
 ## 未发布
 
+- `verdantflare-video` 演进至 `0.5.6`（`dev` 研发版）：按基础模型拆分本地 H3 独立路由（默认 `h3-fasth3` 绑定唯一档位 `fasth3-nvfp4`，冷备 `h3-singularity` 绑定唯一档位 `du-0` 且无跨档软回退），新增 `postprocess.regenerate_2k`（`budget_1440p` / `exact_2x`）串联编排、独立工具 `video.regenerate_2k`（CLI `regenerate-2k`）、[H3 5090 加速与 2K 重生成参考](skills/verdantflare-video/references/h3-fast-2k.md) 及 `M1 / M2` 分级失败保底重试规程（50 项包内单测通过）。
 - 迁入并统一命名空间为七项智能体调度与基础治理技能：`verdantflare-agent-antigravity`、`verdantflare-agent-claude`、`verdantflare-agent-codex`、`verdantflare-agent-grok`、`verdantflare-meta-googledrive`、`verdantflare-meta-markdown`、`verdantflare-meta-skill`，同步内部 Python 包名、MCP 服务名、配置环境变量与 `agents/openai.yaml` 元数据。
 - 将 **GPT Image 2.6**（`engine="codex"`，默认 `model="gpt-image-2.6-sunburst"`，可选高速变体 `gpt-image-2.6-flare`）正式标记为 `verdantflare-image` 及关联编排技能（`x-verdantflare-short-drama`、`verdantflare-music-mv`）的默认出图模型，同时保留 `gpt-image-2.5-sunburst` / `gpt-image-2.5-flare` 向下兼容。
 - `verdantflare-image` 同步 Google 渠道（`engine="gemini"`）Nano Banana 全系列模型目录与 [Google 图像调用参考](skills/verdantflare-image/references/google.md)：明确展示名（`Nano Banana 2.1` / `Nano Banana Pro` / `Nano Banana 2` / `Nano Banana 2 Lite` / `Nano Banana`）与请求 `model_id`（默认 `gemini-nano-banana-2.1`，以及 `gemini-3-pro-image`、`gemini-3.1-flash-image`、`gemini-3.1-flash-lite-image`、`gemini-2.5-flash-image`）的映射、1–6 张参考图编辑与 7 种画幅比例（`1:1`、`2:3`、`3:2`、`3:4`、`4:3`、`9:16`、`16:9`）约束。
-
-
-
 
 - 短剧 0.1.1 研发源码新增对白交接入口，以固定提交关联 Speech 技能；补齐表演模块的声线、逐句恢复与项目归档路由。
 
