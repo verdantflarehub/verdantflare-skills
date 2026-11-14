@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Meta GoogleDrive"
+  short_description: "Manage project media assets via mounted Google Drive links"
+  default_prompt: "Use $verdantflare-meta-googledrive to audit Markdown media references, ingest versioned assets, and verify SHA-256 digests."

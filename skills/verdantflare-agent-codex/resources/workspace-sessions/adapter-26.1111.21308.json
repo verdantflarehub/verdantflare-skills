@@ -1,0 +1,35 @@
+{
+  "version": "26.1111.21308",
+  "target": "webview/assets/header-1b03ac258797.js",
+  "target_sha256": "760e9d2762fdd040a4fd919be4c5615ed34a2dd01dabb733e7ee6d29bfe1aa01",
+  "dependencies": {
+    "webview/assets/rolldown-runtime-428824ca0286.js": "f85e715d54a11fa37b7774ad77b536896ed01bfdfc98f485b678c81859fc8e2e",
+    "webview/assets/app-initial-2d019a54be8b.js": "12dd47f0bd9b7ef49bfba7212a03a37178077124b92bd17a9713c27f01e5cd66",
+    "webview/assets/app-initial-b08bdfd65b1f.js": "5c3b17ef47c5a338360bf26d3d42410766f0db9c7b2bf0e646ffe5d35bbb9947",
+    "webview/assets/app-initial-4f253310bfcc.js": "d194a520632b7272edb4e67acc25f0ffa31662b20a99919ccebba09299320fb3",
+    "webview/assets/app-initial-9c32bda2ed11.js": "7cb7616956bc99c07c139ac248210ca92062c04347e2783a42f55a89dd1830ab"
+  },
+  "bindings": "bindings-26.1111.js.txt",
+  "replacements": [
+    [
+      "ua as de,",
+      "ua as vfRawQuery,"
+    ],
+    [
+      "function Pt(e){let t=Je()",
+      "function Pt(e){let vfContext=vfUseContext();let t=Je()"
+    ],
+    [
+      "clientThreadIdsByConversationId:i}),o.current)",
+      "clientThreadIdsByConversationId:i}).filter(task=>vfAllowsTask(task,vfContext.roots,vfContext.canonical)),o.current)"
+    ],
+    [
+      "[i,a,e,t,n])",
+      "[i,a,e,t,n,vfContext])"
+    ],
+    [
+      "children:[j,M,P]",
+      "children:[j,vfNoticeElement(),M,P]"
+    ]
+  ]
+}

@@ -75,15 +75,17 @@ Singularity 生成前调用 `video.preflight`，使用与 create 相同的生成
 
 Project提交保存文件、`run_refs`、Prompt和审核记录。MD作为普通文件，`domain_documents` 只用于服务支持的领域JSON。技术验收通过仍是候选；不自动选用或注册World。
 
-## 5. 可选与独立插帧
+## 5. 5090 加速档位、2K IC 重生成与可选插帧
 
-发现 `video.capabilities.postprocess.interpolate`，核对 `configured=true`、`readiness=ready` 和 `profile=rife_2x`。生成集成只支持 `route=h3-singularity`，在原请求中增加 `"postprocess":{"interpolate":{"profile":"rife_2x"}}`；省略或 null 关闭。CLI 使用 `generate --interpolate`，预检与创建传相同选项。不得因开启选项而静默改渠道；预检不预留 GPU。
+`route=h3-singularity` 支持 `quality_profile` 选择 `fasth3-nvfp4`（RTX 5090 默认 8-NFE QAD 主加速档）或 `du-0`（4-NFE 回退档）；省略时采用宿主运行时声明并经 `video.preflight` 一致性核对的默认档位，同时对升级前已落盘任务保留原档位输入摘要与幂等性。
 
-独立工具 `video.interpolate` 必填 `project_id`、固定 `idempotency_key`、同项目 `source_artifact_id`；`backend=rife`，默认目标 `target_fps_num=48,target_fps_den=1`。30 FPS 源显式指定 60/1；仅接受源帧率的 2 倍且不超过 120 FPS。该工具和生成选项共用内部运行时，没有独立应用卡片或 MCP Server。
+发现 `video.capabilities.postprocess.regenerate_2k` 与 `video.capabilities.postprocess.interpolate`，提交前分别核对 `configured=true` 与 `readiness=ready`。生成集成只支持 `route=h3-singularity`，支持仅插帧（`{"interpolate":{"profile":"rife_2x"}}`，与历史请求体逐字节一致）、仅 2K 重生成（`{"regenerate_2k":{"profile":"open_h3_2k_ic","grid_mode":"budget_1440p"}}`）或 `P1 -> P2 -> P3` 全串联；CLI 使用 `generate --regenerate-2k [--grid-mode {budget_1440p,exact_2x}] [--interpolate]`，单独传 `--grid-mode` 未开启 `--regenerate-2k` 时在本地立即拒绝。预检与创建传相同选项，不静默改渠道，预检不预留 GPU。
 
-开启选项后，父任务 `status` 和顶层 Artifact 仍描述原生生成；`delivery.status` 表示整个交付进度。生成成功而插帧仍运行时不得结束交付。等待 delivery 成功后读取 `final_artifact_id`、`interpolation_task_id`、`preview_artifact_id` 及 `result`，同时保存 `source_artifact_id` 和各自摘要。CLI `resume` 已按此规则等待；后台不依赖客户端轮询。
+独立工具 `video.regenerate_2k`（CLI `regenerate-2k`）必填 `project_id`、`idempotency_key`、同项目 24 FPS H3 视频 `source_artifact_id`，可选 `grid_mode`（默认 `budget_1440p`：各画幅 `<= 3,686,400 px`，如 `16:9` `2464×1408`、`9:16` `1408×2464`、`21:9` `2560×1120`；可选 `exact_2x`：严格 2 倍边长如 `2688×1536`、`3072×1344`）、`prompt`（省略时自动继承同项目 H3 父任务提示词）、`seed`、`title` 及后置 `postprocess.interpolate`。独立工具 `video.interpolate` 必填 `project_id`、固定 `idempotency_key`、同项目 `source_artifact_id`；`backend=rife`，默认目标 `target_fps_num=48,target_fps_den=1`（30 FPS 源显式指定 60/1，仅接受源帧率的 2 倍且不超过 120 FPS，最大边长 `3072 px`）。
 
-`delivery.status=failed` 时保存阶段错误及原片。实际推理失败需要重试时，对原片用新的明确重试键调用独立工具；响应未知时继续查原任务，不换键。独立重试保留原失败父子历史，不自动改写为成功。查询统一使用 `video.status/result`；历史别名仅在实际发现时使用。所有调用、下载沿用 Studio 有效 Token 与项目权限。
+开启后置选项后，父任务 `status` 和顶层 Artifact 仍描述起始主阶段（`P1` 原生 `M1` 或独立 `P2` 的 `M2`）；`delivery.status` 与 `delivery.profiles` 表示全链路交付进度。等待 `delivery.status=succeeded` 后读取并下载 `delivery.final_artifact_id`（及 `regenerate_2k_task_id`、`interpolation_task_id`、`preview_artifact_id`、`delivery.result`），同时保留 `source_artifact_id`（`M1`）与 `regenerate_2k_artifact_id`（`M2`）。
+
+`delivery.status=failed` 时 `final_artifact_id` 严格为 `null`（绝不拿 24 FPS 的 `M2` 冒充 48 FPS 成片）：若失败发生在 `stage=interpolation` 且 `regenerate_2k_artifact_id` 已保留，直接用新幂等键对 `M2` 调用 `video.interpolate` 重试；若失败发生在 `stage=regenerate_2k`，用新幂等键对 `M1` 调用 `video.regenerate_2k` 重试；严禁重跑已成功的 `P1` 生成。查询统一使用 `video.status/result`，所有调用与下载沿用 Studio 有效 Token 与项目权限。
 
 ## 6. 任务 Title
 

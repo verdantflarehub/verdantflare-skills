@@ -243,6 +243,56 @@ class TestVerdantflareImage(unittest.TestCase):
             self.assertEqual(MockImageServerHandler.received_tasks[1]["model"], "gemini-nano-banana-2.1")
             self.assertEqual(MockImageServerHandler.received_tasks[1]["aspect_ratio"], "3:2")
 
+    def test_inspect_image_bytes_and_resolution_checks(self):
+        """测试 PNG/JPEG 头部宽高解析与 9:16 2K 规格偏差检测。"""
+        png_1024x1536 = (
+            b"\x89PNG\r\n\x1a\n"
+            + (13).to_bytes(4, "big")
+            + b"IHDR"
+            + (1024).to_bytes(4, "big")
+            + (1536).to_bytes(4, "big")
+            + b"\x08\x02\x00\x00\x00"
+        )
+        info_png = image_client.inspect_image_bytes(png_1024x1536)
+        self.assertEqual(info_png["mime_type"], "image/png")
+        self.assertEqual(info_png["width"], 1024)
+        self.assertEqual(info_png["height"], 1536)
+
+        # ChatGPT 9:16 2k 实测退化为 1024x1536 (2:3)：应同时报画幅偏差与分辨率偏差
+        warnings_chatgpt = image_client.check_resolution_and_aspect_ratio(
+            1024, 1536, requested_aspect_ratio="9:16", requested_resolution="2k"
+        )
+        self.assertEqual(len(warnings_chatgpt), 2)
+        self.assertTrue(any("画幅偏差" in w for w in warnings_chatgpt))
+        self.assertTrue(any("分辨率偏差" in w for w in warnings_chatgpt))
+
+        # Google 9:16 2k 实测退化为 768x1376 JPEG (1K)：应报分辨率偏差
+        jpeg_768x1376 = (
+            b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+            b"\xff\xc0\x00\x0b\x08"
+            + (1376).to_bytes(2, "big")
+            + (768).to_bytes(2, "big")
+            + b"\x01\x01\x11\x00\xff\xd9"
+        )
+        info_jpg = image_client.inspect_image_bytes(jpeg_768x1376)
+        self.assertEqual(info_jpg["mime_type"], "image/jpeg")
+        self.assertEqual(info_jpg["width"], 768)
+        self.assertEqual(info_jpg["height"], 1376)
+        warnings_google = image_client.check_resolution_and_aspect_ratio(
+            768, 1376, requested_aspect_ratio="9:16", requested_resolution="2k"
+        )
+        self.assertEqual(len(warnings_google), 1)
+        self.assertIn("分辨率偏差", warnings_google[0])
+
+        # Grok 9:16 2k 返回 1584x2816、Google 修复后返回 1536x2752、ChatGPT 修复后返回 941x1672：均无偏差告警
+        for w_px, h_px, ar in ((1584, 2816, "9:16"), (1536, 2752, "9:16"), (941, 1672, "9:16"), (1254, 1254, "1:1")):
+            self.assertEqual(
+                image_client.check_resolution_and_aspect_ratio(
+                    w_px, h_px, requested_aspect_ratio=ar, requested_resolution="2k"
+                ),
+                [],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

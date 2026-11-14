@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Meta Markdown"
+  short_description: "Format and validate structured Markdown without deep nesting"
+  default_prompt: "Use $verdantflare-meta-markdown to organize, Prettier-format, and check Markdown structure and links before delivery."

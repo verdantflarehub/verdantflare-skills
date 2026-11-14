@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Agent Grok"
+  short_description: "Dispatch Grok CLI tasks and sync AFK Pilot panel sessions"
+  default_prompt: "Use $verdantflare-agent-grok to check Grok capabilities, start an ACP session task, and retrieve the resulting output."

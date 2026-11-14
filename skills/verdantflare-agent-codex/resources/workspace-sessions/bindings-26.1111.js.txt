@@ -1,0 +1,21 @@
+import {createHooks as vfCreateHooks,allowsTask as vfAllowsTask} from "./verdantflare-workspace-sessions.mjs";
+import {gyn as vfInitRoots,pyn as vfRootsAtom,Jyn as vfReadRoots} from "./app-initial-4f253310bfcc.js";
+import {Fsn as vfManagerFor} from "./app-initial-b08bdfd65b1f.js";
+let vfHooks;
+function vfGetHooks(){
+  vfInitRoots();
+  return vfHooks??=vfCreateHooks({React:c(),useRoots:()=>g(vfRootsAtom),useScope:()=>w(Fe),
+    rawQuery:vfRawQuery,managerFor:scope=>vfManagerFor(scope,"local"),
+    canonicalize:async paths=>{
+      const result={};
+      for(let i=0;i<paths.length;i+=100){
+        const page=await vfReadRoots({canonicalizeRoots:paths.slice(i,i+100)});
+        Object.assign(result,page.canonicalPathByRoot??{});
+      }
+      return result;
+    }});
+}
+function de(){return vfGetHooks().useRows()}
+function vfUseContext(){return vfGetHooks().useContext()}
+function vfNotice(){return vfGetHooks().Notice()}
+function vfNoticeElement(){return c().createElement(vfNotice)}
