@@ -24,7 +24,7 @@
 `scripts/video_client.py` 的调用边界：
 
 - `check`：分页发现工具，优先 `video.create`；读取 capabilities 的宿主默认渠道和适配器限制，不提交生成，不把 configured 当就绪。
-- `generate`：经 Studio 创建，显式模型／渠道优先，否则解析宿主明确默认；精确匹配能力行和工具 Schema。`route=h3-singularity` 可传 `--quality-profile {fasth3-nvfp4,du-0}`、`--regenerate-2k`、`--grid-mode {budget_1440p,exact_2x}`（须配合 `--regenerate-2k`）与 `--interpolate`。模型、模式、画幅、时长和分辨率不使用固定白名单；默认值只取已声明能力或匹配工具 Schema，声明不一致就停止。已注册预检时自动调用并保存结果，不静默改画幅或换渠道。
+- `generate`：经 Studio 创建，显式模型／渠道优先，否则解析宿主明确默认（5090 默认 `h3-fasth3`）；精确匹配能力行和工具 Schema。本地 H3（`h3-fasth3` 仅支持 `fasth3-nvfp4`，冷备 `h3-singularity` 仅支持 `du-0`）可传 `--quality-profile`、`--regenerate-2k`、`--grid-mode {budget_1440p,exact_2x}`（须配合 `--regenerate-2k`）与 `--interpolate`。模型、模式、画幅、时长和分辨率不使用固定白名单；默认值只取已声明能力或匹配工具 Schema，声明不一致就停止。已注册预检时自动调用并保存结果，不静默改画幅或换渠道。
 - `regenerate-2k`：经 Studio 调用 `video.regenerate_2k`，将同项目已有 24 FPS H3 视频（`--source-artifact-id`）严格等比重生成至 2K（默认 `budget_1440p`，可选 `--grid-mode exact_2x`），支持 `--prompt`、`--seed`、`--title` 及可选 `--interpolate` 后置 48 FPS 插帧。
 - `import`：本地 `--file` 或中央 `--content-ref-file` 优先走分块协议，支持图像、视频和音频；相同来源、文件名、用途、摘要生成固定导入键。中断后重跑同一命令查询并续传，commit 丢失响应时复用同一导入身份。`--purpose` 记录用途，允许来源 `--source-url` 仍走兼容入口。
 - `status` / `result`：查询原 Video 任务，确认返回格式兼容；含 `delivery` 的任务在 `result --output` 时自动下载并核验 `delivery.final_artifact_id`，若 `delivery.status=failed` 则拒绝写出并提示保留的 `M1 / M2` 重试入口。

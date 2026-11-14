@@ -29,24 +29,32 @@ from video_client import (
 )
 
 
-def h3_singularity_inventory(*, regen_readiness: str = "ready", interp_readiness: str = "ready") -> dict:
+def h3_local_inventory(*, regen_readiness: str = "ready", interp_readiness: str = "ready") -> dict:
     return {
         "tools": ["video.create", "video.preflight", "video.regenerate_2k", "video.status", "video.result"],
         "schemas": schemas(),
         "create_tool": "video.create",
         "create_supports_title": True,
         "capabilities": {
-            "default_route": "h3-singularity",
+            "default_route": "h3-fasth3",
             "default_model": "minimax-h3-ref2va",
             "routes": [
+                {
+                    "route": "h3-fasth3",
+                    "model": "minimax-h3-ref2va",
+                    "configured": True,
+                    "quality_profiles": ["fasth3-nvfp4"],
+                    "duration_seconds": {"minimum": 4, "maximum": 15},
+                    "aspect_ratios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16", "adaptive"],
+                },
                 {
                     "route": "h3-singularity",
                     "model": "minimax-h3-ref2va",
                     "configured": True,
-                    "quality_profiles": ["fasth3-nvfp4", "du-0"],
+                    "quality_profiles": ["du-0"],
                     "duration_seconds": {"minimum": 4, "maximum": 15},
                     "aspect_ratios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16", "adaptive"],
-                }
+                },
             ],
             "postprocess": {
                 "regenerate_2k": {
@@ -70,12 +78,12 @@ class Regenerate2kClientTests(unittest.TestCase):
         self.fixture = test_video_client_fal.VideoClientFalTests()
 
     def test_grid_mode_without_regenerate_2k_is_rejected_before_network(self):
-        inventory = h3_singularity_inventory()
+        inventory = h3_local_inventory()
         with tempfile.TemporaryDirectory() as root, mock.patch(
             "video_client.check_mcp_tools", return_value=inventory
         ), mock.patch("video_client.call_mcp_tool") as call:
             args = self.fixture.args(
-                route="h3-singularity",
+                route=None,
                 ratio="16:9",
                 regenerate_2k=False,
                 grid_mode="exact_2x",
@@ -84,13 +92,44 @@ class Regenerate2kClientTests(unittest.TestCase):
                 generate_mcp(self.fixture.config(root), args)
             call.assert_not_called()
 
+    def test_route_profile_validation_rejects_mismatched_profiles_and_resolves_fasth3_default(self):
+        inventory = h3_local_inventory()
+        with tempfile.TemporaryDirectory() as root, mock.patch(
+            "video_client.check_mcp_tools", return_value=inventory
+        ), mock.patch(
+            "video_client.call_mcp_tool",
+            return_value={"video_task_id": "video_task_" + "f" * 32, "status": "queued"},
+        ) as call:
+            bad_fasth3 = self.fixture.args(route=None, ratio="16:9", quality_profile="du-0")
+            with self.assertRaisesRegex(ClientError, "quality_profile_not_available"):
+                generate_mcp(self.fixture.config(root), bad_fasth3)
+            bad_sing = self.fixture.args(route="h3-singularity", ratio="16:9", quality_profile="fasth3-nvfp4")
+            with self.assertRaisesRegex(ClientError, "quality_profile_not_available"):
+                generate_mcp(self.fixture.config(root), bad_sing)
+            call.assert_not_called()
+
+            default_args = self.fixture.args(route=None, ratio="16:9", idempotency_key="default-fasth3")
+            generate_mcp(self.fixture.config(root), default_args)
+            self.assertEqual(call.call_args_list[-1].args[2]["route"], "h3-fasth3")
+
+            call.reset_mock()
+            sing_args = self.fixture.args(
+                route="h3-singularity",
+                ratio="16:9",
+                idempotency_key="explicit-sing-du0",
+                quality_profile="du-0",
+            )
+            generate_mcp(self.fixture.config(root), sing_args)
+            self.assertEqual(call.call_args_list[-1].args[2]["route"], "h3-singularity")
+            self.assertEqual(call.call_args_list[-1].args[2]["quality_profile"], "du-0")
+
     def test_unready_regenerate_2k_capability_blocks_generate_and_standalone_before_network(self):
-        inventory = h3_singularity_inventory(regen_readiness="not_ready")
+        inventory = h3_local_inventory(regen_readiness="not_ready")
         with tempfile.TemporaryDirectory() as root, mock.patch(
             "video_client.check_mcp_tools", return_value=inventory
         ), mock.patch("video_client.call_mcp_tool") as call:
             gen_args = self.fixture.args(
-                route="h3-singularity",
+                route=None,
                 ratio="16:9",
                 regenerate_2k=True,
                 grid_mode="budget_1440p",
@@ -113,7 +152,7 @@ class Regenerate2kClientTests(unittest.TestCase):
             call.assert_not_called()
 
     def test_interpolate_only_remains_byte_identical_and_full_chain_forwards_quality_and_grid(self):
-        inventory = h3_singularity_inventory()
+        inventory = h3_local_inventory()
         with tempfile.TemporaryDirectory() as root, mock.patch(
             "video_client.check_mcp_tools", return_value=inventory
         ), mock.patch(
@@ -121,12 +160,13 @@ class Regenerate2kClientTests(unittest.TestCase):
             return_value={"video_task_id": "video_task_" + "a" * 32, "status": "queued"},
         ) as call:
             legacy_args = self.fixture.args(
-                route="h3-singularity",
+                route=None,
                 ratio="16:9",
                 idempotency_key="legacy-interp-v1",
                 interpolate=True,
             )
             generate_mcp(self.fixture.config(root), legacy_args)
+            self.assertEqual(call.call_args_list[1].args[2]["route"], "h3-fasth3")
             self.assertEqual(
                 json.dumps(call.call_args_list[1].args[2]["postprocess"], sort_keys=True, separators=(",", ":")),
                 '{"interpolate":{"profile":"rife_2x"}}',
@@ -134,7 +174,7 @@ class Regenerate2kClientTests(unittest.TestCase):
 
             call.reset_mock()
             chain_args = self.fixture.args(
-                route="h3-singularity",
+                route="h3-fasth3",
                 ratio="16:9",
                 idempotency_key="chain-2k-48fps-v1",
                 quality_profile="fasth3-nvfp4",
@@ -146,6 +186,7 @@ class Regenerate2kClientTests(unittest.TestCase):
             self.assertEqual([c.args[1] for c in call.call_args_list], ["video.preflight", "video.create"])
             for entry in call.call_args_list:
                 payload = entry.args[2]
+                self.assertEqual(payload["route"], "h3-fasth3")
                 self.assertEqual(payload["quality_profile"], "fasth3-nvfp4")
                 self.assertEqual(
                     payload["postprocess"],
@@ -156,7 +197,7 @@ class Regenerate2kClientTests(unittest.TestCase):
                 )
 
     def test_standalone_regenerate_2k_request_snapshot_preflight_and_idempotency_conflict(self):
-        inventory = h3_singularity_inventory()
+        inventory = h3_local_inventory()
         src_id = "art_" + "2" * 32
         task_id = "video_task_" + "b" * 32
         with tempfile.TemporaryDirectory() as root, mock.patch(
