@@ -13,7 +13,7 @@
 
 - **不保证人物一致**：官方模型未以参考图训练，现行 R2I 只能传递构图、服装等粗粒度信息，五官与脸型会明显偏离参考图。要求人物身份一致时，选择用户已授权且实际可用的 Google 或 OpenAI 渠道；用户明确指定 MOSS 时说明能力限制，不自动换用收费渠道。确需 MOSS 的文字与版式效果且任务已授权换脸时，可先出图，再使用实际发现的 `image.faceswap`，逐张检查结果。
 
-- **统一入口**：先发现真实 Studio MCP 工具，优先 `image.create` / `image.edit`（现行 MOSS 编辑入口仍为参考图条件生成），仅在实际发现 `image.generate` 时使用该兼容入口；传入 `engine: "moss-image"`。底层 `image-moss-api` 仅在集群内受控可达，客户端不直连，也不调用内部 Edit 实验接口。
+- **统一入口**：先发现真实 Studio MCP 工具，优先 `image.create` / `image.edit`（现行 MOSS 编辑入口仍为参考图条件生成），仅在实际发现 `image.generate` 时使用该兼容入口；传入 `engine: "moss-image"`。底层 `image-moss` 仅在集群内受控可达，客户端不直连，也不调用内部 Edit 实验接口。
 - **能力核验**：调用前通过 `image.capabilities` 核验 `engine="moss-image"` 已声明、支持 `rate_content` 且尺寸、参考图与版式规则匹配。
 - **非渠道引擎**：`moss-image` 是自托管 GPU 引擎，不经过渠道应用，没有上游 Key 或美元预算。
 
