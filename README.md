@@ -108,7 +108,7 @@ STUDIO_MCP_BEARER_TOKEN=<绑定真实Core主体的会话令牌>
 
 [`verdantflare-video`](skills/verdantflare-video/SKILL.md) 通过Studio选择宿主已接入的视频模型和渠道，执行生成、查询、恢复与下载。用户未指定时解析当前宿主默认值并确认可用性；不把H3-VDN、Sol或fal写成跨环境固定默认，也不静默换渠道。
 
-H3 Ref2VA业务模型为 `minimax-h3-ref2va`。现有网关创建工具为 `video.create`，配套 `video.preflight`、`video.regenerate_2k`、`video.interpolate`、`video.status`、`video.result`；以本次真实会话发现的注册名和参数为准。本地 5090 H3 按基础模型拆分独立路由（`0.5.6` 开发版）：默认路由 `h3-fasth3`（独立服务 `video-minimax-h3-fasth3`，固定唯一档位 `fasth3-nvfp4` 8-NFE QAD），冷备路由 `h3-singularity`（独立服务 `video-minimax-h3-singularity`，固定唯一档位 `du-0` 4-NFE，默认 `replicas: 0`）；支持通过 `postprocess.regenerate_2k`（独立服务 `video-minimax-h3-regenerate-2k`，`budget_1440p` / `exact_2x`）与 `postprocess.interpolate`（`rife_2x` 48 FPS）串联全链路交付，或对既有 24 FPS H3 视频单独调用 `video.regenerate_2k`，细则见 [H3 5090 加速与 2K 重生成指南](skills/verdantflare-video/references/h3-fast-2k.md)。fal是否配置、时长和画幅是否支持，需要分别核实，不能只看工具Schema的默认值。
+H3 Ref2VA业务模型为 `minimax-h3-ref2va`。现有网关创建工具为 `video.create`，配套 `video.preflight`、`video.regenerate_2k`、`video.interpolate`、`video.status`、`video.result`；以本次真实会话发现的注册名和参数为准。本地 5090 H3 按基础模型拆分独立路由（`0.5.6` 开发版）：默认路由 `h3-fasth3`（独立服务 `video-minimax-h3-fasth3`，固定唯一档位 `fasth3-nvfp4` 8-NFE QAD），冷备路由 `h3-singularity`（独立服务 `video-minimax-h3-singularity`，固定唯一档位 `du-0` 4-NFE，默认 `replicas: 0`）；支持通过 `postprocess.regenerate_2k`（独立服务 `video-minimax-h3-regenerate-2k`，`budget_1440p` / `exact_2x`）与 `postprocess.interpolate`（`rife_2x` 48 FPS）串联全链路交付，或对既有 24 FPS H3 视频单独调用 `video.regenerate_2k`，细则见 [5090 加速档位与 2K IC 重生成说明](skills/verdantflare-video/references/video-mcp.md#5-5090-加速档位2k-ic-重生成与可选插帧)。fal是否配置、时长和画幅是否支持，需要分别核实，不能只看工具Schema的默认值。
 
 ### 安装与使用
 
