@@ -89,9 +89,15 @@ export function createStore({ manager, roots, canonicalize }) {
         if (cancelled()) return;
         const selected = threads.filter(t => visible({ ...t, hostId: "local" }, roots, canonical));
         const changed = selected.filter(t => observed.get(t.id) !== JSON.stringify(t));
-        if (changed.length) await manager.observeCatalogThreads(changed);
+        if (changed.length) {
+          await manager.observeCatalogThreads(changed.map(t => ({ ...t, updatedAt: (t.updatedAt ?? 0) - 1 })));
+          await manager.observeCatalogThreads(changed);
+        }
         if (cancelled()) return;
-        const rows = (await Promise.all(selected.map(t => manager.getThreadListSummary(t.id)))).filter(Boolean);
+        const rows = (await Promise.all(selected.map(async t => {
+          const row = await manager.getThreadListSummary(t.id);
+          return row && typeof t.name === "string" && t.name.trim() ? { ...row, title: t.name.trim() } : row;
+        }))).filter(Boolean);
         const suppressed = new Set();
         for (const row of rows) if (await manager.isConversationSuppressedAfterArchive(row.conversationId)) suppressed.add(row.conversationId);
         if (cancelled()) return;

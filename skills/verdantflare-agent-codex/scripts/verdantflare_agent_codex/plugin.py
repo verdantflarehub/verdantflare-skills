@@ -170,3 +170,6 @@ class Plugin(JsonlProcess):
             raise BridgeError('STALE_TURN', 'A nonempty expected turn is required')
         return await self.follower('thread-follower-interrupt-turn', thread_id,
                                    {'mode': 'system', 'expectedTurnId': turn_id}, expected_owner=owner)
+
+    async def notify_unarchived(self, thread_id):
+        return await self.call('notify_unarchived', {'thread_id': thread_id})

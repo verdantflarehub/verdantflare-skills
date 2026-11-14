@@ -53,3 +53,30 @@ class RenameTests(unittest.IsolatedAsyncioTestCase):
             await self.engine.call('codex_session_rename', self.args)
         self.assertEqual(self.app.call.await_count, 2)
         self.app.close.assert_awaited_once()
+
+    async def test_rename_persists_sqlite_name_and_notifies_live_owner(self):
+        from contextlib import closing
+        import sqlite3
+        codex_home = self.root / '.codex'
+        codex_home.mkdir()
+        db_path = codex_home / 'state_5.sqlite'
+        with closing(sqlite3.connect(db_path)) as conn:
+            conn.execute('CREATE TABLE threads (id TEXT PRIMARY KEY, title TEXT, name TEXT, updated_at INTEGER, updated_at_ms INTEGER)')
+            conn.execute('INSERT INTO threads VALUES (?, ?, ?, ?, ?)', ('dedicated', 'READY', None, 100, 100000))
+            conn.commit()
+        self.engine.config['codex_home'] = str(codex_home)
+        self.app.call.side_effect = [self.thread(), {}, self.thread(name=self.args['name'])]
+        fake_plugin = AsyncMock()
+        fake_plugin.follow.return_value = 'owner-1'
+        fake_plugin.resnapshot.return_value = {'conversationState': {'title': '确认 READY 状态'}}
+        with patch('verdantflare_agent_codex.engine.Plugin') as plugin_cls:
+            plugin_cls.return_value.start = AsyncMock(return_value=fake_plugin)
+            result = await self.engine.call('codex_session_rename', self.args)
+        self.assertEqual(result['name'], self.args['name'])
+        self.assertEqual(fake_plugin.notify_unarchived.await_count, 2)
+        fake_plugin.close.assert_awaited_once()
+        with closing(sqlite3.connect(db_path)) as conn:
+            row = conn.execute('SELECT title, name, updated_at FROM threads WHERE id = ?', ('dedicated',)).fetchone()
+        self.assertEqual(row[0], self.args['name'])
+        self.assertEqual(row[1], self.args['name'])
+        self.assertGreater(row[2], 100)

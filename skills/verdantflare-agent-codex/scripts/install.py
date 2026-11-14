@@ -249,11 +249,15 @@ def main(argv: list[str] | None = None) -> int:
 
     raw_roots = args.allow_root or ["*"]
     allowed_roots = ["*"] if "*" in raw_roots else [str(Path(p).resolve(strict=True)) for p in raw_roots]
+    # Auto-detected paths are stored as the version-free VS Code extensions
+    # root; the runtime resolves the active (non-obsolete) openai.chatgpt-*
+    # directory on every call, so extension auto-updates need no reinstall.
+    vscode_extensions = str(Path.home() / ".vscode" / "extensions")
     config = {
         "database": str(target / "state/tasks.sqlite3"),
-        "codex": str(codex_bin),
+        "codex": str(codex_bin) if args.codex else vscode_extensions,
         "node": str(node_bin),
-        "extension": str(extension_dir),
+        "extension": str(extension_dir) if args.extension else vscode_extensions,
         "allowed_roots": allowed_roots,
     }
     config_path = target / "config.json"
@@ -272,6 +276,7 @@ def main(argv: list[str] | None = None) -> int:
 
     registered = register_peer_hosts(launch) if args.register_mcp else []
     workspace_patch_status = workspace_patch.apply() if workspace_patch is not None else "not-requested"
+    from workspace_sessions import installation_status
     print(
         json.dumps(
             {
@@ -281,6 +286,7 @@ def main(argv: list[str] | None = None) -> int:
                 "skill_files": len(skill_hashes),
                 "host_registration": registered if args.register_mcp else "prepared-not-applied",
                 "workspace_sessions": workspace_patch_status,
+                "workspace_sessions_check": installation_status(extension_dir),
             },
             ensure_ascii=False,
         )

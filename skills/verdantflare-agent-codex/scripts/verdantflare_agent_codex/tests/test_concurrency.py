@@ -199,14 +199,17 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         await self.engine.close()
         self.temp.cleanup()
 
-    async def test_A04_heartbeat_survives_event_loop_block(self):
+    async def test_A04_heartbeat_stops_after_event_loop_health_window(self):
         self.engine.heartbeat_interval = .02
         await self.engine.start()
+        self.engine.health_timeout = .05
+        await asyncio.sleep(.05)
         before = time.time()
-        time.sleep(.2)  # Intentional event-loop fault; liveness must be independent.
+        time.sleep(.2)  # Intentional event-loop fault; stale progress must stop renewal.
         with self.engine.store.transaction() as db:
             heartbeat = db.execute('SELECT heartbeat FROM owners WHERE id=?', (self.engine.owner,)).fetchone()[0]
-        self.assertGreater(heartbeat, before + .05)
+        self.assertLess(heartbeat, before + .08)
+        self.assertFalse(self.engine.worker_health()['healthy'])
 
     async def test_A04_engine_retries_readonly_history_and_releases_only_original_lease(self):
         store = self.engine.store

@@ -14,6 +14,7 @@ const versions = {
   'thread-follower-submit-user-input': 1,
   'thread-follower-submit-mcp-server-elicitation-response': 1,
   'thread-stream-following-changed': 1,
+  'thread-unarchived': 1,
 };
 const extensionDir = process.argv[2];
 if (extensionDir) {
@@ -118,6 +119,11 @@ lines.on('line', async line => {
       if (subscriptions.has(params.thread_id)) following(params.thread_id, subscriptions.get(params.thread_id), false);
       subscriptions.delete(params.thread_id);
       result = { subscribed: false };
+    } else if (method === 'notify_unarchived') {
+      send({ type: 'broadcast', method: 'thread-unarchived', sourceClientId: clientId,
+        version: versions['thread-unarchived'] ?? 1,
+        params: { conversationId: params.thread_id, hostId: 'local' } });
+      result = { broadcasted: true };
     } else if (Object.hasOwn(versions, method)) {
       result = await request(method, params.payload, params.owner);
     } else throw new Error('unsupported-method');

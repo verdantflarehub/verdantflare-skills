@@ -209,9 +209,36 @@ class Store:
             self._event(db, task, operation + "_queued", {})
             return task
 
-    def heartbeat(self, owner):
+    def cancel_unclaimed(self, command_id, request_id, reason):
+        """Administrative withdrawal of an exact, never-claimed queued submission.
+
+        This cannot interrupt a native turn, cancel a claimed write or erase history.
+        The transaction races safely with claim(); uncertain submissions are refused.
+        """
         with self.transaction() as db:
-            db.execute("INSERT OR REPLACE INTO owners VALUES(?,?)", (owner, time.time()))
+            command = db.execute("SELECT * FROM commands WHERE id=?", (command_id,)).fetchone()
+            request = db.execute("SELECT * FROM requests WHERE id=? AND command_id=?",
+                                 (request_id, command_id)).fetchone()
+            if command is None or request is None:
+                raise BridgeError('TASK_NOT_FOUND', 'Exact queued request not found')
+            task = self._task(db, command['task_id'])
+            if (command['state'] != 'queued' or command['owner'] is not None
+                    or command['operation'] not in ('start', 'continue')
+                    or task['state'] != 'queued' or task['owner'] is not None or task['turn_id'] is not None):
+                raise BridgeError('STALE_TURN', 'Only a never-claimed queued submission can be withdrawn')
+            result = {'code': 'QUEUED_SUBMISSION_WITHDRAWN', 'reason': reason}
+            db.execute("UPDATE commands SET state='done',result=? WHERE id=?", (encode(result), command_id))
+            db.execute("UPDATE tasks SET state='cancelled',error=?,updated=? WHERE id=?",
+                       (encode(result), time.time(), task['id']))
+            db.execute("DELETE FROM leases WHERE task_id=?", (task['id'],))
+            self._event(db, self._task(db, task['id']), 'queued_submission_withdrawn',
+                        {'command_id': command_id, 'request_id': request_id, 'reason': reason})
+            return self._task(db, task['id'])
+
+    def heartbeat(self, owner, healthy=None):
+        with self.transaction() as db:
+            if healthy is None or healthy():
+                db.execute("INSERT OR REPLACE INTO owners VALUES(?,?)", (owner, time.time()))
 
     def claim(self, owner):
         """Only the connected owner may handle subsequent commands for a task."""

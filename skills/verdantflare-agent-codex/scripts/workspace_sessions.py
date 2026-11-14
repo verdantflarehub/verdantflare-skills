@@ -33,7 +33,7 @@ def atomic_write(path: Path, data: bytes) -> None:
         Path(name).unlink(missing_ok=True)
 
 
-def render_header(original: bytes) -> bytes:
+def render_header(original: bytes, adapter: dict | None = None) -> bytes:
     text = original.decode("utf-8")
     replacements = [
         ("wi as z,", "wi as vfRawQuery,"),
@@ -45,11 +45,14 @@ def render_header(original: bytes) -> bytes:
         ("o=i===void 0||i,c=te()", "o=false,c=te()"),
         ("children:[M,N,F]", "children:[M,vfNoticeElement(),N,F]"),
     ]
+    if adapter is not None:
+        replacements = adapter.get("replacements", replacements)
     for old, new in replacements:
         if text.count(old) != 1:
             raise PatchError("Unsupported header structure; no files changed")
         text = text.replace(old, new, 1)
-    return (RESOURCES.joinpath("bindings.js.txt").read_text("utf-8") + "\n" + text).encode("utf-8")
+    bindings = (adapter or {}).get("bindings", "bindings.js.txt")
+    return (RESOURCES.joinpath(bindings).read_text("utf-8") + "\n" + text).encode("utf-8")
 
 
 def discover_extension() -> Path:
@@ -71,10 +74,27 @@ def discover_extension() -> Path:
     return candidates[0].resolve()
 
 
+def installation_status(extension: Path) -> dict:
+    """Read-only status for installers, including when patching was not requested."""
+    try:
+        patch = Patch(extension)
+        return {"status": patch.probe(), "version": patch.adapter["version"]}
+    except PatchError as error:
+        return {"status": "blocked", "reason": str(error)}
+    except (OSError, ValueError, KeyError):
+        return {"status": "blocked", "reason": "Invalid or unreadable installation/state files"}
+
+
 class Patch:
     def __init__(self, extension: Path, state_root: Path | None = None):
         self.extension = extension.resolve(strict=True)
         self.adapter = json.loads((RESOURCES / "adapter.json").read_text("utf-8"))
+        version = json.loads((self.extension / "package.json").read_text("utf-8")).get("version")
+        for candidate in RESOURCES.glob("adapter-*.json"):
+            adapter = json.loads(candidate.read_text("utf-8"))
+            if adapter["version"] == version:
+                self.adapter = adapter
+                break
         base = state_root or Path(os.environ.get("LOCALAPPDATA", Path.home() / ".local/share")) / "verdantflare-agent-codex/workspace-sessions"
         self.state = base.resolve() / sha(str(self.extension).casefold().encode())[:20]
         self.target = self.extension / self.adapter["target"]
@@ -89,7 +109,7 @@ class Patch:
         if package.get("publisher") != "openai" or package.get("name") != "chatgpt":
             raise PatchError("Not the OpenAI Codex extension")
         if package.get("version") != self.adapter["version"]:
-            raise PatchError("Unsupported extension version; no files changed")
+            raise PatchError(f"Workspace-session patch is not adapted to extension {package.get('version')}; no files changed")
         for relative, expected in self.adapter["dependencies"].items():
             path = self.extension / relative
             if not path.is_file() or sha(path.read_bytes()) != expected:
@@ -111,10 +131,10 @@ class Patch:
         manifest = self.manifest()
         sidecar = sha(self.sidecar.read_bytes()) if self.sidecar.exists() else None
         if current == self.adapter["target_sha256"] and sidecar is None:
-            render_header(self.target.read_bytes())
+            self.render(self.target.read_bytes())
             return "compatible"
         if manifest and current == manifest["patched"] and sidecar == manifest["sidecar"]:
-            expected = sha(render_header(self.backup.read_bytes()))
+            expected = sha(self.render(self.backup.read_bytes()))
             resource = sha((RESOURCES / "filter.mjs").read_bytes())
             return "installed" if expected == current and resource == sidecar else "installed-older-patch"
         if manifest and current in (manifest["original"], manifest["patched"]) and sidecar in (None, manifest["sidecar"]):
@@ -136,6 +156,12 @@ class Patch:
         finally:
             path.unlink(missing_ok=True)
 
+    def render(self, original: bytes) -> bytes:
+        # Preserve the legacy adapter and its existing backup hashes exactly.
+        if "replacements" not in self.adapter:
+            return render_header(original)
+        return render_header(original, self.adapter)
+
     def apply(self):
         with self.lock():
             status = self.probe()
@@ -144,7 +170,7 @@ class Patch:
             if status != "compatible":
                 raise PatchError("Rollback the known patch before applying this revision")
             original = self.target.read_bytes()
-            patched = render_header(original)
+            patched = self.render(original)
             sidecar = (RESOURCES / "filter.mjs").read_bytes()
             atomic_write(self.backup, original)
             manifest = {"version": self.adapter["version"], "original": sha(original),

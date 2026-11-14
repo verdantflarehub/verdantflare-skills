@@ -1,11 +1,15 @@
 """Task execution on owned App Server sessions and explicitly selected plugin threads."""
 import asyncio
-from contextlib import suppress
+from contextlib import closing, suppress
 import json
 import os
+from pathlib import Path
+import sqlite3
 import time
 import uuid
 import threading
+import sys
+import traceback
 
 from .errors import BridgeError
 from .build_info import SERVICE_BUILD
@@ -42,16 +46,25 @@ class Engine:
         self.stopping = False
         self.approval_ui = None
         self.approval_lock = asyncio.Lock()
+        self.health_timeout = 20
+        self.loop_progress = {'work': 0.0, 'recovery': 0.0}
+        self.loop_restarts = {'work': 0, 'recovery': 0}
+        self.loop_failures = {'work': 0, 'recovery': 0}
+        self.restart_handles = []
+        self.pending_command = None
 
     async def start(self):
         self.store.heartbeat(self.owner)
         self.heartbeat_thread = threading.Thread(target=self._pulse, daemon=True)
         self.heartbeat_thread.start()
-        self.worker = asyncio.create_task(self._work())
-        self.heartbeat_worker = asyncio.create_task(self._heartbeat())
+        self._spawn_loop('work')
+        self._spawn_loop('recovery')
 
     async def close(self):
         self.stopping = True
+        self.heartbeat_stop.set()
+        for handle in self.restart_handles:
+            handle.cancel()
         if self.approval_ui:
             await self.approval_ui.close()
         if self.heartbeat_worker:
@@ -148,9 +161,45 @@ class Engine:
             thread = check(await app.call('thread/read', params))
             if thread.get('name') != args['name']:
                 raise BridgeError('BACKEND_ERROR', 'Native name readback did not match; inspect before retrying')
+            await self._refresh_renamed_session(args['thread_id'], args['name'])
             return {'thread_id': args['thread_id'], 'name': thread['name'], 'naming': 'native'}
         finally:
             await app.close()
+
+    def _sync_sqlite_thread_name(self, thread_id, name):
+        codex_home = Path(self.config.get('codex_home') or (Path.home() / '.codex'))
+        if not codex_home.is_dir():
+            return
+        now = int(time.time())
+        for db_path in sorted(codex_home.glob('state_*.sqlite')):
+            with suppress(Exception), closing(sqlite3.connect(db_path, timeout=2.0)) as conn:
+                conn.execute(
+                    'UPDATE threads SET title = ?, name = ?, '
+                    'updated_at = CASE WHEN updated_at >= ? THEN updated_at + 1 ELSE ? END, '
+                    'updated_at_ms = CASE WHEN COALESCE(updated_at_ms, 0) >= ? THEN updated_at_ms + 1000 ELSE ? END '
+                    'WHERE id = ?',
+                    (name, name, now, now, now * 1000, now * 1000, thread_id))
+                conn.commit()
+
+    async def _refresh_renamed_session(self, thread_id, name):
+        await asyncio.to_thread(self._sync_sqlite_thread_name, thread_id, name)
+        plugin = None
+        with suppress(Exception):
+            plugin = await Plugin(self.config['node'], self.config['extension']).start()
+            old_title = None
+            with suppress(Exception):
+                owner = await plugin.follow(thread_id)
+                snap = await plugin.resnapshot(thread_id, owner)
+                old_title = (snap.get('conversationState') or {}).get('title')
+            if isinstance(old_title, str) and old_title.strip() and old_title != name:
+                await asyncio.to_thread(self._sync_sqlite_thread_name, thread_id, old_title)
+                await plugin.notify_unarchived(thread_id)
+                await asyncio.sleep(0.15)
+                await asyncio.to_thread(self._sync_sqlite_thread_name, thread_id, name)
+            await plugin.notify_unarchived(thread_id)
+        if plugin:
+            with suppress(Exception):
+                await plugin.close()
 
     async def capabilities(self, args):
         cwd = allowed_cwd(args['cwd'], self.config['allowed_roots']) if args.get('cwd') else None
@@ -185,8 +234,9 @@ class Engine:
                 rows.append({'thread_id': thread['id'], 'title': thread.get('name') or thread.get('preview'),
                              'cwd': thread['cwd'], 'owner_reachable': reachable})
             plugin_ver = detect_codex_plugin_version(self.config.get('extension'))
-            return {'version': '0.2.0', 'plugin_version': plugin_ver,
+            return {'version': '0.2.1', 'plugin_version': plugin_ver,
                     'service_build': dict(SERVICE_BUILD), 'worker_instance': self.owner,
+                    'worker_health': self.worker_health(),
                     'plugin_concurrency': {'scope': 'thread', 'limit': None, 'automatic_queue': False},
                     'recovery_protocol': 'thread-recovery-v1',
                     'plugin': 'read_verified' if any(r['owner_reachable'] for r in rows) else ('discovered' if plugin else 'unavailable'),
@@ -202,10 +252,75 @@ class Engine:
                 await plugin.close()
             await app.close()
 
+    def worker_health(self):
+        now = time.monotonic()
+        ages = {name: (now - tick if tick else None) for name, tick in self.loop_progress.items()}
+        tasks = {'work': self.worker, 'recovery': self.heartbeat_worker}
+        healthy = not self.stopping and all(
+            tasks[name] is not None and not tasks[name].done()
+            and age is not None and age < self.health_timeout for name, age in ages.items())
+        return {'healthy': healthy, 'progress_age_seconds': ages,
+                'timeout_seconds': self.health_timeout, 'restarts': dict(self.loop_restarts)}
+
+    def _loop_error(self, name, error):
+        # No exception message or locals: provider errors may contain private input.
+        frames = [{'file': os.path.basename(f.filename), 'line': f.lineno, 'function': f.name}
+                  for f in traceback.extract_tb(error.__traceback__)]
+        print(json.dumps({'event': 'worker_loop_failed', 'worker_instance': self.owner,
+                          'loop': name, 'exception': type(error).__name__, 'frames': frames}),
+              file=sys.stderr, flush=True)
+
+    def _spawn_loop(self, name):
+        if self.stopping:
+            return
+        task = asyncio.create_task(self._supervise_loop(name), name='codex-' + name)
+        setattr(self, 'worker' if name == 'work' else 'heartbeat_worker', task)
+        def done(future):
+            if self.stopping:
+                return
+            self.loop_progress[name] = 0.0
+            error = (RuntimeError('Supervisor cancelled') if future.cancelled()
+                     else future.exception() or RuntimeError('Supervisor exited'))
+            self._loop_error(name, error)
+            self.loop_restarts[name] += 1
+            self.restart_handles.append(asyncio.get_running_loop().call_later(1, self._spawn_loop, name))
+        task.add_done_callback(done)
+
+    async def _supervise_loop(self, name):
+        while not self.stopping:
+            try:
+                await (self._work() if name == 'work' else self._heartbeat())
+                raise RuntimeError('Worker loop returned unexpectedly')
+            except asyncio.CancelledError:
+                raise
+            except Exception as error:
+                self.loop_progress[name] = 0.0
+                self.loop_restarts[name] += 1
+                self.loop_failures[name] += 1
+                self._loop_error(name, error)
+                await asyncio.sleep((1, 2, 5, 10, 30)[min(self.loop_failures[name] - 1, 4)])
+
+    def _progress(self, name):
+        self.loop_progress[name] = time.monotonic()
+        self.loop_failures[name] = 0
+
     async def _work(self):
         while True:
-            command = self.store.claim(self.owner)
+            if self.pending_command is not None:
+                pending = self.pending_command
+                current = await self._db(self.store.task, pending['task_id'])
+                if current['state'] not in TERMINAL and current['state'] != 'interrupted_unknown':
+                    await self._db(self.store.transition, pending['task_id'], self.owner, 'interrupted_unknown')
+                self.pending_command = None
+            claim = asyncio.create_task(self._db(self.store.claim, self.owner))
+            try:
+                command = await asyncio.shield(claim)
+            except asyncio.CancelledError:
+                # A committed claim must not disappear when its waiter is cancelled.
+                self.pending_command = await claim
+                raise
             if command:
+                self.pending_command = command
                 task_id = command['task_id']
                 try:
                     if command['operation'] in ('start', 'continue'):
@@ -218,8 +333,9 @@ class Engine:
                 except BridgeError as error:
                     self.store.command_done(command['id'], self.owner, error.as_dict())
                     self.store.append_event(task_id, 'control_error', error.as_dict())
-            else:
-                await asyncio.sleep(0.1)
+            self.pending_command = None
+            self._progress('work')
+            await asyncio.sleep(0.1)
 
     async def _db(self, operation, *args):
         future = asyncio.create_task(asyncio.to_thread(operation, *args))
@@ -228,10 +344,11 @@ class Engine:
         return await asyncio.shield(future)
 
     def _pulse(self):
-        # SQLite waits and IPC work on the event loop cannot suppress our liveness.
+        # Thread liveness is insufficient: both supervised loops must make progress.
         while not self.heartbeat_stop.wait(self.heartbeat_interval):
             try:
-                self.store.heartbeat(self.owner)
+                if self.worker_health()['healthy']:
+                    self.store.heartbeat(self.owner, lambda: self.worker_health()['healthy'])
             except Exception:
                 # Recovery fencing still prevents a stale worker from committing.
                 continue
@@ -254,6 +371,7 @@ class Engine:
                     continue
                 if await self._db(self.store.claim_recovery, task['id'], self.owner):
                     self._track(task['id'], self._recover(self.store.task(task['id'])))
+            self._progress('recovery')
             await asyncio.sleep(1)
 
     @staticmethod
