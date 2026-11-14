@@ -2,7 +2,7 @@
 name: verdantflare-video
 description: 通过 Studio Video MCP 的真实动态渠道生成、恢复和下载视频，按已注册能力使用 H3、SD2、Grok、Google 与 Higgsfield 模型；核实参数、素材限制和报价并保留具体服务错误。
 metadata:
-  version: "0.5.4"
+  version: "0.5.5"
 ---
 
 # VerdantFlare Video
@@ -31,7 +31,7 @@ H3 模型支持六种画幅，Omni Reference 还有 Auto；渠道适配器里的
 - Higgsfield：读取 [会员渠道与官方 Skills 适配](references/higgsfield.md)，通过同一 Studio Video MCP 显式选择 `route=higgsfield`。Seedance 2.5 Draft 的 R2V／ref2va 使用 `model=seedance_2_5_draft`、480p、4–15 秒、最多 4 图＋1 视频，不替换为普通 2.5 或首尾帧。官方 CLI 封装在本 Skill 私有运行时，仅供管理员授权维护；成员生成、查询及结果通过 Studio，会员凭据留在服务器。
 - 已有任务沿原任务记录的模型与渠道恢复，不按当前默认值重新生成。
 - 有剧情动作、连续运镜、跨镜物体或剪辑选段要求时，按[叙事动作验收](references/shot-acceptance.md)检查实际动作和可用区间，不能用首尾构图或技术成功代替动态验收。
-- H3-Sing 可选 `postprocess.interpolate.profile=rife_2x`（CLI `--interpolate`），默认关闭；已有视频使用同一 Video MCP 的 `video.interpolate`。开启时等待 `delivery.status` 终态，交付 `delivery.final_artifact_id`，保留原片。插帧失败只对原片明确重试，不重跑成功的生成，详见调用与校验说明。
+- H3-Sing 支持双档加速与全链路后置交付：`quality_profile` 支持 `fasth3-nvfp4`（5090 默认 8-NFE QAD 加速档）与 `du-0`（4-NFE 回退档），CLI 通过 `--quality-profile` 指定；后置可选 `postprocess.regenerate_2k`（CLI `--regenerate-2k` 与 `--grid-mode {budget_1440p,exact_2x}`，默认 `budget_1440p`）与 `postprocess.interpolate.profile=rife_2x`（CLI `--interpolate`）自由组合，也支持对已有 24 FPS H3 视频单独调用 `video.regenerate_2k`（CLI `regenerate-2k`）或 `video.interpolate`。开启后置阶段时等待 `delivery.status` 终态并交付 `delivery.final_artifact_id`，完整保留 `M1`（`source_artifact_id`）与 `M2`（`regenerate_2k_artifact_id`）；`P3` 插帧失败只对保留的 `M2` 单独调用 `video.interpolate` 重试，`P2` 失败只对 `M1` 调用 `video.regenerate_2k` 重试，严禁重跑已成功的 `P1` 生成。
 - 每次创建任务都显式传入当前项目的 `project_id`、已解析的 `route` 和固定幂等键；不能依赖服务端猜测项目或渠道。
 - 中央Artifact的 `ContentRef` 与Video原生引用按宿主适配流程转换；不直接替换ID，不把受控下载路径当成匿名公网素材URL。
 - 所有模型和渠道都通过 Studio MCP 统一网关进入，不直接调用 Runtime。

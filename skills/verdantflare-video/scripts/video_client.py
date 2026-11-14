@@ -446,7 +446,33 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
         if route != "higgsfield" or not math.isfinite(ceiling) or ceiling < 0:
             raise ClientError("--price-ceiling is a finite nonnegative Higgsfield Credits ceiling; other channels use --budget-limit")
         request["price_ceiling"] = ceiling
-    if getattr(args, "interpolate", False):
+    quality_profile = getattr(args, "quality_profile", None)
+    if quality_profile is not None:
+        if route != "h3-singularity" or quality_profile not in {"fasth3-nvfp4", "du-0"}:
+            raise ClientError("--quality-profile supports fasth3-nvfp4 or du-0 on route=h3-singularity only")
+        request["quality_profile"] = quality_profile
+    regenerate_2k = bool(getattr(args, "regenerate_2k", False))
+    grid_mode = getattr(args, "grid_mode", None)
+    interpolate = bool(getattr(args, "interpolate", False))
+    if grid_mode is not None and not regenerate_2k:
+        raise ClientError("--grid-mode requires --regenerate-2k")
+    if regenerate_2k:
+        regen_cap = capabilities.get("postprocess", {}).get("regenerate_2k", {})
+        if route != "h3-singularity" or not regen_cap.get("configured") or regen_cap.get("readiness") != "ready":
+            raise ClientError("--regenerate-2k requires a ready H3-Sing open_h3_2k_ic capability")
+        regen_payload: dict[str, Any] = {"profile": "open_h3_2k_ic"}
+        if grid_mode is not None:
+            if grid_mode not in {"budget_1440p", "exact_2x"}:
+                raise ClientError("--grid-mode must be budget_1440p or exact_2x")
+            regen_payload["grid_mode"] = grid_mode
+        postprocess_payload: dict[str, Any] = {"regenerate_2k": regen_payload}
+        if interpolate:
+            interpolation = capabilities.get("postprocess", {}).get("interpolate", {})
+            if not interpolation.get("configured") or interpolation.get("readiness") != "ready":
+                raise ClientError("--interpolate requires a ready H3-Sing rife_2x capability")
+            postprocess_payload["interpolate"] = {"profile": "rife_2x"}
+        request["postprocess"] = postprocess_payload
+    elif interpolate:
         interpolation = capabilities.get("postprocess", {}).get("interpolate", {})
         if route != "h3-singularity" or not interpolation.get("configured") or interpolation.get("readiness") != "ready":
             raise ClientError("--interpolate requires a ready H3-Sing rife_2x capability")
@@ -510,6 +536,162 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
     return {**result, "attempt_path": str(path)}
 
 
+def regenerate_2k_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
+    project_id = _validate_project_id(args.project_id)
+    idempotency_key = (args.idempotency_key or "").strip()
+    if (
+        not idempotency_key
+        or len(idempotency_key) > 128
+        or any(ord(char) < 0x20 or ord(char) == 0x7F for char in idempotency_key)
+    ):
+        raise ClientError("idempotency_key is invalid")
+    source_artifact_id = (args.source_artifact_id or "").strip()
+    if not re.fullmatch(r"art_[0-9a-f]{32}", source_artifact_id):
+        raise ClientError("source_artifact_id must be a fixed project Artifact ID (art_<32hex>)")
+    inventory = check_mcp_tools(config)
+    if "video.regenerate_2k" not in inventory["tools"]:
+        raise ClientError("Host has no registered video.regenerate_2k tool")
+    capabilities = inventory.get("capabilities") or {}
+    regen_cap = capabilities.get("postprocess", {}).get("regenerate_2k", {})
+    if not regen_cap.get("configured") or regen_cap.get("readiness") != "ready":
+        raise ClientError("regenerate-2k requires a ready H3-Sing open_h3_2k_ic capability")
+    request: dict[str, Any] = {
+        "project_id": project_id,
+        "idempotency_key": idempotency_key,
+        "source_artifact_id": source_artifact_id,
+        "profile": "open_h3_2k_ic",
+    }
+    grid_mode = getattr(args, "grid_mode", None)
+    if grid_mode is not None:
+        if grid_mode not in {"budget_1440p", "exact_2x"}:
+            raise ClientError("--grid-mode must be budget_1440p or exact_2x")
+        request["grid_mode"] = grid_mode
+    prompt = getattr(args, "prompt", None)
+    if prompt is not None:
+        cleaned_prompt = prompt.strip()
+        if not cleaned_prompt:
+            raise ClientError("--prompt must not be empty when provided")
+        request["prompt"] = cleaned_prompt
+    seed = getattr(args, "seed", None)
+    if seed is not None:
+        if type(seed) is not int or not 0 <= seed <= 4294967295:
+            raise ClientError("--seed must be an integer in [0, 4294967295]")
+        request["seed"] = seed
+    if getattr(args, "interpolate", False):
+        interpolation = capabilities.get("postprocess", {}).get("interpolate", {})
+        if not interpolation.get("configured") or interpolation.get("readiness") != "ready":
+            raise ClientError("--interpolate requires a ready H3-Sing rife_2x capability")
+        request["postprocess"] = {"interpolate": {"profile": "rife_2x"}}
+    supports_title = "title" in inventory.get("schemas", {}).get("video.regenerate_2k", {}).get("properties", {})
+    naming = {"title": args.title} if getattr(args, "title", None) is not None and supports_title else {}
+    try:
+        validate_tool(inventory, "video.regenerate_2k", {**request, **naming})
+    except ValueError as exc:
+        raise ClientError(str(exc)) from exc
+    attempt = {
+        "schema_version": 1,
+        "state": "submitting",
+        "created_at": utc_now(),
+        "request": request,
+        "title_snapshot": getattr(args, "title", None),
+    }
+    path = _mcp_attempt_path(config, project_id, idempotency_key)
+    if path.exists():
+        previous = json.loads(path.read_text(encoding="utf-8"))
+        if previous.get("request") != request:
+            raise ClientError("idempotency key already belongs to different inputs")
+        if previous.get("video_task_id"):
+            return {**previous["response"], "attempt_path": str(path)}
+        raise ClientError("Submission is unresolved; retain the original attempt and reconcile it before retrying")
+    preflight_props = inventory.get("schemas", {}).get("video.preflight", {}).get("properties", {})
+    if "video.preflight" in inventory["tools"] and "source_artifact_id" in preflight_props:
+        preflight = {k: v for k, v in request.items() if k != "idempotency_key"}
+        try:
+            validate_tool(inventory, "video.preflight", preflight)
+        except ValueError as exc:
+            raise ClientError(str(exc)) from exc
+        attempt["preflight"] = call_mcp_tool(config, "video.preflight", preflight)
+        quote = attempt["preflight"]
+        if quote.get("can_submit") is False:
+            reason = quote.get("blocked_reason") or quote.get("reason_code") or "preflight_blocked"
+            error = quote.get("error") or {
+                "code": reason,
+                "message": quote.get("message") or str(reason),
+                "source": "regenerate_2k",
+                "retryable": False,
+                "accepted": False,
+            }
+            raise MCPToolError(error if isinstance(error, dict) else {"code": "preflight_blocked", "message": str(error), "accepted": False})
+    _save_mcp_attempt(path, attempt)
+    try:
+        result = call_mcp_tool(config, "video.regenerate_2k", {**request, **naming})
+        if getattr(args, "title", None) is not None and not supports_title:
+            result = {**result, "title_warning": "host_does_not_support_title; requested title was not saved"}
+    except Exception as exc:
+        attempt["state"] = "rejected" if isinstance(exc, MCPToolError) and exc.error.get("accepted") is False else "submission_unknown"
+        if isinstance(exc, MCPToolError):
+            attempt["error"] = exc.error
+        attempt["updated_at"] = utc_now()
+        _save_mcp_attempt(path, attempt)
+        raise
+    task_id = result.get("video_task_id") or result.get("task_id")
+    if not isinstance(task_id, str) or not MCP_TASK_ID_PATTERN.fullmatch(task_id):
+        attempt["state"] = "submission_unknown"
+        attempt["updated_at"] = utc_now()
+        _save_mcp_attempt(path, attempt)
+        raise ClientError("video.regenerate_2k returned an invalid task id")
+    attempt.update(state="confirmed", updated_at=utc_now(), video_task_id=task_id, response=result)
+    _save_mcp_attempt(path, attempt)
+    return {**result, "attempt_path": str(path)}
+
+
+def _delivery_recovery_guidance(delivery: dict[str, Any]) -> dict[str, Any] | None:
+    if delivery.get("status") != "failed":
+        return None
+    m1 = delivery.get("source_artifact_id")
+    m2 = delivery.get("regenerate_2k_artifact_id")
+    stage = delivery.get("stage")
+    if not (m1 or m2 or stage in {"regenerate_2k", "interpolation"}):
+        return None
+    if stage == "interpolation" and m2:
+        return {
+            "failed_stage": "interpolation",
+            "retained_artifacts": {"source_artifact_id": m1, "regenerate_2k_artifact_id": m2},
+            "recommended_tool": "video.interpolate",
+            "recommended_source_artifact_id": m2,
+            "do_not_rerun_generation": True,
+            "message": (
+                f"P3 interpolation failed; M1 ({m1}) and M2 2K 24FPS ({m2}) are preserved. "
+                f"Retry video.interpolate directly on source_artifact_id={m2}; do NOT re-run P1 generation or P2 2K regeneration."
+            ),
+        }
+    if stage == "regenerate_2k" and m1:
+        return {
+            "failed_stage": "regenerate_2k",
+            "retained_artifacts": {"source_artifact_id": m1, "regenerate_2k_artifact_id": None},
+            "recommended_tool": "video.regenerate_2k",
+            "recommended_source_artifact_id": m1,
+            "do_not_rerun_generation": True,
+            "message": (
+                f"P2 2K regeneration failed; M1 ({m1}) is preserved. "
+                f"Retry video.regenerate_2k directly on source_artifact_id={m1}; do NOT re-run P1 generation."
+            ),
+        }
+    if stage == "interpolation" and m1:
+        return {
+            "failed_stage": "interpolation",
+            "retained_artifacts": {"source_artifact_id": m1, "regenerate_2k_artifact_id": None},
+            "recommended_tool": "video.interpolate",
+            "recommended_source_artifact_id": m1,
+            "do_not_rerun_generation": True,
+            "message": (
+                f"Interpolation failed; M1 ({m1}) is preserved. "
+                f"Retry video.interpolate directly on source_artifact_id={m1}; do NOT re-run P1 generation."
+            ),
+        }
+    return None
+
+
 def mcp_status(config: MCPConfig, task_id: str) -> dict[str, Any]:
     return call_mcp_tool(config, "video.status", {"video_task_id": _validate_mcp_task_id(task_id)})
 
@@ -520,9 +702,28 @@ def mcp_result(config: MCPConfig, task_id: str) -> dict[str, Any]:
 
 def download_mcp_result(config: MCPConfig, result: dict[str, Any], output: str) -> dict[str, Any]:
     """Download a native fixed Artifact without overwriting a different local file."""
-    media = result.get("media", {})
+    delivery = result.get("delivery")
+    download_doc = result
+    if isinstance(delivery, dict):
+        d_status = delivery.get("status")
+        if d_status in {"queued", "running"}:
+            raise ClientError("Postprocess delivery is still in progress; wait for delivery.status=succeeded")
+        if d_status == "failed":
+            guidance = _delivery_recovery_guidance(delivery)
+            detail = guidance["message"] if guidance else "Postprocess delivery failed; final_artifact_id is unavailable"
+            raise ClientError(detail)
+        if d_status == "succeeded" and isinstance(delivery.get("result"), dict) and delivery.get("final_artifact_id"):
+            d_res = delivery["result"]
+            download_doc = {
+                **result,
+                **d_res,
+                "artifact_id": delivery["final_artifact_id"],
+                "project_id": d_res.get("project_id") or result.get("project_id"),
+                "video_task_id": d_res.get("video_task_id") or result.get("video_task_id") or result.get("task_id"),
+            }
+    media = download_doc.get("media", {})
     digest, size = media.get("sha256"), media.get("size")
-    if (result.get("status") != "succeeded" or
+    if (download_doc.get("status") != "succeeded" or
             not isinstance(digest, str) or not SHA256_PATTERN.fullmatch(digest) or
             type(size) is not int or not 0 < size <= MAX_DOWNLOAD_BYTES):
         raise ClientError("A completed native Artifact with verified media is required")
@@ -538,10 +739,10 @@ def download_mcp_result(config: MCPConfig, result: dict[str, Any], output: str) 
     # Authorize even when reusing an existing matching download.
     with tempfile.TemporaryDirectory(prefix=".video-download-", dir=destination.parent) as directory:
         staged = Path(directory) / "video.mp4"
-        if result.get("content_ref"):
-            _download_content_ref(config, result, staged)
+        if download_doc.get("content_ref"):
+            _download_content_ref(config, download_doc, staged)
         else:
-            _download_native_result(config, result, staged)
+            _download_native_result(config, download_doc, staged)
         if not matches(staged):
             raise ClientError("Downloaded Artifact does not match Video media")
         _validate_downloaded_video(staged)
@@ -551,7 +752,7 @@ def download_mcp_result(config: MCPConfig, result: dict[str, Any], output: str) 
         except FileExistsError:
             if destination.is_symlink() or not matches(destination):
                 raise ClientError("Output exists with different content") from None
-    return {**result, "download": {"verified": True, "sha256": digest, "size": size}}
+    return {**result, "download": {"verified": True, "artifact_id": download_doc.get("artifact_id"), "sha256": digest, "size": size}}
 
 
 def _download_native_result(config: MCPConfig, result: dict[str, Any], destination: Path) -> None:
@@ -604,7 +805,12 @@ def resume_mcp(config: MCPConfig, task_id: str, poll_interval: float, timeout: f
         if delivery:
             delivery_state = delivery.get("status")
             if delivery_state in {"succeeded", "failed"}:
-                return mcp_result(config, task_id) if state == "succeeded" else current
+                resolved = mcp_result(config, task_id) if state == "succeeded" else current
+                if isinstance(resolved.get("delivery"), dict):
+                    guidance = _delivery_recovery_guidance(resolved["delivery"])
+                    if guidance is not None:
+                        return {**resolved, "recovery_guidance": guidance}
+                return resolved
             if delivery_state not in {"queued", "running"}:
                 raise ClientError("video.status returned an unknown delivery state")
         elif state == "succeeded":
@@ -1991,7 +2197,22 @@ def make_parser() -> argparse.ArgumentParser:
         help="Video via Studio MCP; omitted resolves from the selected host route",
     )
     generate_parser.add_argument("--route", help="explicit configured route, otherwise use the host default")
-    generate_parser.add_argument("--interpolate", action="store_true", help="H3-Sing: retain native video and deliver RIFE 2x FPS")
+    generate_parser.add_argument(
+        "--quality-profile",
+        choices=["fasth3-nvfp4", "du-0"],
+        help="H3-Sing quality profile (fasth3-nvfp4 8-NFE default or du-0 4-NFE fallback)",
+    )
+    generate_parser.add_argument(
+        "--regenerate-2k",
+        action="store_true",
+        help="H3-Sing: chain Open-H3-Regenerate-2K-IC strict aspect-preserving 2K regeneration",
+    )
+    generate_parser.add_argument(
+        "--grid-mode",
+        choices=["budget_1440p", "exact_2x"],
+        help="2K grid mode (budget_1440p default or exact_2x); requires --regenerate-2k",
+    )
+    generate_parser.add_argument("--interpolate", action="store_true", help="H3-Sing: retain native/2K video and deliver RIFE 2x FPS")
     generate_parser.add_argument("--project-id")
     generate_parser.add_argument("--idempotency-key")
     generate_parser.add_argument("--prompt", required=True)
@@ -2016,6 +2237,23 @@ def make_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--generate-audio", dest="generate_audio", action="store_true", default=True)
     generate_parser.add_argument("--no-generate-audio", dest="generate_audio", action="store_false")
     generate_parser.add_argument("--watermark", action="store_true", default=False)
+    regen_parser = sub.add_parser(
+        "regenerate-2k",
+        help="regenerate an existing 24 FPS H3 project video into strict aspect-preserving 2K via video.regenerate_2k",
+    )
+    regen_parser.add_argument("--project-id", required=True)
+    regen_parser.add_argument("--idempotency-key", required=True)
+    regen_parser.add_argument("--source-artifact-id", required=True)
+    regen_parser.add_argument(
+        "--grid-mode",
+        choices=["budget_1440p", "exact_2x"],
+        default=None,
+        help="2K target grid mode (defaults to host budget_1440p)",
+    )
+    regen_parser.add_argument("--prompt", help="optional conditioning prompt; auto-resolved from same-project H3 parent task when omitted")
+    regen_parser.add_argument("--seed", type=int, default=None, help="optional deterministic seed in [0, 4294967295]")
+    regen_parser.add_argument("--title", help="Readable task title; separate from immutable request inputs")
+    regen_parser.add_argument("--interpolate", action="store_true", help="chain RIFE 2x 48 FPS interpolation after 2K regeneration")
     sub.add_parser("list")
     resume_parser = sub.add_parser("resume")
     resume_parser.add_argument("task_id")
@@ -2052,6 +2290,10 @@ def main() -> int:
             return 0
         if args.command == "generate":
             value = generate_mcp(load_mcp_config(), args)
+            print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+        if args.command == "regenerate-2k":
+            value = regenerate_2k_mcp(load_mcp_config(), args)
             print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
         if args.command == "resume" and (args.route or MCP_TASK_ID_PATTERN.fullmatch(args.task_id)):
