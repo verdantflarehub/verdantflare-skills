@@ -1249,7 +1249,10 @@
             ]
           },
           "type_version": {
-            "const": 1
+            "enum": [
+              1,
+              2
+            ]
           },
           "basis": {
             "enum": [
@@ -1316,6 +1319,9 @@
               },
               "domain": {
                 "const": "music"
+              },
+              "type_version": {
+                "const": 1
               }
             }
           },
@@ -1329,6 +1335,9 @@
               },
               "domain": {
                 "const": "script"
+              },
+              "type_version": {
+                "const": 1
               }
             }
           },
@@ -1342,6 +1351,9 @@
               },
               "domain": {
                 "const": "shot"
+              },
+              "type_version": {
+                "const": 1
               }
             }
           },
@@ -1355,6 +1367,9 @@
               },
               "domain": {
                 "const": "character"
+              },
+              "type_version": {
+                "const": 1
               }
             }
           },
@@ -1368,6 +1383,9 @@
               },
               "domain": {
                 "const": "scene"
+              },
+              "type_version": {
+                "const": 1
               }
             }
           },
@@ -1381,6 +1399,9 @@
               },
               "domain": {
                 "const": "scene"
+              },
+              "type_version": {
+                "const": 1
               }
             }
           },
@@ -1394,6 +1415,9 @@
               },
               "domain": {
                 "const": "sound"
+              },
+              "type_version": {
+                "const": 1
               }
             }
           },
@@ -1407,6 +1431,9 @@
               },
               "domain": {
                 "const": "knowledge"
+              },
+              "type_version": {
+                "const": 1
               }
             }
           },
@@ -1420,6 +1447,9 @@
               },
               "domain": {
                 "const": "knowledge"
+              },
+              "type_version": {
+                "const": 1
               }
             }
           },
@@ -1433,6 +1463,9 @@
               },
               "domain": {
                 "const": "knowledge"
+              },
+              "type_version": {
+                "const": 1
               }
             }
           },
@@ -1446,6 +1479,9 @@
               },
               "domain": {
                 "const": "knowledge"
+              },
+              "type_version": {
+                "const": 1
               }
             }
           },
@@ -1459,6 +1495,9 @@
               },
               "domain": {
                 "const": "knowledge"
+              },
+              "type_version": {
+                "const": 1
               }
             }
           },
@@ -1469,6 +1508,9 @@
               },
               "payload": {
                 "$ref": "#/$defs/file_asset"
+              },
+              "type_version": {
+                "const": 1
               }
             },
             "allOf": [
@@ -1680,6 +1722,9 @@
               },
               "domain": {
                 "const": "scene"
+              },
+              "type_version": {
+                "const": 1
               }
             }
           },
@@ -1693,6 +1738,9 @@
               },
               "domain": {
                 "const": "shot"
+              },
+              "type_version": {
+                "const": 1
               }
             }
           },
@@ -1706,6 +1754,25 @@
               },
               "domain": {
                 "const": "knowledge"
+              },
+              "type_version": {
+                "const": 1
+              }
+            }
+          },
+          {
+            "properties": {
+              "type_key": {
+                "const": "creative_system"
+              },
+              "payload": {
+                "$ref": "#/$defs/creative_system_v2"
+              },
+              "domain": {
+                "const": "knowledge"
+              },
+              "type_version": {
+                "const": 2
               }
             }
           }
@@ -4054,6 +4121,210 @@
           {
             "$ref": "world-draft-manifest.schema.json#/$defs/sourceRef"
           }
+        ]
+      },
+      "creative_system_v2": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "research_subjects": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "minItems": 0,
+            "maxItems": 128
+          },
+          "corpus_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ref"
+            },
+            "minItems": 0,
+            "maxItems": 256
+          },
+          "scope_note": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "modules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+                },
+                "method_ref": {
+                  "$ref": "#/$defs/ref"
+                },
+                "domain": {
+                  "enum": [
+                    "music",
+                    "script",
+                    "shot",
+                    "character",
+                    "scene",
+                    "sound",
+                    "knowledge"
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "depends_on_keys": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+                  },
+                  "minItems": 0,
+                  "maxItems": 128
+                },
+                "default_scope": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                }
+              },
+              "required": [
+                "key",
+                "method_ref",
+                "domain",
+                "required",
+                "depends_on_keys"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 128
+          },
+          "coordination_rules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+                },
+                "condition": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "effect": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "target_module_keys": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+                  },
+                  "minItems": 1,
+                  "maxItems": 128
+                },
+                "priority": {
+                  "type": "integer",
+                  "minimum": -10000,
+                  "maximum": 10000
+                },
+                "evidence_refs": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/ref"
+                  },
+                  "minItems": 0,
+                  "maxItems": 256,
+                  "uniqueItems": true
+                }
+              },
+              "required": [
+                "key",
+                "condition",
+                "effect",
+                "target_module_keys",
+                "priority",
+                "evidence_refs"
+              ]
+            },
+            "minItems": 0,
+            "maxItems": 256
+          },
+          "exceptions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "$ref": "#/$defs/key"
+                },
+                "condition": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "target_rule_keys": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/key"
+                  },
+                  "minItems": 0,
+                  "maxItems": 256,
+                  "uniqueItems": true
+                },
+                "evidence_refs": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/ref"
+                  },
+                  "minItems": 0,
+                  "maxItems": 256,
+                  "uniqueItems": true
+                }
+              },
+              "required": [
+                "key",
+                "condition",
+                "reason",
+                "target_rule_keys",
+                "evidence_refs"
+              ]
+            },
+            "minItems": 0,
+            "maxItems": 256
+          },
+          "validation_case_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/ref"
+            },
+            "minItems": 0,
+            "maxItems": 256
+          }
+        },
+        "required": [
+          "research_subjects",
+          "corpus_refs",
+          "scope_note",
+          "modules",
+          "coordination_rules",
+          "exceptions",
+          "validation_case_refs"
         ]
       }
     }
