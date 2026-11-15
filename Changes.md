@@ -1,5 +1,14 @@
 # Changes
 
+## verdantflare-video-v0.5.6 — 2026-11-15
+
+`verdantflare-video-v0.5.6`。
+
+- 按基础模型拆分本地 5090 H3 独立路由：默认路由 `h3-fasth3`（独立服务 `video-minimax-h3-fasth3`，固定唯一档位 `fasth3-nvfp4` 8-NFE QAD，无跨档软回退），冷备路由 `h3-singularity`（独立服务 `video-minimax-h3-singularity`，固定唯一档位 `du-0` 4-NFE，默认 `replicas: 0`）。
+- 新增独立后置 2K IC 重生成服务（`video-minimax-h3-regenerate-2k`）客户端支持：支持 `video.create` 内联 `postprocess.regenerate_2k`（`budget_1440p` / `exact_2x`）与 `postprocess.interpolate`（`rife_2x` 48 FPS）串联交付，以及对既有 24 FPS H3 视频独立调用 `video.regenerate_2k`（CLI `regenerate-2k`）。
+- 固化 `M1`（`source_artifact_id`）与 `M2`（`regenerate_2k_artifact_id`）中间产物保留及分级失败单点重试规程，补齐 [5090 加速档位与 2K IC 重生成调用说明](skills/verdantflare-video/references/video-mcp.md#5-5090-加速档位2k-ic-重生成与可选插帧)；包内 50 项单元测试通过。
+- GitHub 标签/Release 附独立 `verdantflare-video-v0.5.6.zip` 与 `SHA256SUMS`；标签发布不代表其他客户端已自动升级安装。
+
 ## 参考声线与配乐检查工具 — 2026-10-17
 
 `verdantflare-speech-v0.3.0`, `verdantflare-music-v0.5.0`。

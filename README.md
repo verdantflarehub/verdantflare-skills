@@ -9,7 +9,7 @@
 | 技能 | 固定版本 |
 | --- | --- |
 | `x-verdantflare-short-drama` | [0.2.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/x-verdantflare-short-drama-v0.2.0) |
-| `verdantflare-video` | [0.5.4](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-video-v0.5.4) |
+| `verdantflare-video` | [0.5.6](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-video-v0.5.6) |
 | `verdantflare-music` | [0.6.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-music-v0.6.0) |
 | `verdantflare-speech` | [0.3.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-speech-v0.3.0) |
 | `verdantflare-project` | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-project-v0.1.0) |
@@ -108,14 +108,14 @@ STUDIO_MCP_BEARER_TOKEN=<绑定真实Core主体的会话令牌>
 
 [`verdantflare-video`](skills/verdantflare-video/SKILL.md) 通过Studio选择宿主已接入的视频模型和渠道，执行生成、查询、恢复与下载。用户未指定时解析当前宿主默认值并确认可用性；不把H3-VDN、Sol或fal写成跨环境固定默认，也不静默换渠道。
 
-H3 Ref2VA业务模型为 `minimax-h3-ref2va`。现有网关创建工具为 `video.create`，配套 `video.status`、`video.result`；以本次真实会话发现的注册名和参数为准。fal是否配置、时长和画幅是否支持，需要分别核实，不能只看工具Schema的默认值。
+H3 Ref2VA业务模型为 `minimax-h3-ref2va`。现有网关创建工具为 `video.create`，配套 `video.preflight`、`video.regenerate_2k`、`video.interpolate`、`video.status`、`video.result`；以本次真实会话发现的注册名和参数为准。本地 5090 H3 按基础模型拆分独立路由（`0.5.6`）：默认路由 `h3-fasth3`（独立服务 `video-minimax-h3-fasth3`，固定唯一档位 `fasth3-nvfp4` 8-NFE QAD），冷备路由 `h3-singularity`（独立服务 `video-minimax-h3-singularity`，固定唯一档位 `du-0` 4-NFE，默认 `replicas: 0`）；支持通过 `postprocess.regenerate_2k`（独立服务 `video-minimax-h3-regenerate-2k`，`budget_1440p` / `exact_2x`）与 `postprocess.interpolate`（`rife_2x` 48 FPS）串联全链路交付，或对既有 24 FPS H3 视频单独调用 `video.regenerate_2k`，细则见 [5090 加速档位与 2K IC 重生成说明](skills/verdantflare-video/references/video-mcp.md#5-5090-加速档位2k-ic-重生成与可选插帧)。fal是否配置、时长和画幅是否支持，需要分别核实，不能只看工具Schema的默认值。
 
 ### 安装与使用
 
-已发布版本：`verdantflare-video-v0.5.4`。该版按真实动态能力处理模型、逐模式参数与报价，保留安全错误和原任务恢复，并核对原生结果 SHA-256／大小。0.5.4 补充已实测的媒体数量、大小与解码边界；本轮真实生成使用 0.5.3，最终说明由宿主显式载入 0.5.4。固定标签不包含后续本地更新，也不表示其他客户端已自动安装。
+已发布版本：`verdantflare-video-v0.5.6`。该版拆分本地 H3 独立路由（默认 `h3-fasth3` 绑定唯一档位 `fasth3-nvfp4`，冷备 `h3-singularity` 绑定唯一档位 `du-0` 且无跨档软回退），新增 `postprocess.regenerate_2k`（`budget_1440p` / `exact_2x`）全链路后置串联、独立工具 `video.regenerate_2k`（CLI `regenerate-2k`）及 `M1 / M2` 中间产物保留与分级单点重试规程；延续按真实动态能力处理模型、逐模式参数、报价、原任务恢复与原生结果 SHA-256／大小校验。固定标签不包含后续本地更新，也不表示其他客户端已自动安装。
 
 ```text
-使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.5.4/skills/verdantflare-video 安装 Skill。
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.5.6/skills/verdantflare-video 安装 Skill。
 ```
 
 ```text

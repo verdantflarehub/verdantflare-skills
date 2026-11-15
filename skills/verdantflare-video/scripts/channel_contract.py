@@ -123,6 +123,8 @@ def validate_capability(request: dict, selected: dict) -> None:
     for field, declaration in (("aspect_ratio", "aspect_ratios"), ("resolution", "resolutions"), ("mode", "modes")):
         if field in request and (not selected.get(declaration) or request[field] not in selected[declaration]):
             raise ValueError(f"Selected route/model {field} is not supported by host capabilities")
+    if "quality_profile" in request and selected.get("quality_profiles") and request["quality_profile"] not in selected["quality_profiles"]:
+        raise ValueError("Selected route/model quality_profile is not supported by host capabilities")
     references = request["references"]
     ref_limits = selected.get("reference_limits") or {}
     ref_limits = {**ref_limits, **ref_limits.get('by_mode', {}).get(request.get('mode'), {})}
