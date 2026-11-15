@@ -280,7 +280,7 @@ class WorkerTests(Fixture, unittest.IsolatedAsyncioTestCase):
     async def test_busy_then_success_and_one_return(self):
         self.store.enqueue(self.body)
         adapter = FakeAdapter(error=NotAccepted("SESSION_BUSY"))
-        worker = Worker(self.store, {"local-claude": adapter, "local-codex": adapter})
+        worker = Worker(self.store, {"local-antigravity": adapter, "local-codex": adapter})
         await worker.step()
         self.assertEqual(self.store.get(self.body["message_id"])["state"], "retry_wait")
         await worker.step()
@@ -288,6 +288,7 @@ class WorkerTests(Fixture, unittest.IsolatedAsyncioTestCase):
         adapter.error, adapter.terminal = None, "completed"
         self.now += 5
         await worker.step()
+        self.assertEqual(len(adapter.calls), 2)
         self.assertEqual(len(self.store.pending({"queued"})), 1)
         await worker.step()
         await worker.step()
@@ -297,7 +298,7 @@ class WorkerTests(Fixture, unittest.IsolatedAsyncioTestCase):
     async def test_unknown_after_external_acceptance_never_replayed(self):
         self.store.enqueue(self.body)
         adapter = FakeAdapter(error=TimeoutError())
-        worker = Worker(self.store, {"local-claude": adapter})
+        worker = Worker(self.store, {"local-antigravity": adapter})
         await worker.step()
         self.now += 300
         await worker.step()
@@ -313,7 +314,7 @@ class WorkerTests(Fixture, unittest.IsolatedAsyncioTestCase):
         self.store.enqueue(self.body)
         adapter = FakeAdapter()
         stop = asyncio.Event()
-        worker = Worker(self.store, {"local-claude": adapter}, poll_seconds=.01)
+        worker = Worker(self.store, {"local-antigravity": adapter}, poll_seconds=.01)
         task = asyncio.create_task(worker.run(stop))
         for _ in range(100):
             if adapter.calls:

@@ -73,6 +73,74 @@ class CheckMdTest(unittest.TestCase):
         self.assertIn(("E", "local-path"), codes("see C:\\Users\\me\\a.md\n"))
         self.assertEqual(codes("see `C:/Users/a.md` and [w](https://e.com)\n"), [])
 
+    def test_controlled_rd_review_and_acceptance_fail_closed(self):
+        def write_lf(path: Path, content: str) -> None:
+            path.write_text(content, encoding="utf-8", newline="\n")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for rel in ("docs/plan", "docs/reviews", "docs/acceptance", "docs/archive/reviews", "docs/design"):
+                (root / rel).mkdir(parents=True)
+            plan_f = root / "docs/plan/2026.11.demo.plan.md"
+            write_lf(plan_f, "# Demo Plan\n")
+
+            # AGENTS.md and README.md inside docs/{reviews,acceptance}/ are excluded from report schema
+            for special in ("docs/reviews/AGENTS.md", "docs/reviews/README.md", "docs/acceptance/AGENTS.md", "docs/acceptance/README.md"):
+                p = root / special
+                write_lf(p, "# Spec\n\n## 1. Scope\n\nOk.\n")
+                self.assertIsNone(check_md.detect_doc_type(p))
+                self.assertEqual(check_md.check_file(p), [])
+
+            # Creative *.review.md outside docs/reviews/ keeps 'review' type without rd-review schema errors
+            creative = root / "docs/design/shots.review.md"
+            write_lf(creative, "# 分镜看片\n\n## 1. 第一轮\n\n待审。\n")
+            self.assertEqual(check_md.detect_doc_type(creative), "review")
+            self.assertEqual(check_md.check_file(creative), [])
+
+            # Valid rd-review in docs/reviews/ and docs/archive/reviews/
+            valid_rev_txt = (
+                "# T1 评审报告\n\n"
+                "负责人：Mengsk\n评审助手：Claude（架构）、Codex（细节）\n"
+                "关联计划：[计划](../plan/2026.11.demo.plan.md)\n关联阶段：T1\n"
+                "评审对象哈希：sha256:" + "a" * 64 + "\n评审结论：已通过\n更新时间：2026-11-15\n\n"
+                "## 1. 当前依据\n\n- [计划](../plan/2026.11.demo.plan.md)\n\n"
+                "## 2. 总体架构核验与符合性审计\n\n通过。\n\n"
+                "## 3. 工程细节与防漏评审\n\n通过。\n\n"
+                "## 4. 架构疑难升级裁定\n\n无。\n\n"
+                "## 5. 问题闭环与放行结论\n\n未闭环 HIGH/MEDIUM：0\n"
+            )
+            rev_ok = root / "docs/reviews/review_20261115_demo_t2-r2.md"
+            write_lf(rev_ok, valid_rev_txt)
+            self.assertEqual(check_md.detect_doc_type(rev_ok), "rd-review")
+            self.assertEqual(check_md.check_file(rev_ok), [])
+
+            # Fail-closed on illegal filename or bad status/chapters inside docs/reviews/
+            rev_bad = root / "docs/reviews/random_notes.md"
+            write_lf(rev_bad, "# Notes\n\n## 1. Foo\n")
+            bad_codes = {c for _, _, c, _ in check_md.check_file(rev_bad)}
+            self.assertEqual(bad_codes, {"rd-review-name", "rd-review-meta", "rd-review-chapters", "rd-review-summary"})
+
+            # Valid acceptance & fail-closed illegal acceptance
+            valid_acc_txt = (
+                "# 专项验收\n\n"
+                "负责人：Mengsk\n执行助手：Gemini\n验真助手：待 T4 登记\n"
+                "关联计划：[计划](../plan/2026.11.demo.plan.md)\n验收状态：考卷已锁定\n更新时间：2026-11-15\n\n"
+                "## 1. 当前依据\n\n- [计划](../plan/2026.11.demo.plan.md)\n\n"
+                "## 2. 锁定验收场景与判据\n\n### 2.1 S1：测试\n\n说明。\n\n"
+                "## 3. 智能体实跑与演示证据\n\n待 T4 实跑回填。\n\n"
+                "## 4. 防伪锚点与双轨验真\n\n待 T4 实跑回填。\n\n"
+                "## 5. CP1 双抽检核验单\n\n待提交。\n"
+            )
+            acc_ok = root / "docs/acceptance/accept_20261115_demo.md"
+            write_lf(acc_ok, valid_acc_txt)
+            self.assertEqual(check_md.detect_doc_type(acc_ok), "acceptance")
+            self.assertEqual(check_md.check_file(acc_ok), [])
+
+            acc_bad = root / "docs/acceptance/bad_name.md"
+            write_lf(acc_bad, valid_acc_txt.replace("验收状态：考卷已锁定", "验收状态：随便写"))
+            acc_bad_codes = {c for _, _, c, _ in check_md.check_file(acc_bad)}
+            self.assertEqual(acc_bad_codes, {"acceptance-name", "acceptance-meta"})
+
 
 class DiscoverTest(unittest.TestCase):
     def test_explicit_missing_reports_reason(self):

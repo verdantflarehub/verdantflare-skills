@@ -1,6 +1,6 @@
 ---
 name: verdantflare-meta-markdown
-description: 编写、整理和审阅任意仓库中自主维护的 Markdown，按通用规范及 README、设计、计划、变更、缺陷、技能文档业务规范组织内容，执行落盘后 Format、结构检查与交付流程，避免多层列表缩进。用于新增或实质修改 Markdown、长列表重构及 Format 缩进排查；目标仓库规则、第三方原文、历史归档和脚本依赖的格式契约优先。
+description: 编写、整理和审阅任意仓库中自主维护的 Markdown，按通用规范及 README、设计、计划、变更、研发评审、研发验收、缺陷、技能文档业务规范组织内容，执行落盘后 Format、结构检查与交付流程，避免多层列表缩进。用于新增或实质修改 Markdown、长列表重构及 Format 缩进排查；目标仓库规则、第三方原文、历史归档和脚本依赖的格式契约优先。
 ---
 
 # Markdown 结构与格式化治理（verdantflare-meta-markdown）
@@ -26,6 +26,8 @@ description: 编写、整理和审阅任意仓库中自主维护的 Markdown，�
 | `README.md`；用途、快速开始、常用操作、导航      | [README 规范](references/readme.md)          |
 | `docs/plan/*.plan.md`；负责人、任务清单、勾选    | [计划文档规范](references/plan.md)           |
 | `docs/changes/change_*.md`；执行记录、验证证据   | [变更文档规范](references/change.md)         |
+| `docs/reviews/review_*.md`；架构与工程细节评审   | [研发评审规范](references/rd-review.md)      |
+| `docs/acceptance/accept_*.md`；锁卷与验收锚点    | [研发验收规范](references/acceptance.md)     |
 | `docs/bugs/bug_*.md`；复现、根因、修复验证       | [缺陷文档规范](references/bug.md)            |
 | `skills/*/SKILL.md` 及 `references/`；触发与流程 | [技能文档规范](references/skill.md)          |
 | 多轮素材持续评审；待审/不合格标记、媒体表格      | [评审文档规范](references/review.md)         |
