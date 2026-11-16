@@ -4905,5 +4905,459 @@
         }
       }
     }
+  },
+  "station://contracts/v2/reference-learning-v2": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "station://contracts/v2/reference-learning-v2",
+    "title": "ReferenceLearningDocumentV2",
+    "description": "Offline draft: explicit curation and frozen processing metadata; not enabled in production.",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": 2
+      },
+      "document_kind": {
+        "$ref": "reference-learning.schema.json#/properties/document_kind"
+      },
+      "origin": {
+        "$ref": "reference-learning.schema.json#/properties/origin"
+      },
+      "coverage": {
+        "$ref": "reference-learning.schema.json#/properties/coverage"
+      },
+      "sources": {
+        "$ref": "reference-learning.schema.json#/properties/sources"
+      },
+      "results": {
+        "$ref": "reference-learning.schema.json#/properties/results"
+      },
+      "relations": {
+        "$ref": "reference-learning.schema.json#/properties/relations"
+      },
+      "uses": {
+        "$ref": "reference-learning.schema.json#/properties/uses"
+      },
+      "provenance": {
+        "$ref": "reference-learning.schema.json#/properties/provenance"
+      },
+      "curation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "packages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "$ref": "reference-learning.schema.json#/$defs/key"
+                },
+                "purpose": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "result_keys": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "reference-learning.schema.json#/$defs/key"
+                  },
+                  "minItems": 1,
+                  "maxItems": 10000
+                }
+              },
+              "required": [
+                "key",
+                "purpose",
+                "result_keys"
+              ]
+            },
+            "minItems": 0,
+            "maxItems": 1000
+          },
+          "assessments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "result_key": {
+                  "$ref": "reference-learning.schema.json#/$defs/key"
+                },
+                "package_keys": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "reference-learning.schema.json#/$defs/key"
+                  },
+                  "minItems": 0,
+                  "maxItems": 1000
+                },
+                "selection": {
+                  "enum": [
+                    "unassessed",
+                    "recommended",
+                    "needs_review",
+                    "excluded"
+                  ]
+                },
+                "reason_codes": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "reference-learning.schema.json#/$defs/key"
+                  },
+                  "minItems": 1,
+                  "maxItems": 128
+                },
+                "note": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "evidence_refs": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "world-draft-manifest.schema.json#/$defs/sourceRef"
+                  },
+                  "minItems": 0,
+                  "maxItems": 1000
+                },
+                "merged_from_refs": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "world-draft-manifest.schema.json#/$defs/sourceRef"
+                  },
+                  "minItems": 0,
+                  "maxItems": 1000
+                },
+                "previews": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "key": {
+                        "$ref": "reference-learning.schema.json#/$defs/key"
+                      },
+                      "state": {
+                        "enum": [
+                          "ready",
+                          "missing"
+                        ]
+                      },
+                      "media_kind": {
+                        "enum": [
+                          "image",
+                          "audio",
+                          "video"
+                        ]
+                      },
+                      "role": {
+                        "enum": [
+                          "original_reference",
+                          "generated_effect",
+                          "reconstruction_preview"
+                        ]
+                      },
+                      "note": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096
+                      },
+                      "file_ref": {
+                        "$ref": "world-draft-manifest.schema.json#/$defs/sourceRef"
+                      },
+                      "locator": {
+                        "oneOf": [
+                          {
+                            "$ref": "reference-learning.schema.json#/$defs/locator"
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "kind": {
+                                "const": "image_region"
+                              },
+                              "x": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "y": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "width": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 1
+                              },
+                              "height": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 1
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "x",
+                              "y",
+                              "width",
+                              "height"
+                            ]
+                          }
+                        ]
+                      },
+                      "sha256": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "reason_code": {
+                        "$ref": "reference-learning.schema.json#/$defs/key"
+                      },
+                      "run_ref": {
+                        "$ref": "reference-learning.schema.json#/$defs/run"
+                      },
+                      "input_refs": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "world-draft-manifest.schema.json#/$defs/sourceRef"
+                        },
+                        "minItems": 0,
+                        "maxItems": 1000
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "state",
+                      "media_kind",
+                      "role",
+                      "note"
+                    ],
+                    "allOf": [
+                      {
+                        "if": {
+                          "properties": {
+                            "state": {
+                              "const": "ready"
+                            }
+                          }
+                        },
+                        "then": {
+                          "required": [
+                            "file_ref",
+                            "locator",
+                            "sha256"
+                          ],
+                          "not": {
+                            "required": [
+                              "reason_code"
+                            ]
+                          }
+                        },
+                        "else": {
+                          "required": [
+                            "reason_code"
+                          ],
+                          "not": {
+                            "anyOf": [
+                              {
+                                "required": [
+                                  "file_ref"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "locator"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "sha256"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "run_ref"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "input_refs"
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "if": {
+                          "properties": {
+                            "state": {
+                              "const": "ready"
+                            },
+                            "role": {
+                              "enum": [
+                                "generated_effect",
+                                "reconstruction_preview"
+                              ]
+                            }
+                          }
+                        },
+                        "then": {
+                          "required": [
+                            "run_ref",
+                            "input_refs"
+                          ]
+                        }
+                      },
+                      {
+                        "if": {
+                          "properties": {
+                            "role": {
+                              "const": "original_reference"
+                            }
+                          }
+                        },
+                        "then": {
+                          "not": {
+                            "anyOf": [
+                              {
+                                "required": [
+                                  "run_ref"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "input_refs"
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "minItems": 0,
+                  "maxItems": 128
+                }
+              },
+              "required": [
+                "result_key",
+                "package_keys",
+                "selection",
+                "reason_codes",
+                "note",
+                "evidence_refs",
+                "merged_from_refs",
+                "previews"
+              ],
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "selection": {
+                        "enum": [
+                          "recommended",
+                          "excluded"
+                        ]
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "evidence_refs": {
+                        "minItems": 1
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "minItems": 0,
+            "maxItems": 10000
+          }
+        },
+        "required": [
+          "packages",
+          "assessments"
+        ]
+      },
+      "processing_snapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "task_id": {
+            "$ref": "content-ref.schema.json#/properties/store_id"
+          },
+          "pipeline_version": {
+            "type": "integer",
+            "enum": [
+              0,
+              2
+            ]
+          },
+          "assembly_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "adapter_revision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "plan_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "task_id",
+          "pipeline_version",
+          "assembly_version",
+          "adapter_revision",
+          "plan_sha256"
+        ]
+      }
+    },
+    "required": [
+      "schema_version",
+      "document_kind",
+      "origin",
+      "coverage",
+      "sources",
+      "results",
+      "relations",
+      "uses",
+      "curation"
+    ],
+    "allOf": [
+      {
+        "if": {
+          "properties": {
+            "origin": {
+              "const": "generated"
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "provenance",
+            "processing_snapshot"
+          ]
+        },
+        "else": {
+          "not": {
+            "required": [
+              "processing_snapshot"
+            ]
+          }
+        }
+      }
+    ]
   }
 }
