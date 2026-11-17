@@ -1,6 +1,6 @@
 ---
 name: verdantflare-meta-agent
-description: 规范 AI Agent 之间基于计划的委托、Session 命名与身份登记、多智能体评审分工（Claude 纯架构低 Token 门禁与 Codex 细节反作弊）、结果回传、统筹和故障恢复。用于跨 Agent 派单、交接、回收结果或维护协作机制；普通问答不强制建计划，不替代用户授权、项目验收和各宿主调度技能。
+description: 规范 AI Agent 之间基于计划的委托、Session 命名与身份登记、多智能体评审分工（Claude 架构核验与抽查低 Token 门禁、Codex 细节与验收全面核验）、结果回传、统筹和故障恢复。用于跨 Agent 派单、交接、回收结果或维护协作机制；普通问答不强制建计划，不替代用户授权、项目验收和各宿主调度技能。
 ---
 
 # Agent 计划协作治理（verdantflare-meta-agent）
@@ -11,7 +11,7 @@ description: 规范 AI Agent 之间基于计划的委托、Session 命名与身�
 
 ## 2. 范围与边界
 
-统一 Agent 之间的任务来源、Session 身份、评审主责边界、交接门禁与通知闭环，确保执行方明确范围与回传目标，统筹方明确审阅、返修、解锁依赖及结项规则。在多智能体研发评审中执行严格专精分工：Claude 仅承担总体架构核验、跨系统架构争议裁决与架构符合性轻量审计（`HO-CLAUDE-SCOPE` 只读低 Token 门禁），Codex 承担全部具体工程细节评审、影响防漏扫描与测试反作弊验真。
+统一 Agent 之间的任务来源、Session 身份、评审主责边界、交接门禁与通知闭环，确保执行方明确范围与回传目标，统筹方明确审阅、返修、解锁依赖及结项规则。在多智能体研发评审中执行严格专精分工：Claude 仅承担 `T1` 总体架构核验与验收流程修订定稿、`T4` 抽查 Codex 评价 `1～2` 项与跨系统架构争议裁决（`HO-CLAUDE-SCOPE` 低 Token 门禁，不审源码与脚本细节），Codex 承担全部具体工程细节评审、影响防漏扫描与对照锁卷流程的验收结果全面核验。
 
 与 `verdantflare-meta-plan`、`verdantflare-meta-markdown` 协作维护计划门禁和文档表达，与 `verdantflare-agent-codex`、`verdantflare-agent-claude`、`verdantflare-agent-antigravity`、`verdantflare-agent-grok` 协作执行宿主通信。本技能不授予发布、提权或向无关 Session 派单的权限。
 

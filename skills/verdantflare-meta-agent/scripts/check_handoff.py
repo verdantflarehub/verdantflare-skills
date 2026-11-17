@@ -21,12 +21,21 @@ FIELDS = {
 }
 OPTIONAL_FIELDS = {"review_stage", "review_doc_path"}
 ENDPOINT_FIELDS = {"session_key", "service", "agent", "mode", "native_session_id", "generation"}
-REVIEW_STAGES = {"claude_arch", "codex_detail", "claude_escalation", "claude_arch_audit", "acceptance_audit"}
+REVIEW_STAGES = {
+    "claude_arch", "codex_detail", "claude_escalation", "claude_arch_audit", "acceptance_audit",
+    "claude_spot_check", "claude_acceptance_revision",
+}
+# claude_spot_check: T4 spot-check of 1-2 items of the Codex evaluation.
+# claude_arch_audit: legacy alias of claude_spot_check, kept for backward compatibility.
+# claude_acceptance_revision: T1 Claude direct revision/finalization of acceptance chapter 2.
 CLAUDE_CHAR_CAPS = {
     "claude_escalation": 800,
+    "claude_spot_check": 1000,
     "claude_arch_audit": 1000,
     "claude_arch": 1200,
+    "claude_acceptance_revision": 1200,
 }
+ACCEPTANCE_DOC_STAGES = {"acceptance_audit", "claude_acceptance_revision"}
 RD_REVIEW_DOC_RE = re.compile(
     r"^docs/reviews/review_\d{8}_[a-z0-9.-]+_(?:t1|t2|t4)(?:-r(?:[2-9]|[1-9]\d+))?\.md$"
 )
@@ -109,9 +118,11 @@ def _validate_review_and_claude_scope(payload, root: Path) -> None:
             raise InvalidHandoff("review_stage: unsupported review_stage enum")
         review_doc_path = text(payload["review_doc_path"], "review_doc_path")
         relative_file(root, review_doc_path, "review_doc_path")
-        if review_stage == "acceptance_audit":
+        if review_stage in ACCEPTANCE_DOC_STAGES:
             if not ACCEPTANCE_DOC_RE.match(review_doc_path):
-                raise InvalidHandoff("review_doc_path: acceptance_audit requires docs/acceptance/accept_YYYYMMDD_<topic>.md")
+                raise InvalidHandoff(
+                    f"review_doc_path: {review_stage} requires docs/acceptance/accept_YYYYMMDD_<topic>.md"
+                )
         elif not RD_REVIEW_DOC_RE.match(review_doc_path):
             raise InvalidHandoff("review_doc_path: stage requires docs/reviews/review_YYYYMMDD_<topic>_<t1|t2|t4>[-rN].md")
 
@@ -120,13 +131,20 @@ def _validate_review_and_claude_scope(payload, root: Path) -> None:
 
     if recipient_is_claude and not stage_is_claude:
         raise InvalidHandoff(
-            "HO-CLAUDE-SCOPE: recipient claude requires review_stage in claude_arch|claude_escalation|claude_arch_audit"
+            "HO-CLAUDE-SCOPE: recipient claude requires review_stage in "
+            "claude_arch|claude_acceptance_revision|claude_spot_check|claude_escalation|claude_arch_audit"
         )
     if stage_is_claude and not recipient_is_claude:
         raise InvalidHandoff("HO-CLAUDE-SCOPE: claude_* review_stage must target recipient agent claude")
 
     if recipient_is_claude:
-        if payload["allowed_write_paths"]:
+        if review_stage == "claude_acceptance_revision":
+            # Claude directly revises and finalizes the acceptance procedure: only the bound accept_*.md is writable.
+            if any(item != review_doc_path for item in payload["allowed_write_paths"]):
+                raise InvalidHandoff(
+                    "HO-CLAUDE-SCOPE: claude_acceptance_revision may only write review_doc_path (docs/acceptance/accept_*.md)"
+                )
+        elif payload["allowed_write_paths"]:
             raise InvalidHandoff("HO-CLAUDE-SCOPE: claude handoff must be read-only (allowed_write_paths must be [])")
         if not CLAUDE_PLAN_DOC_RE.match(payload["plan_path"]):
             raise InvalidHandoff("HO-CLAUDE-SCOPE: plan_path restricted to docs/[archive/]plan/*.plan.md")

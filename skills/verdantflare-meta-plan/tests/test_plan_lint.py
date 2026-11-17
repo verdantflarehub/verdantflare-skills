@@ -117,10 +117,17 @@ def build_valid_complex_workspace(root: Path, *, t3_author: str = "Gemini") -> d
         "## 1. 当前依据\n\n"
         "- [所属计划](../plan/2026.11.alpha-gov.plan.md)\n\n"
         "## 2. 锁定验收场景与判据\n\n"
+        "验收流程审定记录：\n\n"
+        f"- **执行者起草**：{t3_author} 起草。\n"
+        f"- **研发核验修订**：{detail_reviewer} 直接修订。\n"
+        "- **Claude 修订**：Claude 修订定稿。\n"
+        "- **分歧上报**：无。\n\n"
         "### 2.1 S1：核心门禁验证\n\n"
-        "- **测试对象**：核心门禁模块。\n"
-        "- **执行入口与命令**：运行标准测试套件。\n"
-        "- **量化通过判据**：退出码 `0` 且断言全部通过。\n\n"
+        "- **验收对象**：核心门禁模块。\n"
+        "- **取证流程**：执行者运行标准测试套件。\n"
+        "- **证据内容**：退出码与断言日志。\n"
+        "- **充分性判据**：退出码 `0` 且断言全部通过。\n"
+        "- **判定**：Codex 全面核验，Claude 抽查。\n\n"
         "## 3. 智能体实跑与演示证据\n\n"
         "- `S1` 实跑通过：退出码 `0`，18 项断言全部通过。\n\n"
         "## 4. 防伪锚点与双轨验真\n\n"
@@ -233,7 +240,7 @@ def build_valid_complex_workspace(root: Path, *, t3_author: str = "Gemini") -> d
         "#### 4.1.2 T2：分析影响范围\n\n完成全仓扫描。\n\n"
         "#### 4.1.3 T3：实施子计划\n\n完成编码。\n\n"
         "#### 4.1.4 T4：验收子计划\n\n完成实跑与双轨验真。\n\n"
-        "#### 4.1.5 T5：人类验收子计划\n\n完成 CP1 双抽检与归档。\n\n"
+        "#### 4.1.5 T5：人类验收子计划\n\n呈报 CP1，批准后收尾归档。\n\n"
         "### 4.2 设计规划\n\n- [专题设计](../design/alpha-gov.md)\n\n"
         "## 5. 当前进展\n\n"
         "完成 **4/5 项（80%）**，按末级子任务计数。\n\n"
@@ -254,7 +261,7 @@ def build_valid_complex_workspace(root: Path, *, t3_author: str = "Gemini") -> d
         "  - 关联文档：[专项验收](../acceptance/accept_20261115_alpha-gov.md)\n"
         "  - 关联进展：[T4 变更](../archive/changes/change_20261115_t4-run.md)\n\n"
         "### 5.5 T5 人类验收子计划（0/1）\n\n"
-        "- [ ] T5.1：过 CP1 双抽检并同构归档。\n"
+        "- [ ] T5.1：呈报 CP1，批准后同构归档。\n"
         "  - 关联文档：[专项验收](../acceptance/accept_20261115_alpha-gov.md)\n"
         "  - 关联进展：无\n\n"
         "## 6. 中断恢复\n\n暂无\n\n"
@@ -401,6 +408,17 @@ class PlanLintMutationTests(unittest.TestCase):
             ws = build_valid_complex_workspace(Path(tmp))
             shutil.rmtree(ws["root"] / ".gdrive")
             self.assert_gate(ws["plan"], "cp0", 2, ["PL-GDRIVE-UNMOUNTED"])
+
+    # PL-CP0-PROC: acceptance procedure review record and per-scenario four elements are required at CP0
+    def test_cp0_requires_acceptance_procedure_review(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = build_valid_complex_workspace(Path(tmp))
+            acc_orig = ws["accept"].read_text("utf-8")
+            ws["accept"].write_text(acc_orig.replace("- **Claude 修订**：Claude 修订定稿。\n", ""), encoding="utf-8")
+            self.assert_gate(ws["plan"], "cp0", 1, ["PL-CP0-PROC", "PL-REV-STALE"])
+
+            ws["accept"].write_text(acc_orig.replace("- **充分性判据**：", "- **量化通过判据**："), encoding="utf-8")
+            self.assert_gate(ws["plan"], "cp0", 1, ["PL-CP0-PROC", "PL-REV-STALE"])
 
     # 5. F3a: Missing t2 review or [OPEN] mismatch blocks CP0 with PL-CP0-REV
     def test_f3a_missing_t2_or_open_count_mismatch_blocks_cp0(self):
@@ -986,7 +1004,7 @@ class PlanLintMutationTests(unittest.TestCase):
 
     # 24. P4c: Byte-exact lock-hash regression against live CP0 A03 locked exam + CRLF/BOM invariance
     def test_p4_deterministic_lock_hash_matches_live_cp0_a03_baseline(self):
-        live_accept = SKILL_ROOT.parents[2] / "docs/acceptance/accept_20261114_rd-plan-governance.md"
+        live_accept = SKILL_ROOT.parents[2] / "docs/archive/acceptance/accept_20261114_rd-plan-governance.md"
         self.assertTrue(live_accept.is_file(), f"Missing live acceptance doc: {live_accept}")
         expected_a03_hash = "sha256:150798fa72094168eaa553253f47ff257ddc8f073f4d23eb9c51a8eef56a43ca"
 

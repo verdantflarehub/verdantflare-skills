@@ -31,11 +31,16 @@ RD_REVIEW_REQUIRED_META = ("负责人", "评审助手", "关联计划", "关联�
 RD_REVIEW_STATUSES = {"待修订", "复评中", "已通过", "已废弃"}
 RD_REVIEW_CHAPTERS = (
     "1. 当前依据",
-    "2. 总体架构核验与符合性审计",
-    "3. 工程细节与防漏评审",
+    "2. 架构核验与抽查",
+    "3. 工程细节、防漏与验收核验",
     "4. 架构疑难升级裁定",
     "5. 问题闭环与放行结论",
 )
+# Legacy chapter titles kept valid for existing (in-flight or archived) reports.
+RD_REVIEW_LEGACY_CHAPTERS = {
+    "2. 架构核验与抽查": ("2. 总体架构核验与符合性审计",),
+    "3. 工程细节、防漏与验收核验": ("3. 工程细节与防漏评审",),
+}
 
 ACCEPTANCE_REQUIRED_META = ("负责人", "执行助手", "验真助手", "关联计划", "验收状态", "更新时间")
 ACCEPTANCE_STATUSES = {"考卷草案", "考卷已锁定", "实跑取证中", "智能体已验真", "CP1已通过", "已废弃"}
@@ -44,8 +49,18 @@ ACCEPTANCE_CHAPTERS = (
     "2. 锁定验收场景与判据",
     "3. 智能体实跑与演示证据",
     "4. 防伪锚点与双轨验真",
-    "5. CP1 双抽检核验单",
+    "5. CP1 呈报包",
 )
+ACCEPTANCE_LEGACY_CHAPTERS = {
+    "5. CP1 呈报包": ("5. CP1 双抽检核验单",),
+}
+
+
+def chapters_match(titles, expected, legacy):
+    """Compare H2 titles position by position, accepting legacy aliases."""
+    if len(titles) != len(expected):
+        return False
+    return all(t == e or t in legacy.get(e, ()) for t, e in zip(titles, expected))
 
 
 def parser():
@@ -157,7 +172,7 @@ def check_controlled_contract(path, text, tokens, add):
             add(1, "E", "rd-review-meta", f"missing={missing} duplicate={dup_keys}")
         elif meta.get("评审结论") not in RD_REVIEW_STATUSES:
             add(1, "E", "rd-review-meta", f"invalid 评审结论: {meta.get('评审结论')!r}")
-        if tuple(h2_titles) != RD_REVIEW_CHAPTERS:
+        if not chapters_match(h2_titles, RD_REVIEW_CHAPTERS, RD_REVIEW_LEGACY_CHAPTERS):
             add(1, "E", "rd-review-chapters", f"expected 5 fixed chapters {RD_REVIEW_CHAPTERS}, got {tuple(h2_titles)}")
         if not re.search(r"未闭环\s*HIGH/MEDIUM\s*[：:]\s*\d+", text):
             add(1, "E", "rd-review-summary", "missing '未闭环 HIGH/MEDIUM：<整数>' summary line in chapter 5")
@@ -169,7 +184,7 @@ def check_controlled_contract(path, text, tokens, add):
             add(1, "E", "acceptance-meta", f"missing={missing} duplicate={dup_keys}")
         elif meta.get("验收状态") not in ACCEPTANCE_STATUSES:
             add(1, "E", "acceptance-meta", f"invalid 验收状态: {meta.get('验收状态')!r}")
-        if tuple(h2_titles) != ACCEPTANCE_CHAPTERS:
+        if not chapters_match(h2_titles, ACCEPTANCE_CHAPTERS, ACCEPTANCE_LEGACY_CHAPTERS):
             add(1, "E", "acceptance-chapters", f"expected 5 fixed chapters {ACCEPTANCE_CHAPTERS}, got {tuple(h2_titles)}")
 
 

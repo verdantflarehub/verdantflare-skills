@@ -351,6 +351,35 @@ def compute_lock_hash(accept_path: Path) -> tuple[str, int, str]:
     return digest, scenarios, canon
 
 
+PROC_RECORD_LABELS = ("执行者起草", "研发核验修订", "Claude 修订")
+PROC_SCENARIO_LABELS = ("取证流程", "证据内容", "充分性判据", "判定")
+
+
+def check_acceptance_procedure(acc_doc: "ParsedDoc", issues: list) -> None:
+    """PL-CP0-PROC: Chapter 2 must carry the three-step procedure review record and the four elements per scenario."""
+    label = acc_doc.path.as_posix()
+    h2s = [h for h in acc_doc.headings if h.level == 2]
+    ch2 = next((h for h in h2s if re.match(r"^2\.\s+", h.title)), None)
+    if ch2 is None:
+        return
+    scen_heads = [
+        h for h in acc_doc.headings if h.level == 3 and ch2.line < h.line <= ch2.end_line and re.match(r"^2\.\d+\s+S\d+\b", h.title)
+    ]
+    intro_end = scen_heads[0].line - 1 if scen_heads else ch2.end_line
+    intro = "\n".join(acc_doc.lines[ch2.line : intro_end])
+    missing_rec = [k for k in PROC_RECORD_LABELS if not re.search(r"\*\*" + re.escape(k) + r"\*\*\s*[：:]", intro)]
+    if missing_rec:
+        issues.append(
+            Issue("PL-CP0-PROC", f"考卷第 2 章开头缺验收流程审定记录项 {missing_rec}（执行者起草 → 研发核验修订 → Claude 修订）", label, ch2.line)
+        )
+    for idx, h in enumerate(scen_heads):
+        end = scen_heads[idx + 1].line - 1 if idx + 1 < len(scen_heads) else ch2.end_line
+        body = "\n".join(acc_doc.lines[h.line : end])
+        missing = [k for k in PROC_SCENARIO_LABELS if not re.search(r"\*\*" + re.escape(k) + r"\*\*\s*[：:]", body)]
+        if missing:
+            issues.append(Issue("PL-CP0-PROC", f"考卷场景 '{h.title}' 缺验收流程要素 {missing}", label, h.line))
+
+
 def compute_review_hash(stage: str, accept_path: Path, design_path: Path | None = None) -> str:
     base_stage = stage.lower().split("-r")[0]
     if base_stage in ("t1", "t2"):
@@ -736,7 +765,8 @@ def extract_section_claimed_agents(section_text: str) -> set[str]:
             claimed.add(_norm_agent_name(m.group(1)))
         m_lead = re.match(
             r"^\s*(?:-\s*)?(?:\*\*)?(Claude|Codex|Gemini|Grok)(?:\*\*)?\s*(?:[（(][^）)]*[）)])?\s*"
-            r"(?:细节评审|防漏审|全仓防漏|反作弊|完成脚本|核验通过|基于|评审通过|复核通过|架构审计|总体架构|[：:])",
+            r"(?:细节评审|防漏审|全仓防漏|反作弊|完成脚本|核验通过|基于|评审通过|复核通过|架构审计|总体架构"
+            r"|全面核验|抽查|验收流程修订|修订定稿|[：:])",
             ln,
             re.IGNORECASE,
         )
@@ -1010,7 +1040,7 @@ def check_review_independence_and_roles(
     # Rule 1: Claude must NEVER serve as detail / anti-omission / anti-cheat reviewer.
     for agent, role in roles:
         if agent == "Claude" and re.search(r"细节|防漏|反作弊|脚本|codex_detail", role):
-            issues.append(Issue("PL-REV-INDEP", f"{rev_doc.path.name}: Claude 严禁承担工程细节或脚本反作弊评审", rel_label, 1))
+            issues.append(Issue("PL-REV-INDEP", f"{rev_doc.path.name}: Claude 严禁承担工程细节审或替补验收结果核验", rel_label, 1))
             return
 
     if "Claude" in ch3_claimed or (stage == "t2" and "Claude" in reviewer_agents and not rd_header_reviewers):
@@ -1026,7 +1056,7 @@ def check_review_independence_and_roles(
             issues.append(Issue(missing_code, f"{rev_doc.path.name}: 未登记有效评审助手", rel_label, 1))
             return
         if "Claude" not in reviewer_agents or "Claude" not in ch2_claimed or not has_full_receipt(ch2):
-            issues.append(Issue(missing_code, f"{rev_doc.path.name}: 缺少第 2 章 Claude 架构核验/审计原生会话收据", rel_label, 1))
+            issues.append(Issue(missing_code, f"{rev_doc.path.name}: 缺少第 2 章 Claude 架构核验/抽查原生会话收据", rel_label, 1))
             return
         if ch2_claimed != {"Claude"}:
             issues.append(
@@ -1035,7 +1065,7 @@ def check_review_independence_and_roles(
             return
 
     if not rd_header_reviewers or not (ch3_claimed & RD_AGENTS) or not has_full_receipt(ch3):
-        issues.append(Issue(missing_code, f"{rev_doc.path.name}: 缺少第 3 章研发智能体工程细节/反作弊原生会话收据", rel_label, 1))
+        issues.append(Issue(missing_code, f"{rev_doc.path.name}: 缺少第 3 章研发智能体工程细节/验收核验原生会话收据", rel_label, 1))
         return
 
     if ch3_claimed != rd_header_reviewers:
@@ -1176,7 +1206,7 @@ def verify_acceptance_t4_binding(acc_doc: ParsedDoc, t4_rev: ParsedDoc, issues: 
         issues.append(
             Issue(
                 "PL-REV-INDEP",
-                f"{acc_doc.path.name}: T4 验真助手必须由 Claude 与唯一研发细节审助手组成（实测 {sorted(t4_reviewers)}）",
+                f"{acc_doc.path.name}: T4 验真助手必须由 Claude（抽查）与唯一研发核验助手组成（实测 {sorted(t4_reviewers)}）",
                 acc_label,
                 1,
             )
@@ -1496,6 +1526,8 @@ def check_plan(
                     issues.append(Issue("PL-CP0-ACC", "预设考卷第 2 章未定义 S1..Sn 锁定验收场景", acc_doc.path.as_posix(), 1))
             except ValueError as exc:
                 issues.append(Issue("PL-CP0-ACC", str(exc), acc_doc.path.as_posix(), 1))
+            else:
+                check_acceptance_procedure(acc_doc, issues)
 
         # PL-CP0-REV / PL-REV-STALE / PL-REV-INDEP
         t1_rev = eff_reviews.get("t1")
@@ -1606,7 +1638,7 @@ def check_plan(
         t4_rev = eff_reviews.get("t4")
         authors_cp1, sessions_cp1, author_errs_cp1 = extract_stage_authors(doc, {3, 4})
         if not t4_rev:
-            issues.append(Issue("PL-CP1-REV", "缺少反向关联本计划的 t4 阶段双轨验真与架构审计报告", p_label, 1))
+            issues.append(Issue("PL-CP1-REV", "缺少反向关联本计划的 t4 阶段核验与抽查报告", p_label, 1))
         else:
             if t4_rev.header_fields.get("评审结论", "").strip() != "已通过" or not check_review_open_counts(t4_rev):
                 issues.append(
