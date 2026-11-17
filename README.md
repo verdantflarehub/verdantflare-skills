@@ -34,6 +34,7 @@ Project、Artifact、Blender 三项基础技能已实现并完成本地及 5090 
 - [`verdantflare-project`](skills/verdantflare-project/SKILL.md)：项目创建、固定修订、工作副本保存与恢复。
 - [`verdantflare-artifact`](skills/verdantflare-artifact/SKILL.md)：内容上传、受控下载、摘要校验与上传恢复。
 - [`verdantflare-blender`](skills/verdantflare-blender/SKILL.md)：指定实例的场景操作、幂等恢复与 Project 工程归档。
+- [`verdantflare-comfyui`](skills/verdantflare-comfyui/SKILL.md)：指定 ComfyUI 实例与 `comfyui-api` 无头通道的模型齐套、白盒排障自愈及 `WorkflowAPISpec v1` 发布调用。
 
 三项目录各自包含完整引用资料。此前源码联调未安装客户端；本轮六包的发布与安装入口见首节。Project/Artifact 的本地工作副本操作复用 Studio 0.5.50 的 `studio-workspace`；宿主 MCP 仍是首选入口。
 Blender 0.1.5 的首次工程恢复已通过干净工作副本、真实内容服务、后台 Blender 编辑保存及重新打开验证。Project/Artifact 已完成 Windows↔Linux 往返；第二台物理 Blender 主机和完整桌面验收仍未覆盖。
