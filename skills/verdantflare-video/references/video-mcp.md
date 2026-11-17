@@ -63,6 +63,8 @@ World输入先解析已授权固定版本，再导入或关联当前项目。记
 
 本地 H3（`h3-fasth3` / `h3-singularity`）生成前调用 `video.preflight`，使用与 create 相同的生成参数但不含 idempotency_key。返回 resolved_output、reference_mapping、reference_media、input_digest 和实际 Prompt，不创建任务。核对图片、视频配对音轨、独立音频标签后保存请求；服务不替用户编写批准事实。音频单参考要求显式画幅。
 
+本地 H3 路由在 `video.capabilities.routes[].image_guidance` 中声明 `modes: ["reference", "first_frame"]`、`hard_geometry_lock: false` 与 `conditioning_strength: "soft_under_multi_reference_cross_style"`。核查确认端到端未发现参数丢失证据，单图实验证明第 `0` 帧条件消费路径有效，但多参考跨画风下属于软条件、不保证硬几何锁定；要求固定机位写实定妆的镜头须先产出同构图写实首帧定妆图，再进入视频动作生成。
+
 ## 4. 状态与结果
 
 创建成功后先保存服务返回的原始任务ID，再轮询。当前响应可能同时返回 `task_id` / `video_task_id`；按当前Schema传入受支持字段，保留原值，不改写成UUID。常见状态为 `queued`、`running`、`succeeded`、`failed`、`cancelled`；未知状态按协议错误处理。

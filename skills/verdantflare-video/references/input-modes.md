@@ -31,6 +31,14 @@ fal 的 `prompt_expansion_mode` 会产生可能不同于用户原文的 `expande
 - fal endpoint、API Key、供应商 request ID 和结果 URL 都由 Video MCP 管理，不进入 Skill 请求或项目记录；
 - 新模式必须先有声明式部署、领域 MCP 字段、输入校验、Provenance 和真实验收，再修改 Skill。
 
+## 本地 H3 首帧条件（`image_guidance="first_frame"`）与两步工作流边界
+
+本地 H3 路由（`route=h3-fasth3` 与 `route=h3-singularity`）均开放 `image_guidance` 参数（取值 `"reference"` 或 `"first_frame"`，默认 `"reference"`）：
+
+- 传 `image_guidance="first_frame"` 时，服务端将 `references.images[0]` 绑定到第 `0` 帧 `PackedLayout` 条件槽位；`images[0]` 分辨率必须与目标输出像素网格精确一致，且不得与 `references.videos` 同时传入。
+- 实证控制边界：端到端核查未发现参数丢失证据；单图静止保持对照实验（第 `0` 帧边缘 `IoU 0.9983`）证明首帧条件消费路径真实有效；但在多参考跨画风转换（如拿 3D 白模渲染图作 `images[0]` 首帧，同时叠加多张写实人物/服装参考图并要求去白模写实重绘）下，`first_frame` 属于软条件引导（`hard_geometry_lock=false`），不保证硬几何透视锁定或像素级复制。
+- 生产执行边界：凡要求固定机位、精确空间透视且需写实人物定妆的镜头，不得直接将白模或异画风参考塞入多参考视频生成充当硬首帧锁；必须先在图像阶段产出同构图写实首帧定妆图并通过图像层核验，再将该写实首帧送入视频模型执行动作生成。
+
 ## 模式选择原则
 
-当上层只需要固定开场构图时，需求语义属于 I2VA；需要严格起止构图时属于 FL2VA；只需要身份、造型、动作或声线参考时属于 Ref2VA。当前接口不能满足 I2VA/FL2VA 语义时，应在提交前报告能力缺口，不用 Ref2VA 假装等价完成。
+当上层只需要固定开场构图时，需求语义属于 I2VA；需要严格起止构图时属于 FL2VA；只需要身份、造型、动作或声线参考时属于 Ref2VA。本地 H3 的 `image_guidance="first_frame"` 在同画风写实首帧就绪后可承担首帧引导，但多参考跨画风下不提供硬几何锁定；当前接口不能满足硬锁定或 FL2VA 语义时，应在提交前如实说明边界或先补齐同构图写实首帧定妆图，不用纯多参考 Ref2VA 假装等价完成。
