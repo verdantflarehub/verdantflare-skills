@@ -12,7 +12,7 @@
 
 调用当前注册的创建工具前将Attempt置为 `submitting`。成功返回后先保存原始任务ID，再查询状态。未收到明确提交结果时记录 `submission_unknown`，按原幂等键/任务ID恢复；不能将网络超时猜成失败，也不能换渠道或新建幂等键重放。
 
-- `queued` / `running`：保存最近状态，继续查询原任务。
+- `queued` / `running`：保存最近状态，继续查询原任务（本地 GPU 路由出现 `waiting_gpu_lease` 或 `queue_reason` 表示正在 Station GPU 调度器排队等待显存或按需扩容，严禁当作故障重提或切换渠道）。
 - `succeeded`：读取结果，进入媒体验证。
 - `failed` / `cancelled`：保存错误或取消状态，结束本次Attempt。
 - 未知状态：保留原始值并核查协议，不映射成成功或已确认失败。

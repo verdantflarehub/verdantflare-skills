@@ -21,32 +21,34 @@ Project、Artifact 和 World 的归属遵循[共同接入规则](https://github.
 
 每次只进入一个能力文件；需要组合多个能力时，先完成前一个文件的输出和验证，再把它作为下一个文件的输入。不要把“独立生成”“翻唱”“曲谱提取”“换声”和“多声部”当成同一个调用。
 
-| 一键能力 | 独立引导文件 |
-| --- | --- |
-| 视频配乐、旁白底乐、纯器乐 | [贴片配乐](references/picture-scoring.md) |
-| 生成新歌，不保留参考旋律 | [一键独立生成](references/one-click-independent-generation.md) |
-| 音频提取待审可编辑曲谱 | [一键提取曲谱](references/one-click-score-extraction.md) |
-| 参考音频与歌词制作翻唱 | [一键无曲谱翻唱](references/one-click-cover.md) |
-| 按曲谱与歌词约束翻唱 | [一键曲谱约束翻唱](references/one-click-score-constrained-cover.md) |
-| 保留歌曲，只替换指定声线 | [一键单歌手换声](references/one-click-voice-replacement.md) |
-| 两条独立声部制作对唱 | [一键男女对唱](references/one-click-duet.md) |
-| 三人及以上独立声部合唱 | [一键多人合唱](references/one-click-ensemble.md) |
+| 一键能力                   | 独立引导文件                                                        |
+| -------------------------- | ------------------------------------------------------------------- |
+| 视频配乐、旁白底乐、纯器乐 | [贴片配乐](references/picture-scoring.md)                           |
+| 生成新歌，不保留参考旋律   | [一键独立生成](references/one-click-independent-generation.md)      |
+| 音频提取待审可编辑曲谱     | [一键提取曲谱](references/one-click-score-extraction.md)            |
+| 参考音频与歌词制作翻唱     | [一键无曲谱翻唱](references/one-click-cover.md)                     |
+| 按曲谱与歌词约束翻唱       | [一键曲谱约束翻唱](references/one-click-score-constrained-cover.md) |
+| 保留歌曲，只替换指定声线   | [一键单歌手换声](references/one-click-voice-replacement.md)         |
+| 两条独立声部制作对唱       | [一键男女对唱](references/one-click-duet.md)                        |
+| 三人及以上独立声部合唱     | [一键多人合唱](references/one-click-ensemble.md)                    |
 
 ## 2. 阶段参考
 
-| 当前阶段                                     | 按需读取                                                                                                                                    |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| 进入远端生成、翻唱、训练或局部重绘           | [制作前预检](references/preflight.md)，核对人声来源、模型 ID、已批准范围、预算及实际 MCP 能力                                             |
-| 企划、原创候选、翻唱、分轨、转换、对齐或返工 | [工作流](references/workflow.md) 的对应阶段                                                                                                 |
-| 修复某一时间区间、尾奏或局部演唱             | [局部重绘](references/local-redraw.md)；仅在预检确认真实条件音频编辑后端可用时执行                                                           |
-| 指定音色换声，或换声后细节流失               | [换声保真与返工](references/vocal-replacement-mix.md)；选定候选后先识别需要保留的层次，返工时复用已有资产                                     |
-| 男女对唱、多人合唱或多声部换声               | [多声部制作](references/multi-vocal.md)；逐歌手确认声源、全曲对齐的独立轨与实际混音能力                                                       |
-| 编写原创企划                                 | [全局规范](references/全局-审核规范.md)、[歌词规范](references/歌词-审核规范.md)、[编曲规范](references/编曲-审核规范.md)，再按下方曲风路由 |
-| 输入输出、命名、目录或质量检查               | [交付契约](references/artifacts.md)                                                                                                         |
-| 原始人声准备或训练                           | [人声准备](references/voice-preparation.md)                                                                                                 |
-| 生成后 18+ 内容分级评估与标记                | [评估步骤](references/content-rating-step.md)、[评估规范](references/content-rating-rubric.md)                                               |
-| 候选选择、批准、终审或恢复审核记录           | [审核门](references/review-gates.md)                                                                                                        |
-| 配置问题                                     | [环境说明](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-music-v0.4.1/skills/ENVIRONMENT.md)                                                                                                               |
+| 当前阶段                                     | 按需读取                                               |
+| -------------------------------------------- | ------------------------------------------------------ |
+| 进入远端生成、翻唱、训练或局部重绘           | [制作前预检](references/preflight.md)                  |
+| 企划、原创候选、翻唱、分轨、转换、对齐或返工 | [工作流](references/workflow.md)                       |
+| 修复某一时间区间、尾奏或局部演唱             | [局部重绘](references/local-redraw.md)                 |
+| 指定音色换声，或换声后细节流失               | [换声保真与返工](references/vocal-replacement-mix.md)  |
+| 男女对唱、多人合唱或多声部换声               | [多声部制作](references/multi-vocal.md)                |
+| 编写原创企划                                 | [全局规范](references/全局-审核规范.md) 等三份通用规范 |
+| 输入输出、命名、目录或质量检查               | [交付契约](references/artifacts.md)                    |
+| 原始人声准备或训练                           | [人声准备](references/voice-preparation.md)            |
+| 生成后 18+ 内容分级评估与标记                | [评估步骤](references/content-rating-step.md) 与规范   |
+| 候选选择、批准、终审或恢复审核记录           | [审核门](references/review-gates.md)                   |
+| 配置问题                                     | [环境说明](../ENVIRONMENT.md)                          |
+
+阶段补充约束：制作前预检须核对人声来源、模型 ID、已批准范围、预算及实际 MCP 能力；局部重绘仅在预检确认真实条件音频编辑后端可用时执行；换声保真须在选定候选后先识别保留层次并复用已有资产；多声部制作须逐歌手确认声源、全曲对齐独立轨与实际混音能力；编写原创企划先读[全局规范](references/全局-审核规范.md)、[歌词规范](references/歌词-审核规范.md)、[编曲规范](references/编曲-审核规范.md)再按下方曲风路由；生成后分级同时遵循[评估规范](references/content-rating-rubric.md)。
 
 音符驱动对唱进入预混或整曲前，按 [多声部制作](references/multi-vocal.md) 的 `duet-score-v1` 计划运行 `scripts/validate_duet.py`；自然演唱源换声前运行 `scripts/audit_performance_voice_source.py`。已有合格对唱基线的单声部替换可用 `scripts/replace_performance_duet_voice.py`；若须更换分离伴奏，先按 [多声部制作](references/multi-vocal.md) 判断能否用 `scripts/prepare_duet_replacement_backing.py` 恢复基线电平。逐句编排后用**上一版获认可的试听**作参照运行 `scripts/validate_performance_duet.py`。角色窗口轨通过不等于可独立重混的男女干声；需加伴奏轨核验能否重建试听。任一适用检查退出码非零时，只保留为诊断候选，不能调用母带或声部扩展；脚本通过也仍需逐句与整曲人耳听审。
 
@@ -78,7 +80,7 @@ Project、Artifact 和 World 的归属遵循[共同接入规则](https://github.
 
 写企划不依赖远端预检。进入远端阶段时优先使用可用的 `workflow.preflight`；旧版 Music MCP 没有此工具时按 [预检](references/preflight.md) 的兼容路径检查当前阶段，不把“工具不存在”写成服务故障，也不伪称预检通过。人声显示名不能代替实际模型 ID；局部重绘必须有真实编辑能力。
 
-通过已配置的 Music MCP 和受控 Artifact 执行；宿主未注入工具时可使用该 MCP 的标准客户端，不直连供应商。训练使用有权处理且已批准的材料，已批准模型直接复用。只在确需用户听审或新增授权的地方暂停；候选选定后，分轨技术检查通过即可继续已批准模型的转换，不单独索取分轨批准。
+通过已配置的 Music MCP 和受控 Artifact 执行；宿主未注入工具时可使用该 MCP 的标准客户端，不直连供应商。本地 GPU 推理阶段（`MiniMax Music 3` 跨双物理卡原子预约、`ACE-Step`、`UVR5` 分轨与 `RVC` 换声）由 Music MCP 自动经 Station GPU 调度器（`:5056`）申请显存租约、触发按需冷启动（`0 -> 1`）并在推理后回收显存；状态处于 `queued`（`waiting_gpu_lease`）表示正在等待显存释放或冷启动就绪，继续轮询原任务 ID，严禁重复提单或手动关停其他 GPU 工作负载。训练使用有权处理且已批准的材料，已批准模型直接复用。只在确需用户听审或新增授权的地方暂停；候选选定后，分轨技术检查通过即可继续已批准模型的转换，不单独索取分轨批准。
 
 保留已认可演唱而重做伴奏时，先读[局部重绘](references/local-redraw.md)末节的音乐一致性约束；帧长与哈希通过不能代替和声、拍点、乐句核验及实际合听。
 
