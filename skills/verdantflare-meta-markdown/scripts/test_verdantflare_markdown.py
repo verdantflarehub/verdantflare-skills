@@ -114,6 +114,19 @@ class CheckMdTest(unittest.TestCase):
             self.assertEqual(check_md.detect_doc_type(rev_ok), "rd-review")
             self.assertEqual(check_md.check_file(rev_ok), [])
 
+            # New chapter titles are accepted alongside the legacy ones
+            rev_new = root / "docs/reviews/review_20261117_demo_t4.md"
+            write_lf(
+                rev_new,
+                valid_rev_txt.replace("2. 总体架构核验与符合性审计", "2. 架构核验与抽查").replace(
+                    "3. 工程细节与防漏评审", "3. 工程细节、防漏与验收核验"
+                ),
+            )
+            self.assertEqual(check_md.check_file(rev_new), [])
+            rev_wrong = root / "docs/reviews/review_20261117_demo_t1.md"
+            write_lf(rev_wrong, valid_rev_txt.replace("2. 总体架构核验与符合性审计", "2. 随意章名"))
+            self.assertEqual({c for _, _, c, _ in check_md.check_file(rev_wrong)}, {"rd-review-chapters"})
+
             # Fail-closed on illegal filename or bad status/chapters inside docs/reviews/
             rev_bad = root / "docs/reviews/random_notes.md"
             write_lf(rev_bad, "# Notes\n\n## 1. Foo\n")
@@ -135,6 +148,10 @@ class CheckMdTest(unittest.TestCase):
             write_lf(acc_ok, valid_acc_txt)
             self.assertEqual(check_md.detect_doc_type(acc_ok), "acceptance")
             self.assertEqual(check_md.check_file(acc_ok), [])
+
+            acc_new = root / "docs/acceptance/accept_20261117_demo.md"
+            write_lf(acc_new, valid_acc_txt.replace("5. CP1 双抽检核验单", "5. CP1 呈报包"))
+            self.assertEqual(check_md.check_file(acc_new), [])
 
             acc_bad = root / "docs/acceptance/bad_name.md"
             write_lf(acc_bad, valid_acc_txt.replace("验收状态：考卷已锁定", "验收状态：随便写"))

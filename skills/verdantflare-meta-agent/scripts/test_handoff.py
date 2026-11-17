@@ -31,11 +31,13 @@ class HandoffTests(unittest.TestCase):
         data["allowed_write_paths"] = []
         data["deliverables"] = ["docs/reviews/review_20261115_demo_t4.md"]
         data["review_stage"] = stage
-        data["review_doc_path"] = (
-            "docs/reviews/review_20261115_demo_t4.md"
-            if stage == "claude_arch_audit"
-            else "docs/reviews/review_20261115_demo_t1.md"
-        )
+        if stage == "claude_acceptance_revision":
+            data["review_doc_path"] = "docs/acceptance/accept_20261115_demo.md"
+            data["deliverables"] = ["docs/acceptance/accept_20261115_demo.md"]
+        elif stage in {"claude_arch_audit", "claude_spot_check"}:
+            data["review_doc_path"] = "docs/reviews/review_20261115_demo_t4.md"
+        else:
+            data["review_doc_path"] = "docs/reviews/review_20261115_demo_t1.md"
         return data
 
     def test_valid_and_revision_preserve_task_identity(self):
@@ -126,8 +128,11 @@ class HandoffTests(unittest.TestCase):
             validate(bad_dir2, self.root)
 
     def test_ho_claude_scope_stage_binding_and_readonly_whitelist(self):
-        # Compliant claude_arch_audit, claude_arch, and claude_escalation pass
-        for stage in ("claude_arch", "claude_escalation", "claude_arch_audit"):
+        # Compliant claude_arch, claude_acceptance_revision, claude_spot_check, claude_escalation
+        # and legacy claude_arch_audit pass
+        for stage in (
+            "claude_arch", "claude_acceptance_revision", "claude_spot_check", "claude_escalation", "claude_arch_audit"
+        ):
             ok = self._claude_handoff(stage)
             self.assertEqual(validate(ok, self.root)["review_stage"], stage)
 
@@ -173,6 +178,66 @@ class HandoffTests(unittest.TestCase):
         py_change["change_path"] = "scripts/plan_lint.py"
         with self.assertRaisesRegex(InvalidHandoff, "HO-CLAUDE-SCOPE"):
             validate(py_change, self.root)
+
+    def test_ho_claude_new_acceptance_model_stages(self):
+        # T4 spot-check of 1-2 Codex evaluation items: read-only, bound to a t4 review doc, may read acceptance doc
+        spot = self._claude_handoff("claude_spot_check")
+        acc = self.root / "docs/acceptance/accept_20261115_demo.md"
+        acc.parent.mkdir(parents=True, exist_ok=True)
+        acc.write_text("# Accept\n", "utf-8")
+        spot["inputs"] = ["docs/acceptance/accept_20261115_demo.md"]
+        self.assertEqual(validate(spot, self.root)["review_stage"], "claude_spot_check")
+
+        spot_write = self._claude_handoff("claude_spot_check")
+        spot_write["allowed_write_paths"] = ["docs/reviews/review_20261115_demo_t4.md"]
+        with self.assertRaisesRegex(InvalidHandoff, "read-only"):
+            validate(spot_write, self.root)
+
+        spot_wrong_doc = self._claude_handoff("claude_spot_check")
+        spot_wrong_doc["review_doc_path"] = "docs/acceptance/accept_20261115_demo.md"
+        with self.assertRaisesRegex(InvalidHandoff, "docs/reviews/review_"):
+            validate(spot_wrong_doc, self.root)
+
+        spot_long = self._claude_handoff("claude_spot_check")
+        spot_long["goal"] = "戊" * 1001
+        with self.assertRaisesRegex(InvalidHandoff, r"claude_spot_check limit \(1000\)"):
+            validate(spot_long, self.root)
+
+        # T1 acceptance procedure revision: Claude may directly edit only the bound accept_*.md
+        rev = self._claude_handoff("claude_acceptance_revision")
+        rev["allowed_write_paths"] = ["docs/acceptance/accept_20261115_demo.md"]
+        self.assertEqual(validate(rev, self.root)["review_stage"], "claude_acceptance_revision")
+
+        rev_other = self._claude_handoff("claude_acceptance_revision")
+        rev_other["allowed_write_paths"] = ["docs/acceptance/accept_20261115_other.md"]
+        with self.assertRaisesRegex(InvalidHandoff, "HO-CLAUDE-SCOPE: claude_acceptance_revision may only write"):
+            validate(rev_other, self.root)
+
+        rev_script = self._claude_handoff("claude_acceptance_revision")
+        rev_script["allowed_write_paths"] = ["scripts/plan_lint.py"]
+        with self.assertRaisesRegex(InvalidHandoff, "HO-CLAUDE-SCOPE"):
+            validate(rev_script, self.root)
+
+        rev_review_doc = self._claude_handoff("claude_acceptance_revision")
+        rev_review_doc["review_doc_path"] = "docs/reviews/review_20261115_demo_t1.md"
+        with self.assertRaisesRegex(InvalidHandoff, "docs/acceptance/accept_"):
+            validate(rev_review_doc, self.root)
+
+        # Source/script detail review is still rejected for every Claude stage
+        py_file = self.root / "scripts/plan_lint.py"
+        py_file.parent.mkdir(parents=True, exist_ok=True)
+        py_file.write_text("print('hi')\n", "utf-8")
+        for stage in ("claude_spot_check", "claude_acceptance_revision"):
+            py_input = self._claude_handoff(stage)
+            py_input["inputs"] = ["scripts/plan_lint.py"]
+            with self.subTest(stage=stage), self.assertRaisesRegex(InvalidHandoff, "HO-CLAUDE-SCOPE"):
+                validate(py_input, self.root)
+
+        # New Claude stages cannot be sent to Codex
+        to_codex = self._claude_handoff("claude_spot_check")
+        to_codex["recipient"].update(service="local-codex", agent="codex", mode="plugin")
+        with self.assertRaisesRegex(InvalidHandoff, "HO-CLAUDE-SCOPE"):
+            validate(to_codex, self.root)
 
     def test_ho_claude_scope_total_text_chars_caps_and_anti_split_bypass(self):
         # Splitting long text across secondary list fields (constraints + verification + completion_criteria)
