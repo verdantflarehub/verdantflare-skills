@@ -20,7 +20,7 @@ from .schema import validate
 from .snapshot import Snapshot, turn_result
 from .store import Store, TERMINAL, allowed_cwd
 from .approval_ui import ApprovalUI, decisions
-from .permissions import PermissionSelection, assert_effective_selection, assert_supported_thread, effective_permissions, assert_no_pending_permission_conflict
+from .permissions import PermissionSelection, assert_effective_selection, assert_supported_thread, effective_permissions, assert_no_pending_permission_conflict, permission_comparison
 
 
 def public_task(task):
@@ -225,16 +225,29 @@ class Engine:
                     filtered_out_count += 1
                     continue
                 reachable = False
+                alignment = {'status': 'unknown', 'reason': 'owner_unavailable'}
                 if plugin:
                     try:
                         await plugin.settings(thread['id'])
                         reachable = True
-                    except BridgeError:
-                        pass
+                        try:
+                            owner = await plugin.follow(thread['id'])
+                            snapshot = await self._snapshot(plugin, thread['id'])
+                            _, selection = await plugin.permission_selection(thread['id'], owner)
+                            assert_supported_thread(snapshot.state)
+                            alignment = permission_comparison(snapshot.state, selection)
+                        except Exception as error:
+                            # A diagnostic read failure must not remove this or later rows.
+                            alignment = {'status': 'unknown', 'reason': error.code if isinstance(error, BridgeError)
+                                         else 'permission_read_failed'}
+                    except Exception as error:
+                        alignment = {'status': 'unknown', 'reason': error.code if isinstance(error, BridgeError)
+                                     else 'permission_read_failed'}
                 rows.append({'thread_id': thread['id'], 'title': thread.get('name') or thread.get('preview'),
-                             'cwd': thread['cwd'], 'owner_reachable': reachable})
+                             'cwd': thread['cwd'], 'owner_reachable': reachable,
+                             'permission_alignment': alignment})
             plugin_ver = detect_codex_plugin_version(self.config.get('extension'))
-            return {'version': '0.2.1', 'plugin_version': plugin_ver,
+            return {'version': '0.2.2', 'plugin_version': plugin_ver,
                     'service_build': dict(SERVICE_BUILD), 'worker_instance': self.owner,
                     'worker_health': self.worker_health(),
                     'plugin_concurrency': {'scope': 'thread', 'limit': None, 'automatic_queue': False},

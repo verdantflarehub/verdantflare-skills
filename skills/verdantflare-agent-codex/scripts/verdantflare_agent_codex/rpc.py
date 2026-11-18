@@ -1,8 +1,43 @@
 """JSONL process transport. Timed-out writes are never automatically retried."""
 import asyncio
 import json
+import hashlib
 import os
 from .errors import BridgeError
+
+
+def backend_rejection(method, error):
+    """Classify explicit backend evidence; never infer ownership from UI visibility.
+
+    Untrusted provider text may contain prompts, paths or secrets. Return a digest
+    and numeric wire code instead of copying that text into public task logs.
+    """
+    error = error if isinstance(error, dict) else {}
+    message = error.get('message')
+    message = message if isinstance(message, str) else ''
+    details = {'method': method,
+               'backend_error_code': error.get('code') if type(error.get('code')) is int else None,
+               'backend_message_sha256': hashlib.sha256(message.encode()).hexdigest()}
+    if method != 'thread/resume':
+        return BridgeError('BACKEND_ERROR', 'Backend rejected the request', details=details)
+    normalized = message.strip().lower().rstrip('.')
+    # Deliberately exact: generic busy/locked/already-loaded errors do not prove
+    # that a plugin owns the thread. Unknown messages remain unclassified.
+    if normalized in ('thread is owned by plugin', 'thread is owned by the vscode plugin'):
+        return BridgeError('THREAD_OWNED_BY_PLUGIN',
+            'Backend explicitly reports plugin ownership; no turn was submitted. '
+            'Use the authorized plugin path after checking permission_alignment, or let the user '
+            'release the panel ownership before resuming the original managed task.',
+            reason='backend_reported_plugin_owner', details=details)
+    if normalized in ('thread not found', 'thread does not exist'):
+        reason = 'thread_not_found'
+    else:
+        reason = 'unclassified_backend_rejection'
+    return BridgeError('THREAD_RESUME_REJECTED',
+        'Backend rejected thread/resume; no turn was submitted. Plugin ownership is not established. '
+        'Inspect the original task, native thread history and backend diagnostics; do not replay '
+        'or change permissions automatically. Use the plugin path only when authorized and '
+        'permission_alignment is match.', reason=reason, details=details)
 
 
 class JsonlProcess:
@@ -11,6 +46,7 @@ class JsonlProcess:
         self.env = env
         self.process = None
         self.pending = {}
+        self.pending_methods = {}
         self.events = asyncio.Queue(maxsize=2048)
         self.sequence = 0
         self.reader_task = None
@@ -33,7 +69,7 @@ class JsonlProcess:
                 if 'method' not in message and message.get('id') in self.pending:
                     future = self.pending.pop(message['id'])
                     if 'error' in message:
-                        future.set_exception(BridgeError('BACKEND_ERROR', 'Backend rejected the request'))
+                        future.set_exception(backend_rejection(self.pending_methods.get(message['id']), message['error']))
                     else:
                         future.set_result(message.get('result'))
                 else:
@@ -66,6 +102,7 @@ class JsonlProcess:
         request_id = self.sequence
         future = asyncio.get_running_loop().create_future()
         self.pending[request_id] = future
+        self.pending_methods[request_id] = method
         try:
             await self.send({'id': request_id, 'method': method, 'params': params})
             return await asyncio.wait_for(future, timeout)
@@ -73,6 +110,7 @@ class JsonlProcess:
             raise BridgeError('BACKEND_TIMEOUT', 'Request outcome is unknown; do not replay writes') from None
         finally:
             self.pending.pop(request_id, None)
+            self.pending_methods.pop(request_id, None)
 
     async def close(self):
         self.closed = True

@@ -1,4 +1,5 @@
 import asyncio
+import os
 from copy import deepcopy
 from pathlib import Path
 import tempfile
@@ -13,6 +14,11 @@ from verdantflare_agent_codex.store import canonical
 
 class PluginPermissionTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        # These tests use fake backends and temporary databases only. Do not let
+        # the parent delegated shell's depth flag block the isolated test engine.
+        depth = patch.dict(os.environ, {'VERDANTFLARE_AGENT_CODEX_DEPTH': ''})
+        depth.start()
+        self.addCleanup(depth.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.owner = "owner"

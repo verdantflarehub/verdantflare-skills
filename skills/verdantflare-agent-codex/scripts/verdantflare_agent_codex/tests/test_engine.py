@@ -1,4 +1,6 @@
 import asyncio
+import json
+import os
 import tempfile
 import time
 import unittest
@@ -39,6 +41,11 @@ class FakeApp:
 
 class EngineTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        # These tests use fake backends and temporary databases only. Do not let
+        # the parent delegated shell's depth flag block the isolated test engine.
+        depth = patch.dict(os.environ, {'VERDANTFLARE_AGENT_CODEX_DEPTH': ''})
+        depth.start()
+        self.addCleanup(depth.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.patch = patch('verdantflare_agent_codex.engine.AppServer', FakeApp)
@@ -62,6 +69,25 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         reply = await self.engine.call('codex_task_start', dict(mode='managed', cwd=str(self.root), prompt='test', request_id='test'))
         await self.until(reply['task_id'], 'running')
         return reply['task_id'], FakeApp.instances[-1]
+
+    async def test_managed_resume_rejection_is_persisted_without_new_turn(self):
+        from verdantflare_agent_codex.rpc import backend_rejection
+        task_id, app = await self.start_task()
+        await app.events.put({'method': 'turn/completed', 'params': {'threadId': 'thread',
+            'turn': {'id': 'turn', 'status': 'completed', 'items': []}}})
+        await self.until(task_id, 'completed')
+        calls = []
+        async def reject_resume(connection, method, params):
+            calls.append(method)
+            raise backend_rejection(method, {'code': -32000, 'message': 'thread already loaded'})
+        with patch.object(FakeApp, 'call', reject_resume):
+            await self.engine.call('codex_task_continue', {'task_id': task_id, 'request_id': 'resume',
+                'prompt': 'continue', 'expected_turn_id': 'turn'})
+            await self.until(task_id, 'failed')
+        task = self.engine.store.task(task_id)
+        self.assertEqual('THREAD_RESUME_REJECTED', json.loads(task['error'])['code'])
+        self.assertEqual(['thread/resume'], calls)
+        self.assertIsNone(task['turn_id'])
 
     async def test_approval_cannot_be_granted_by_mcp_agent(self):
         task_id, app = await self.start_task()

@@ -23,6 +23,7 @@ from .backend import (
 from .errors import BridgeError
 from .schema import validate
 from .store import Store, TERMINAL, allowed_cwd
+from .recovery import read_finished_panel_turn
 
 
 def public_task(task: dict) -> dict:
@@ -104,6 +105,13 @@ class Engine:
             return public_task(task)
         if name == "claude_task_status":
             task = self.store.task(args["task_id"])
+            if task['mode'] == 'panel' and task['state'] == 'interrupted_unknown' and task['owner'] is None:
+                allowed_cwd(task['cwd'], self.config['allowed_roots'])
+                prompt = self.store.recovery_prompt(task)
+                if prompt:
+                    outcome = await asyncio.to_thread(read_finished_panel_turn, self.claude_dir, task, prompt)
+                    if outcome:
+                        task = self.store.recover_finished_panel(task, outcome)
             return {
                 **public_task(task),
                 **self.store.events(task["id"], args["after_event"], args["limit"]),
