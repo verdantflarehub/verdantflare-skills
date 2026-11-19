@@ -43,3 +43,5 @@ MOSS-Image 自托管文生图（`engine="moss-image"`）读取 [MOSS-Image 调�
 生成后内容分级评估（K09 强制步骤）：取得生成产物后、在交付摘要展示与 Project/World 同步之前，必须按 [评估步骤](references/content-rating-step.md) 与 [评估规范](references/content-rating-rubric.md) 评估图像本身、正向提示词与标题，并调用 `image.rate_content` 提交分级结果（`general` 与 `nsfw` 均须提交，`rubric_version` 取自规范副本文首；不确定即标 `nsfw`；提交超时用相同内容幂等重试，不重新生图）。判定为 `nsfw` 的产物在摘要中只写“N 个产物已标记为 NSFW 并隐藏”，不展示预览、链接、`ContentRef` 或提示词全文，也不同步到 Studio 项目或登记到 World。
 
 本地准备、检查及可恢复技术修复自主执行。已有任务按 ID 查询，不因等待超时重新生成；新收费尝试限定在已授权次数或预算内。下载后验证文件、实际尺寸与服务端 SHA-256，完成 `image.rate_content` 分级评估后，`general` 产物按项目受控路径归档并保留原始产物。完成所请求的技术交付后返回候选及检查结果，艺术批准由用户或上层审核记录决定。
+
+使用 Google Flow 时显式传入 `--engine google-flow`。生成与筛选沿用同一引擎名。支持 `nano2`（默认）、`nano21`、`nano-pro`，画幅为 1:1、16:9 或 9:16，最多三张参考图。可通过 `--budget-limit` 指定整数积分上限。

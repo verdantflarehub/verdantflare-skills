@@ -22,3 +22,5 @@ python3 scripts/image_client.py generate --help
 调用失败应分别记录客户端地址构造、认证和服务响应。没有收到任务ID时核查同一幂等键的状态，不自行换键重放；已取得ID则用宿主 `image.status/result` 恢复。
 
 后续CLI适配应复用Studio工具发现、真实会话和受控传输，并验证提交幂等、任务恢复、项目归属与内容哈希；在实现及检查完成前，不把文档修正标为客户端已修复。
+
+使用 Google Flow 时显式传入 `--engine google-flow`。生成与筛选沿用同一引擎名。支持 `nano2`（默认）、`nano21`、`nano-pro`，画幅为 1:1、16:9 或 9:16，最多三张参考图。可通过 `--budget-limit` 指定整数积分上限。
