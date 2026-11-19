@@ -68,3 +68,5 @@ python scripts/video_client.py generate --project-id <项目ID> --idempotency-ke
 ## 5. 任务 Title
 
 已有 Agent 在创作上下文生成或沿用 Title，CLI 生成可加 `--title "湖面漂流的纸船"`。Title 是命名快照，与固定 Generation Unit / Attempt 的生成 request 分离；原 project_id、幂等键、task ID 和输入摘要仍是恢复身份。resume/status/result 读取原任务，不以重复名称查找、重命名或重新生成；用户报告同名时附镜头上下文或时间。具体字段及旧宿主兼容见 [MCP 调用说明](video-mcp.md)。
+
+Google Flow 会员渠道使用显式参数 `--route google-flow`，模型取自当前 Video 能力目录。创建前必须通过项目写权限、会话、模型与积分预检。`--budget-limit` 使用正整数积分。结果不明时用原 Video 任务 ID 恢复查询。

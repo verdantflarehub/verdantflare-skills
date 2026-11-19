@@ -32,6 +32,18 @@ class DynamicChannelTests(unittest.TestCase):
             self.assertEqual([c.args[1] for c in calls.call_args_list], ["video.preflight", "video.generate"])
             return calls.call_args_list[-1].args[2]
 
+    def test_google_flow_explicit_route_requires_preflight(self):
+        self.inventory["capabilities"]["routes"].append({"route": "google-flow", "model": "veo-lite",
+            "configured": True, "duration_seconds": {"minimum": 4, "maximum": 8}, "aspect_ratios": ["16:9"],
+            "modes": ["text_to_video"], "reference_limits": {"images": 3, "videos": 0, "audios": 0}})
+        args = self.args("--route", "google-flow", "--model", "veo-lite", "--duration", "4", "--budget-limit", "6")
+        request = self.submit(args)
+        self.assertEqual((request["route"], request["model"], request["budget_limit"]), ("google-flow", "veo-lite", "6"))
+        self.inventory["tools"] = [tool for tool in self.inventory["tools"] if tool != "video.preflight"]
+        args.idempotency_key = "scene/no-preflight"
+        with self.assertRaisesRegex(client.ClientError, "video.preflight"):
+            client.generate_mcp(self.config, args)
+
     def test_fal_sd2_selects_second_model_and_sends_exact_budget(self):
         self.inventory["capabilities"]["routes"].append({"route": "fal", "model": "bytedance-seedance-2.0-reference-to-video",
             "configured": True, "duration_seconds": {"minimum": 4, "maximum": 15}, "aspect_ratios": ["21:9"],

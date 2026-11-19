@@ -501,7 +501,7 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
         if previous.get("video_task_id"):
             return {**previous["response"], "attempt_path": str(path)}
         raise ClientError("Submission is unresolved; retain the original attempt and reconcile it before retrying")
-    if "video.preflight" not in inventory["tools"] and route in {"h3-fasth3", "h3-singularity", "higgsfield"}:
+    if "video.preflight" not in inventory["tools"] and route in {"h3-fasth3", "h3-singularity", "higgsfield", "google-flow"}:
         raise ClientError("Selected route requires the deployed video.preflight adapter")
     if "video.preflight" in inventory["tools"]:
         preflight = {k: v for k, v in request.items() if k != "idempotency_key"}
@@ -2199,7 +2199,7 @@ def make_parser() -> argparse.ArgumentParser:
         default=None,
         help="Video via Studio MCP; omitted resolves from the selected host route",
     )
-    generate_parser.add_argument("--route", help="explicit configured route, otherwise use the host default")
+    generate_parser.add_argument("--route", help="explicit configured route, e.g. google-flow for Google Flow membership; otherwise use the host default")
     generate_parser.add_argument(
         "--quality-profile",
         choices=["fasth3-nvfp4", "du-0"],
