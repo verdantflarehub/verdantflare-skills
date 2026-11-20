@@ -1,0 +1,6 @@
+interface:
+  display_name: "VF 通用下载与研究"
+  short_description: "下载网页、文件及平台媒体，按内容类型提取研究证据"
+  default_prompt: "使用 $verdantflare-download 下载并分析这份资料，给出带证据的研究结论。"
+policy:
+  allow_implicit_invocation: true

@@ -1,5 +1,7 @@
 # VerdantFlare Skills
 
+开发机配置与跨项目技能更新见[全局安装清单](skills/GLOBAL-SKILLS.md)。
+
 本文描述工作区 Skill 包。每个目录都包含可被 Codex 发现和安装的 `SKILL.md` 与 `agents/openai.yaml`；工作区新增能力仍属于研发版，未自动发布到 Center Catalog 或安装到 Studio Runtime。下方版本标签是既有发布入口。当前可用技能还包括 [30 秒 MV](skills/verdantflare-music-mv/SKILL.md)。
 
 ## 已发布媒体技能
