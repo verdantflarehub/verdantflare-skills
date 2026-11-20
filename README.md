@@ -1,19 +1,21 @@
 # VerdantFlare Skills
 
+开发机配置与跨项目技能更新见[全局安装清单](skills/GLOBAL-SKILLS.md)。
+
 本文描述工作区 Skill 包。每个目录都包含可被 Codex 发现和安装的 `SKILL.md` 与 `agents/openai.yaml`；工作区新增能力仍属于研发版，未自动发布到 Center Catalog 或安装到 Studio Runtime。下方版本标签是既有发布入口。当前可用技能还包括 [30 秒 MV](skills/verdantflare-music-mv/SKILL.md)。
 
 ## 已发布媒体技能
 
 各技能使用独立不可变标签，Release附独立ZIP和SHA256SUMS。安装到当前客户端后在下一回合加载；发布不代表Center Catalog或Studio Runtime已安装，也不代替媒体听审。
 
-| 技能 | 固定版本 |
-| --- | --- |
+| 技能                         | 固定版本                                                                                                       |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `x-verdantflare-short-drama` | [0.2.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/x-verdantflare-short-drama-v0.2.0) |
-| `verdantflare-video` | [0.5.4](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-video-v0.5.4) |
-| `verdantflare-music` | [0.6.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-music-v0.6.0) |
-| `verdantflare-speech` | [0.3.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-speech-v0.3.0) |
-| `verdantflare-project` | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-project-v0.1.0) |
-| `verdantflare-artifact` | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-artifact-v0.1.0) |
+| `verdantflare-video`         | [0.5.6](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-video-v0.5.6)         |
+| `verdantflare-music`         | [0.6.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-music-v0.6.0)         |
+| `verdantflare-speech`        | [0.3.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-speech-v0.3.0)        |
+| `verdantflare-project`       | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-project-v0.1.0)       |
+| `verdantflare-artifact`      | [0.1.0](https://github.com/verdantflarehub/verdantflare-skills/releases/tag/verdantflare-artifact-v0.1.0)      |
 
 使用 `$skill-installer` 从对应标签的 `skills/<技能名称>` 安装。已有目录先备份再升级；不覆盖个人配置或项目素材。Speech 0.3.0 包含参考登记、实验性声谱融合及音色设计路由；Music 0.5.0 包含配乐计划检查。VoxCPM2 尚未完成 GPU 验证或开放 Studio 调用，音乐生成以实时预检为准。
 
@@ -34,6 +36,7 @@ Project、Artifact、Blender 三项基础技能已实现并完成本地及 5090 
 - [`verdantflare-project`](skills/verdantflare-project/SKILL.md)：项目创建、固定修订、工作副本保存与恢复。
 - [`verdantflare-artifact`](skills/verdantflare-artifact/SKILL.md)：内容上传、受控下载、摘要校验与上传恢复。
 - [`verdantflare-blender`](skills/verdantflare-blender/SKILL.md)：指定实例的场景操作、幂等恢复与 Project 工程归档。
+- [`verdantflare-comfyui`](skills/verdantflare-comfyui/SKILL.md)：指定 ComfyUI 实例与 `comfyui-api` 无头通道的模型齐套、白盒排障自愈及 `WorkflowAPISpec v1` 发布调用。
 
 三项目录各自包含完整引用资料。此前源码联调未安装客户端；本轮六包的发布与安装入口见首节。Project/Artifact 的本地工作副本操作复用 Studio 0.5.50 的 `studio-workspace`；宿主 MCP 仍是首选入口。
 Blender 0.1.5 的首次工程恢复已通过干净工作副本、真实内容服务、后台 Blender 编辑保存及重新打开验证。Project/Artifact 已完成 Windows↔Linux 往返；第二台物理 Blender 主机和完整桌面验收仍未覆盖。
@@ -108,14 +111,14 @@ STUDIO_MCP_BEARER_TOKEN=<绑定真实Core主体的会话令牌>
 
 [`verdantflare-video`](skills/verdantflare-video/SKILL.md) 通过Studio选择宿主已接入的视频模型和渠道，执行生成、查询、恢复与下载。用户未指定时解析当前宿主默认值并确认可用性；不把H3-VDN、Sol或fal写成跨环境固定默认，也不静默换渠道。
 
-H3 Ref2VA业务模型为 `minimax-h3-ref2va`。现有网关创建工具为 `video.create`，配套 `video.status`、`video.result`；以本次真实会话发现的注册名和参数为准。fal是否配置、时长和画幅是否支持，需要分别核实，不能只看工具Schema的默认值。
+H3 Ref2VA业务模型为 `minimax-h3-ref2va`。现有网关创建工具为 `video.create`，配套 `video.preflight`、`video.regenerate_2k`、`video.interpolate`、`video.status`、`video.result`；以本次真实会话发现的注册名和参数为准。本地 5090 H3 按基础模型拆分独立路由（`0.5.6`）：默认路由 `h3-fasth3`（独立服务 `video-minimax-h3-fasth3`，固定唯一档位 `fasth3-nvfp4` 8-NFE QAD），冷备路由 `h3-singularity`（独立服务 `video-minimax-h3-singularity`，固定唯一档位 `du-0` 4-NFE，默认 `replicas: 0`）；支持通过 `postprocess.regenerate_2k`（独立服务 `video-minimax-h3-regenerate-2k`，`budget_1440p` / `exact_2x`）与 `postprocess.interpolate`（`rife_2x` 48 FPS）串联全链路交付，或对既有 24 FPS H3 视频单独调用 `video.regenerate_2k`，细则见 [5090 加速档位与 2K IC 重生成说明](skills/verdantflare-video/references/video-mcp.md#5-5090-加速档位2k-ic-重生成与可选插帧)。fal是否配置、时长和画幅是否支持，需要分别核实，不能只看工具Schema的默认值。
 
 ### 安装与使用
 
-已发布版本：`verdantflare-video-v0.5.4`。该版按真实动态能力处理模型、逐模式参数与报价，保留安全错误和原任务恢复，并核对原生结果 SHA-256／大小。0.5.4 补充已实测的媒体数量、大小与解码边界；本轮真实生成使用 0.5.3，最终说明由宿主显式载入 0.5.4。固定标签不包含后续本地更新，也不表示其他客户端已自动安装。
+已发布版本：`verdantflare-video-v0.5.6`。该版拆分本地 H3 独立路由（默认 `h3-fasth3` 绑定唯一档位 `fasth3-nvfp4`，冷备 `h3-singularity` 绑定唯一档位 `du-0` 且无跨档软回退），新增 `postprocess.regenerate_2k`（`budget_1440p` / `exact_2x`）全链路后置串联、独立工具 `video.regenerate_2k`（CLI `regenerate-2k`）及 `M1 / M2` 中间产物保留与分级单点重试规程；延续按真实动态能力处理模型、逐模式参数、报价、原任务恢复与原生结果 SHA-256／大小校验。固定标签不包含后续本地更新，也不表示其他客户端已自动安装。
 
 ```text
-使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.5.4/skills/verdantflare-video 安装 Skill。
+使用 $skill-installer 从 https://github.com/verdantflarehub/verdantflare-skills/tree/verdantflare-video-v0.5.6/skills/verdantflare-video 安装 Skill。
 ```
 
 ```text
@@ -182,12 +185,14 @@ CLI现状见 [Image CLI](skills/verdantflare-image/references/cli.md)，实际�
 
 ## 智能体调度与基础治理技能
 
-工作区统一纳入四项本机跨智能体 MCP 调度技能与三项跨仓库基础治理技能，统一采用 `verdantflare-` 命名空间，各自包含路由入口 `SKILL.md`、四份底座专册 `references/01.base-*.md` 与 `agents/openai.yaml`：
+工作区统一纳入四项本机跨智能体 MCP 调度技能与五项跨仓库基础治理技能，统一采用 `verdantflare-` 命名空间，各自包含路由入口 `SKILL.md`、四份底座专册 `references/01.base-*.md` 与 `agents/openai.yaml`：
 
 - [`verdantflare-agent-antigravity`](skills/verdantflare-agent-antigravity/SKILL.md)：封装 VS Code Antigravity 面板 Connect-RPC 与无头 CLI，供其他智能体派单、查询与回收产物。
 - [`verdantflare-agent-claude`](skills/verdantflare-agent-claude/SKILL.md)：向指定 VS Code Claude Code 面板会话或受管 CLI 派单、续接任务与读取结果。
 - [`verdantflare-agent-codex`](skills/verdantflare-agent-codex/SKILL.md)：向指定 Codex 插件会话或独立后端派单、监控进度与验收结果。
 - [`verdantflare-agent-grok`](skills/verdantflare-agent-grok/SKILL.md)：调度 Grok ACP 会话并同步写入索引以在 VS Code AFK Pilot 面板展示。
+- [`verdantflare-meta-agent`](skills/verdantflare-meta-agent/SKILL.md)：规范跨智能体计划协作、会话登记、低 Token 架构门禁交接单校验与结果回传。
 - [`verdantflare-meta-googledrive`](skills/verdantflare-meta-googledrive/SKILL.md)：通过已登录的 Google Drive 桌面映射盘与项目 `.gdrive` 软连接管理 SHA-256 版本化素材。
 - [`verdantflare-meta-markdown`](skills/verdantflare-meta-markdown/SKILL.md)：按文档主类型组织浅层 Markdown 结构，探测 Prettier 执行格式化与量化检查。
+- [`verdantflare-meta-plan`](skills/verdantflare-meta-plan/SKILL.md)：提供研发计划双轨分级（简单 S0/S1 与复杂 T1–T5）、核心目录对账、确定性锁卷/评审哈希及五档 AST 自动门禁。
 - [`verdantflare-meta-skill`](skills/verdantflare-meta-skill/SKILL.md)：统一技能入口与四份底座专册规范，提供脚手架初始化与静态结构评审工具。

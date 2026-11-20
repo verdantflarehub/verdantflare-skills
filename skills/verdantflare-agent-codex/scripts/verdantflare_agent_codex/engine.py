@@ -18,9 +18,12 @@ from .plugin import Plugin, detect_codex_plugin_version, resolve_codex_binary
 from .rpc import AppServer
 from .schema import validate
 from .snapshot import Snapshot, turn_result
-from .store import Store, TERMINAL, allowed_cwd
+from .store import Store, TERMINAL, allowed_cwd, canonical
 from .approval_ui import ApprovalUI, decisions
-from .permissions import PermissionSelection, assert_effective_selection, assert_supported_thread, effective_permissions, assert_no_pending_permission_conflict
+from .permissions import PermissionSelection, assert_effective_selection, assert_supported_thread, effective_permissions, assert_no_pending_permission_conflict, permission_comparison
+
+
+DELEGATION_PREFIX = '[Delegated by verdantflare-agent-codex; do not call verdantflare-agent-codex recursively.]\n'
 
 
 def public_task(task):
@@ -126,6 +129,18 @@ class Engine:
                           next_cursor=str(offset + 32768) if offset + 32768 < len(payload) else None)
             return result
         operation = name.removeprefix('codex_task_')
+        if operation == 'cancel' and args['expected_turn_id'] is None:
+            task = self.store.task(args['task_id'])
+            candidate = self.store.queued_continue(task)
+            if task['state'] not in ('queued', 'interrupted_unknown') or not candidate:
+                raise BridgeError('STALE_TURN', 'No unsubmitted continuation to verify')
+            connection = await Plugin(self.config['node'], self.config['extension']).start()
+            try:
+                owner = await connection.follow(task['thread_id'])
+                await self._confirm_unsubmitted(connection, owner, task, candidate)
+                return public_task(self.store.finish_unsubmitted(task, candidate, 'cancelled'))
+            finally:
+                await connection.close()
         if operation == 'respond':
             pending = self.store.pending_list(args['task_id'])
             entry = next((p for p in pending if p['id'] == args['pending_request_id']), None)
@@ -225,16 +240,29 @@ class Engine:
                     filtered_out_count += 1
                     continue
                 reachable = False
+                alignment = {'status': 'unknown', 'reason': 'owner_unavailable'}
                 if plugin:
                     try:
                         await plugin.settings(thread['id'])
                         reachable = True
-                    except BridgeError:
-                        pass
+                        try:
+                            owner = await plugin.follow(thread['id'])
+                            snapshot = await self._snapshot(plugin, thread['id'])
+                            _, selection = await plugin.permission_selection(thread['id'], owner)
+                            assert_supported_thread(snapshot.state)
+                            alignment = permission_comparison(snapshot.state, selection)
+                        except Exception as error:
+                            # A diagnostic read failure must not remove this or later rows.
+                            alignment = {'status': 'unknown', 'reason': error.code if isinstance(error, BridgeError)
+                                         else 'permission_read_failed'}
+                    except Exception as error:
+                        alignment = {'status': 'unknown', 'reason': error.code if isinstance(error, BridgeError)
+                                     else 'permission_read_failed'}
                 rows.append({'thread_id': thread['id'], 'title': thread.get('name') or thread.get('preview'),
-                             'cwd': thread['cwd'], 'owner_reachable': reachable})
+                             'cwd': thread['cwd'], 'owner_reachable': reachable,
+                             'permission_alignment': alignment})
             plugin_ver = detect_codex_plugin_version(self.config.get('extension'))
-            return {'version': '0.2.1', 'plugin_version': plugin_ver,
+            return {'version': '0.2.2', 'plugin_version': plugin_ver,
                     'service_build': dict(SERVICE_BUILD), 'worker_instance': self.owner,
                     'worker_health': self.worker_health(),
                     'plugin_concurrency': {'scope': 'thread', 'limit': None, 'automatic_queue': False},
@@ -393,6 +421,46 @@ class Engine:
                 snapshot.apply(event['params']['change'])
         return snapshot
 
+    async def _confirm_unsubmitted(self, connection, owner, task, candidate):
+        thread_id = task['thread_id']
+        snapshot = Snapshot()
+        snapshot.apply(await connection.resnapshot(thread_id, owner))
+        snapshot.assert_idle(task['cwd'])
+        turns = snapshot.turns()
+        plugin_ids = [turn.get('turnId') for turn in turns]
+        if (plugin_ids.count(candidate[2]) != 1
+                or any(not turn.get('turnId') or (turn.get('params') or {}).get('clientUserMessageId')
+                       == candidate[1] for turn in turns)):
+            raise BridgeError('RECOVERY_UNCONFIRMED', 'Plugin history does not confirm previous turn')
+        app = await AppServer(resolve_codex_binary(self.config.get('codex'), self.config.get('extension'))).start()
+        try:
+            thread = (await app.call('thread/read', {'threadId': thread_id, 'includeTurns': True}))['thread']
+            history = thread.get('turns')
+            if (thread.get('id') != thread_id or not thread.get('cwd') or canonical(thread['cwd']) != task['cwd']
+                    or not history
+                    or history[-1].get('status') not in ('completed', 'failed', 'interrupted')
+                    or any(not turn.get('id') or not isinstance(turn.get('items'), list) for turn in history)
+                    or any(item.get('type') == 'userMessage' and candidate[1] in
+                           (item.get('id'), item.get('clientUserMessageId'))
+                           for turn in history for item in turn['items'])
+                    or await connection.owner(thread_id) != owner):
+                raise BridgeError('RECOVERY_UNCONFIRMED', 'Native history does not confirm previous turn')
+            native_ids = [turn['id'] for turn in history]
+            prior = candidate[2]
+            if native_ids.count(prior) != 1 or native_ids[native_ids.index(prior):] != plugin_ids[plugin_ids.index(prior):]:
+                raise BridgeError('RECOVERY_UNCONFIRMED', 'Native and plugin continuation histories differ')
+            for later in history[native_ids.index(prior) + 1:]:
+                messages = [item.get('content') for item in later['items'] if item.get('type') == 'userMessage']
+                if later.get('status') not in ('completed', 'failed', 'interrupted') or len(messages) != 1:
+                    raise BridgeError('RECOVERY_UNCONFIRMED', 'Later turn has no verifiable terminal input')
+                parts = messages[0]
+                if (not isinstance(parts, list) or len(parts) != 1 or parts[0].get('type') != 'text'
+                        or not isinstance(parts[0].get('text'), str) or not parts[0]['text'].strip()
+                        or DELEGATION_PREFIX.strip() in parts[0]['text']):
+                    raise BridgeError('RECOVERY_UNCONFIRMED', 'Later input could be a delegated submission')
+        finally:
+            await app.close()
+
     async def _recover(self, task):
         connection = None
         try:
@@ -400,6 +468,14 @@ class Engine:
                 connection = await Plugin(self.config['node'], self.config['extension']).start()
                 self.connections[task['id']] = connection
                 owner = await connection.follow(task['thread_id'])
+                candidate = self.store.queued_continue(task)
+                if candidate:
+                    current = self.store.task(task['id'])
+                    if current['state'] != 'recovering' or current['owner'] != self.owner:
+                        raise BridgeError('STALE_TURN', 'Recovery ownership changed')
+                    await self._confirm_unsubmitted(connection, owner, current, candidate)
+                    self.store.finish_unsubmitted(current, candidate, 'failed')
+                    return
                 snapshot = await self._snapshot(connection, task['thread_id'])
                 submission = self.store.submission(task['id']) or {}
                 marker = submission.get('client_message_id')
@@ -482,7 +558,7 @@ class Engine:
         connection = None
         try:
             self.store.transition(task_id, self.owner, 'starting')
-            prompt = '[Delegated by verdantflare-agent-codex; do not call verdantflare-agent-codex recursively.]\n' + payload['prompt']
+            prompt = DELEGATION_PREFIX + payload['prompt']
             if task['mode'] == 'plugin':
                 connection = await Plugin(self.config['node'], self.config['extension']).start()
                 self.connections[task_id] = connection

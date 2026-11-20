@@ -17,8 +17,8 @@
   },
   "recipient": {
     "session_key": "reviewer",
-    "service": "local-claude",
-    "agent": "claude",
+    "service": "local-antigravity",
+    "agent": "antigravity",
     "mode": "panel",
     "native_session_id": "example-reviewer-id",
     "generation": 1

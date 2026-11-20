@@ -86,7 +86,7 @@ def validator(name):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--input', type=Path, required=True)
-    parser.add_argument('--schema', choices=('reference-learning', 'world-draft-manifest'), default='reference-learning')
+    parser.add_argument('--schema', choices=('reference-learning', 'reference-learning-v2', 'world-draft-manifest'), default='reference-learning')
     args = parser.parse_args()
     try:
         validator(args.schema).validate(read_json(args.input))

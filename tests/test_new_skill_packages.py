@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILLS = ("x-verdantflare-short-drama",)
+SKILLS = ("x-verdantflare-short-drama", "verdantflare-comfyui")
 
 
 class NewSkillPackageTests(unittest.TestCase):

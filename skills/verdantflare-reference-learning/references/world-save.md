@@ -10,12 +10,17 @@
 
 本路径新工作使用 collection（仅收录）或 learning（分析结果）；创建后 purpose 不变。契约中的 creation 保留旧内容读取与恢复兼容；用户要求修改或创作时转真实 Project，不以新建 creation 草稿代替。仅收录 URL 可保存标题、网址与笔记，但不能标为已经抓取或分析。分析固定 collection 的修订作为来源，保存到 learning；无需先登记资产，也不改写 collection。
 
-类型化正文采用 `document_kind=reference-learning,schema_version=1`，显式提供 origin、sources、coverage、results、relations、uses；空集合写 `[]`。来源角色、事实／推断／新创作、完整覆盖和模型验证状态按实际证据填写。`results` 保留各自 type_key/type_version、正文 payload、来源与使用条件；具体字段按包内[中央格式投影](learning-contracts.generated.json)的 reference-learning `$defs` 按需查询，尤其是 result、prompt、variant 和所需类型。不要用同一个通用 payload 替代所有类型。
+类型化正文采用 `document_kind=reference-learning`，根据实际正文和服务支持显式区分 schema_version=1／2；旧 v1 保留原版本，未知版本拒绝，不删去 v2 元数据冒充 v1。两版均显式提供 origin、sources、coverage、results、relations、uses；空集合写 `[]`。来源角色、事实／推断／新创作、完整覆盖和模型验证状态按实际证据填写。`results` 保留各自 type_key/type_version、正文 payload、来源与使用条件；具体字段按包内[中央格式投影](learning-contracts.generated.json)的 reference-learning `$defs` 按需查询，尤其是 result、prompt、variant 和所需类型。不要用同一个通用 payload 替代所有类型。
+
+v2 另保留 curation 的用途 packages 和逐项 assessments；对应关系覆盖原 results，不因筛选删除原成果。无审核依据时为 unassessed，recommended／excluded 均须保留固定 evidence_refs，needs_review 与原因如实交接；推荐只对记录用途有效，不等于模型或审美验收。合并保留 merged_from_refs 及原始来源，不以本地编号代替固定修订。generated 文档的 processing_snapshot 和正文须与服务冻结组装一致；人工整理不得伪装为原生生成结果，沿实际支持的人工编辑来源保存新修订，旧正文不变。
+
+预览沿实际记录区分 original_reference／generated_effect／reconstruction_preview；缺项保留 missing 及原因，不能以原片冒充生成或重建成果。ready 需要固定文件、摘要和适用的真实运行／输入依据；它是记录状态，不证明当前可读或效果通过。具体字段与互斥约束查中央投影中的 reference-learning-v2，不根据本说明臆造字段。新格式的本地检查通过不表示线上服务已支持，保存前仍核对当前能力。
 
 可在已具备 Python 3.10+、jsonschema 4、referencing 的环境使用包内检查器，从技能根目录执行：
 
 ```sh
-python3 scripts/check_learning.py --input path/to/learning.json
+python3 scripts/check_learning.py --input path/to/learning-v1.json
+python3 scripts/check_learning.py --schema reference-learning-v2 --input path/to/learning-v2.json
 python3 scripts/check_learning.py --schema world-draft-manifest --input path/to/manifest.json
 ```
 
@@ -52,3 +57,11 @@ python3 scripts/check_learning.py --schema world-draft-manifest --input path/to/
 - 已保存派生正文与继续使用来源依赖分别授权。原资产撤权后，不靠派生关系回读原资产；自己的派生正文可读，也不代表后续依赖消费已经获权。
 
 持续失败时保存当前可用成果、原请求及恢复入口，报告具体不可用阶段。不要无限重试、重新分析或重复提交生成任务掩盖保存问题。
+
+## 6. 成果包与导入回执
+
+ZIP 包的完整性／路径／容量预检与单份学习 JSON 的结构检查不同。包内 check_learning.py 只接受对应 JSON，不负责解压、整包校验、目标映射或上传，不能把其 PASS 当作包可安全导入。需要导入导出时使用实际具备该能力的 World 页面或本次环境明确提供并验证过的包工具，不臆造 world.import／world.export MCP 方法。
+
+导入保存产生新的 learning 修订，不覆盖原件、不自动登记资产。复用该修订时按[导入成果读取](mcp-results.md#31-读取导入的学习工作稿)找回当前工作正文。只有原件与工作正文均从固定新修订回读核对，才能证明服务器保存了两份内容；本地 ZIP、上传成功或列表出现都不足以证明业务保存完成。
+
+浏览器尚有原导入恢复记录时，先在原身份和浏览器恢复同一操作；用已知 commit_id 从 MCP 查询状态可作只读对账，不能据此另起一套创建／上传请求。服务器已经 committed 而页面回执丢失时，沿原结果固定回读；只有明确 failed/conflict 并解决原因后才进入修正意图。保留原包、固定目标映射和请求编号，禁止通过清空恢复记录或重建草稿掩盖未知结果。

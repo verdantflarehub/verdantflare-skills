@@ -15,7 +15,7 @@ metadata:
 
 已通过 Studio 接通 Speech 0.2.0 → IndexTTS2 0.2.0 → Artifact 原生产物 → Project 固定修订。实际工具为 `speech.capabilities`、`speech.voices`、`speech.create`、`speech.status`、`speech.result`、`speech.rate_content`。`speech.capabilities` 返回按引擎的能力声明数组 `engines`；`speech.voices` 同时列出项目引用的 World `reference-voice` 资产（`world_voice`）与项目候选配置（`voice_profile`）。每次执行重新发现 Schema 和就绪状态；缺工具时报告当前入口缺口，继续可独立完成的准备和已有结果整理。
 
-本技能不启动 GPU 服务、不读取 Kubernetes Secret，也不直连内部运行时。Music 歌曲接口或视频自带音轨不自动替代独立对白生成。
+本技能不启动 GPU 服务、不读取 Kubernetes Secret，也不直连内部运行时；`speech.create` 调用 `IndexTTS2` 时由 Speech MCP 自动向 Station GPU 调度器（`:5056`）申请 `6144 MiB` 显存租约并执行按需冷启动（`0 -> 1`），`speech.status` 返回 `queued`（`waiting_gpu_lease`）属正常显存排队或冷启动等待，继续轮询原任务 ID，不重复提交 `speech.create`。Music 歌曲接口或视频自带音轨不自动替代独立对白生成。
 
 ## 2. 选择工作
 

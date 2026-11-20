@@ -448,8 +448,11 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
         request["price_ceiling"] = ceiling
     quality_profile = getattr(args, "quality_profile", None)
     if quality_profile is not None:
-        if route != "h3-singularity" or quality_profile not in {"fasth3-nvfp4", "du-0"}:
-            raise ClientError("--quality-profile supports fasth3-nvfp4 or du-0 on route=h3-singularity only")
+        expected_profile = {"h3-fasth3": "fasth3-nvfp4", "h3-singularity": "du-0"}.get(route)
+        if expected_profile is None or quality_profile != expected_profile:
+            raise ClientError(
+                "quality_profile_not_available: route=h3-fasth3 only accepts fasth3-nvfp4 and route=h3-singularity only accepts du-0"
+            )
         request["quality_profile"] = quality_profile
     regenerate_2k = bool(getattr(args, "regenerate_2k", False))
     grid_mode = getattr(args, "grid_mode", None)
@@ -458,8 +461,8 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
         raise ClientError("--grid-mode requires --regenerate-2k")
     if regenerate_2k:
         regen_cap = capabilities.get("postprocess", {}).get("regenerate_2k", {})
-        if route != "h3-singularity" or not regen_cap.get("configured") or regen_cap.get("readiness") != "ready":
-            raise ClientError("--regenerate-2k requires a ready H3-Sing open_h3_2k_ic capability")
+        if route not in {"h3-fasth3", "h3-singularity"} or not regen_cap.get("configured") or regen_cap.get("readiness") != "ready":
+            raise ClientError("--regenerate-2k requires a ready local H3 open_h3_2k_ic capability")
         regen_payload: dict[str, Any] = {"profile": "open_h3_2k_ic"}
         if grid_mode is not None:
             if grid_mode not in {"budget_1440p", "exact_2x"}:
@@ -469,13 +472,13 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
         if interpolate:
             interpolation = capabilities.get("postprocess", {}).get("interpolate", {})
             if not interpolation.get("configured") or interpolation.get("readiness") != "ready":
-                raise ClientError("--interpolate requires a ready H3-Sing rife_2x capability")
+                raise ClientError("--interpolate requires a ready local H3 rife_2x capability")
             postprocess_payload["interpolate"] = {"profile": "rife_2x"}
         request["postprocess"] = postprocess_payload
     elif interpolate:
         interpolation = capabilities.get("postprocess", {}).get("interpolate", {})
-        if route != "h3-singularity" or not interpolation.get("configured") or interpolation.get("readiness") != "ready":
-            raise ClientError("--interpolate requires a ready H3-Sing rife_2x capability")
+        if route not in {"h3-fasth3", "h3-singularity"} or not interpolation.get("configured") or interpolation.get("readiness") != "ready":
+            raise ClientError("--interpolate requires a ready local H3 rife_2x capability")
         request["postprocess"] = {"interpolate": {"profile": "rife_2x"}}
     naming = {'title': args.title} if getattr(args, 'title', None) is not None and inventory.get('create_supports_title') else {}
     try:
@@ -498,7 +501,7 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
         if previous.get("video_task_id"):
             return {**previous["response"], "attempt_path": str(path)}
         raise ClientError("Submission is unresolved; retain the original attempt and reconcile it before retrying")
-    if "video.preflight" not in inventory["tools"] and route in {"h3-singularity", "higgsfield"}:
+    if "video.preflight" not in inventory["tools"] and route in {"h3-fasth3", "h3-singularity", "higgsfield", "google-flow"}:
         raise ClientError("Selected route requires the deployed video.preflight adapter")
     if "video.preflight" in inventory["tools"]:
         preflight = {k: v for k, v in request.items() if k != "idempotency_key"}
@@ -554,7 +557,7 @@ def regenerate_2k_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, 
     capabilities = inventory.get("capabilities") or {}
     regen_cap = capabilities.get("postprocess", {}).get("regenerate_2k", {})
     if not regen_cap.get("configured") or regen_cap.get("readiness") != "ready":
-        raise ClientError("regenerate-2k requires a ready H3-Sing open_h3_2k_ic capability")
+        raise ClientError("regenerate-2k requires a ready open_h3_2k_ic capability")
     request: dict[str, Any] = {
         "project_id": project_id,
         "idempotency_key": idempotency_key,
@@ -2203,23 +2206,23 @@ def make_parser() -> argparse.ArgumentParser:
         default=None,
         help="Video via Studio MCP; omitted resolves from the selected host route",
     )
-    generate_parser.add_argument("--route", help="explicit configured route, otherwise use the host default")
+    generate_parser.add_argument("--route", help="explicit configured route, e.g. google-flow for Google Flow membership; otherwise use the host default")
     generate_parser.add_argument(
         "--quality-profile",
         choices=["fasth3-nvfp4", "du-0"],
-        help="H3-Sing quality profile (fasth3-nvfp4 8-NFE default or du-0 4-NFE fallback)",
+        help="Route-matched quality profile (fasth3-nvfp4 for h3-fasth3; du-0 for h3-singularity cold standby)",
     )
     generate_parser.add_argument(
         "--regenerate-2k",
         action="store_true",
-        help="H3-Sing: chain Open-H3-Regenerate-2K-IC strict aspect-preserving 2K regeneration",
+        help="Local H3 (h3-fasth3 / h3-singularity): chain Open-H3-Regenerate-2K-IC strict aspect-preserving 2K regeneration",
     )
     generate_parser.add_argument(
         "--grid-mode",
         choices=["budget_1440p", "exact_2x"],
         help="2K grid mode (budget_1440p default or exact_2x); requires --regenerate-2k",
     )
-    generate_parser.add_argument("--interpolate", action="store_true", help="H3-Sing: retain native/2K video and deliver RIFE 2x FPS")
+    generate_parser.add_argument("--interpolate", action="store_true", help="Local H3: retain native/2K video and deliver RIFE 2x FPS")
     generate_parser.add_argument("--project-id")
     generate_parser.add_argument("--idempotency-key")
     generate_parser.add_argument("--prompt", required=True)

@@ -209,6 +209,44 @@ class Store:
             self._event(db, task, operation + "_queued", {})
             return task
 
+    @staticmethod
+    def _queued_continue(db, task):
+        if task['mode'] != 'plugin' or task['turn_id'] is not None:
+            return None
+        row = db.execute("""SELECT id, operation, state, payload FROM commands
+            WHERE task_id=? AND operation IN ('start','continue')
+            ORDER BY rowid DESC LIMIT 1""", (task['id'],)).fetchone()
+        if not row or row['operation'] != 'continue' or row['state'] not in ('unknown', 'queued'):
+            return None
+        # A worker records starting before doing any native work. Once past
+        # that boundary, an in-flight write cannot be excluded by history.
+        started = db.execute("""SELECT 1 FROM events WHERE task_id=?
+            AND seq > (SELECT MAX(seq) FROM events WHERE task_id=? AND kind='continue_queued')
+            AND (kind='submission' OR (kind='state' AND json_extract(payload,'$.state')='starting'))
+            LIMIT 1""", (task['id'], task['id'])).fetchone()
+        if started:
+            return None
+        payload = json.loads(row['payload'])
+        return row['id'], payload['request_id'], payload['expected_turn_id']
+
+    def queued_continue(self, task):
+        with closing(self.connect()) as db:
+            return self._queued_continue(db, task)
+
+    def finish_unsubmitted(self, task, candidate, state):
+        with self.transaction() as db:
+            current = self._task(db, task['id'])
+            if (current['state'] != task['state'] or current['owner'] != task['owner']
+                    or self._queued_continue(db, current) != candidate):
+                raise BridgeError('STALE_TURN', 'Continuation changed during history verification')
+            error = {'code': 'CONTINUE_NOT_SUBMITTED'}
+            db.execute("UPDATE commands SET state='done',result=? WHERE id=?", (encode(error), candidate[0]))
+            db.execute("UPDATE tasks SET state=?,error=?,updated=? WHERE id=?",
+                       (state, encode(error), time.time(), task['id']))
+            db.execute("DELETE FROM leases WHERE task_id=?", (task['id'],))
+            self._event(db, current, 'state', {'state': state, **error, 'request_id': candidate[1]})
+            return self._task(db, task['id'])
+
     def cancel_unclaimed(self, command_id, request_id, reason):
         """Administrative withdrawal of an exact, never-claimed queued submission.
 

@@ -1,8 +1,8 @@
 ---
 name: verdantflare-video
-description: 通过 Studio Video MCP 的真实动态渠道生成、恢复和下载视频，按已注册能力使用 H3、SD2、Grok、Google 与 Higgsfield 模型；核实参数、素材限制和报价并保留具体服务错误。
+description: 通过 Studio Video MCP 的真实动态渠道生成、恢复和下载视频，按已注册能力使用 H3、SD2、Grok、Google、Google Flow 与 Higgsfield 模型；核实参数、素材限制和报价并保留具体服务错误。
 metadata:
-  version: "0.5.5"
+  version: "0.5.7"
 ---
 
 # VerdantFlare Video
@@ -33,7 +33,9 @@ H3 模型支持六种画幅，Omni Reference 还有 Auto；渠道适配器里的
 - Higgsfield：读取 [会员渠道与官方 Skills 适配](references/higgsfield.md)，通过同一 Studio Video MCP 显式选择 `route=higgsfield`。Seedance 2.5 Draft 的 R2V／ref2va 使用 `model=seedance_2_5_draft`、480p、4–15 秒、最多 4 图＋1 视频，不替换为普通 2.5 或首尾帧。官方 CLI 封装在本 Skill 私有运行时，仅供管理员授权维护；成员生成、查询及结果通过 Studio，会员凭据留在服务器。
 - 已有任务沿原任务记录的模型与渠道恢复，不按当前默认值重新生成。
 - 有剧情动作、连续运镜、跨镜物体或剪辑选段要求时，按[叙事动作验收](references/shot-acceptance.md)检查实际动作和可用区间，不能用首尾构图或技术成功代替动态验收。
-- H3-Sing 支持双档加速与全链路后置交付：`quality_profile` 支持 `fasth3-nvfp4`（5090 默认 8-NFE QAD 加速档）与 `du-0`（4-NFE 回退档），CLI 通过 `--quality-profile` 指定；后置可选 `postprocess.regenerate_2k`（CLI `--regenerate-2k` 与 `--grid-mode {budget_1440p,exact_2x}`，默认 `budget_1440p`）与 `postprocess.interpolate.profile=rife_2x`（CLI `--interpolate`）自由组合，也支持对已有 24 FPS H3 视频单独调用 `video.regenerate_2k`（CLI `regenerate-2k`）或 `video.interpolate`。开启后置阶段时等待 `delivery.status` 终态并交付 `delivery.final_artifact_id`，完整保留 `M1`（`source_artifact_id`）与 `M2`（`regenerate_2k_artifact_id`）；`P3` 插帧失败只对保留的 `M2` 单独调用 `video.interpolate` 重试，`P2` 失败只对 `M1` 调用 `video.regenerate_2k` 重试，严禁重跑已成功的 `P1` 生成。
+- 本地 H3 按基础模型独立路由并支持全链路后置交付：默认路由 `h3-fasth3`（独立 `video-minimax-h3-fasth3`，固定唯一档位 `fasth3-nvfp4` 8-NFE QAD，无 `du-0` 软回退档），冷备路由 `h3-singularity`（独立 `video-minimax-h3-singularity`，固定唯一档位 `du-0` 4-NFE，默认 `replicas: 0`）；后置可选 `postprocess.regenerate_2k`（独立 `video-minimax-h3-regenerate-2k`，CLI `--regenerate-2k` 与 `--grid-mode {budget_1440p,exact_2x}`，默认 `budget_1440p`）与 `postprocess.interpolate.profile=rife_2x`（CLI `--interpolate`）自由组合，也支持对已有 24 FPS H3 视频单独调用 `video.regenerate_2k`（CLI `regenerate-2k`）或 `video.interpolate`。开启后置阶段时等待 `delivery.status` 终态并交付 `delivery.final_artifact_id`，完整保留 `M1`（`source_artifact_id`）与 `M2`（`regenerate_2k_artifact_id`）；`P3` 插帧失败只对保留的 `M2` 单独调用 `video.interpolate` 重试，`P2` 失败只对 `M1` 调用 `video.regenerate_2k` 重试，严禁重跑已成功的 `P1` 生成。
+- 本地 H3 首帧条件（`image_guidance="first_frame"`）边界：`h3-fasth3` 与 `h3-singularity` 均支持 `image_guidance="first_frame"`（`references.images[0]` 像素尺寸须与目标输出网格精确一致，且不与 `references.videos` 混用）。链路核查未发现参数丢失证据，单图静止保持实验（边缘 `IoU 0.9983`）证明第 `0` 帧 `PackedLayout` 条件消费路径有效；但在多参考跨画风（如 3D 白模首帧叠加写实人物身份/服装参考并要求写实转换）场景下属于软条件，不保证硬几何或硬机位锁定。要求固定机位写实定妆的镜头须先在图像阶段产出同构图写实首帧定妆图并完成核验，再送入视频模型执行动作生成，详见 [输入模式](references/input-modes.md) 与 [控制证据](references/control-evidence.md)。
+- 本地 GPU 调度与排队恢复：本地推理路由（`h3-fasth3`、`h3-singularity`、`regenerate_2k`、`interpolate` 及本地超分／深度阶段）由服务端经 Station GPU 调度器（`:5056`）统一申请物理卡显存租约、执行按需冷启动（`0 -> 1`）并在 `P2 -> P3` 阶段自动原地降级显存锁，智能体无需也不得手动关停 ComfyUI 或 Blender 腾挪显存（调度器会自动回收 `idle_evictable` 空闲实例并保护 `human_protected` 人类会话）。状态返回 `queued`（含 `waiting_gpu_lease` 或 `queue_reason`）属正常显存排队或冷启动等待，继续轮询原 `task_id`，严禁取消重建或静默切往付费云渠道。
 - 每次创建任务都显式传入当前项目的 `project_id`、已解析的 `route` 和固定幂等键；不能依赖服务端猜测项目或渠道。
 - 中央Artifact的 `ContentRef` 与Video原生引用按宿主适配流程转换；不直接替换ID，不把受控下载路径当成匿名公网素材URL。
 - 所有模型和渠道都通过 Studio MCP 统一网关进入，不直接调用 Runtime。

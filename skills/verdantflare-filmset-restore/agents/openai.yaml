@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Film Set Restore"
+  short_description: "Restore empty film-set clean plates from drama frames"
+  default_prompt: "Use $verdantflare-filmset-restore to analyze continuous drama frames, annotate three-tier occlusion zones, and restore single-view or five-view uninhabited set clean plates."

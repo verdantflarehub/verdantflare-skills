@@ -13,7 +13,7 @@ AI 短剧任务形成阶段成果后默认同步到原 Studio 项目，沿用真
 它与中央 `/mcp` 分别发现工具；同一个有效 Studio Bearer 可复用，实例权限仍逐个校验。
 不得因 A 不可用转到 B，不使用独立下游公网 MCP。
 
-先核对真实 tools/list、绑定 project_id 和任务范围。现有名字包括 session.open、scene.get、object.create、project.save，以及 v0.1.14 的 workspace.clean、script.run_project、scene.inspect_file、scene.open_file、project.export_assets；不套用早期 blender.* 草案名。
+先核对真实 tools/list、绑定 project_id 和任务范围。现有名字包括 session.open、scene.get、object.create、project.save，以及 v0.1.14 的 workspace.clean、script.run_project、scene.inspect_file、scene.open_file、project.export_assets；不套用早期 blender.\* 草案名。
 这里的 project.save 与 project.export_assets 属于实例入口，不发送到中央 Project 域。
 
 短剧沿已绑定的同剧固定实例接续，故障不另开实例。恢复先区分管理台账、实际工作进程、工作卷和工程加载证据；连接失败或 `WORKSPACE_BINDING_CONFLICT` 不能单独证明卷已丢失。经已开放的原实例受控恢复路径核对终态、精确 UID、租约和保存，再读取原场景；不能直接删 Pod、改绑或以最新项目文件覆盖未核实工作副本。
@@ -44,7 +44,10 @@ scene.save 只保存实例工作区。用户要求保存到绑定项目时，按
 
 哈希正确只证明字节完整。需要证明可继续编辑时，必须实际加载并核对场景；对预演 `.mp4` 视频须完整解码核验帧数／时长并逐机位抽帧检查画面主体可见、未被替身或天花板遮挡。首次恢复使用服务提供的受控流程，不能删除引用或改空项目绕过。
 
-## 4. 收尾与释放租约
+## 4. 收尾、释放租约与 GPU 驻留协同
 
 单次任务或“跑脚本 → 核验 → 归档”闭环结束时，**必须调用 `session.close` 显式释放本次取得的 `editing_session_id` 编辑租约**（租约默认保持 30 分钟且不会随批处理自动释放）；仅长期交互按用户要求保留。释放失败记录恢复入口，不关闭其他人的会话。
+
+释放编辑租约且无人类 GUI 视口连接时，实例自动由受保护活动态（`S1`：`active_compute` / `human_dirty`）转入可安全回收态（`S2`：`idle_evictable`）：当重型视频、音乐或图像任务需要显存时，Station GPU 调度器会自动将 `S2` 实例安全休眠至零显存待命（`S3`：`zero_vram_standby`，预先写出独立 `pre_hibernate_*.blend` 检查点，绝不覆盖用户 `main.blend`），并在下次 `session.open` 或打开视口时透明唤醒恢复。智能体严禁为“腾显存”调用实例停止或销毁管理接口，也严禁抢占处于 `human_protected`（`INSTANCE_EDIT_LEASE_HELD` / 人类视口在线）的实例。
+
 返回实例、操作与保存状态、Project 修订、内容校验、来源溯源及已知缺口；技术成功不代替创作或视觉验收。

@@ -61,7 +61,9 @@ World输入先解析已授权固定版本，再导入或关联当前项目。记
 
 单文件最多 1 GiB；格式和解码预算见 [校验](validation.md) 及 capabilities。CLI 自动优先选择完整分块协议，不静默压缩或公开私有素材。兼容 `video.import` 的内联字节仍限 3 MiB PNG/JPEG/WebP；它不是完整 Omni 导入方案。
 
-Singularity 生成前调用 `video.preflight`，使用与 create 相同的生成参数但不含 idempotency_key。返回 resolved_output、reference_mapping、reference_media、input_digest 和实际 Prompt，不创建任务。核对图片、视频配对音轨、独立音频标签后保存请求；服务不替用户编写批准事实。音频单参考要求显式画幅。
+本地 H3（`h3-fasth3` / `h3-singularity`）生成前调用 `video.preflight`，使用与 create 相同的生成参数但不含 idempotency_key。返回 resolved_output、reference_mapping、reference_media、input_digest 和实际 Prompt，不创建任务。核对图片、视频配对音轨、独立音频标签后保存请求；服务不替用户编写批准事实。音频单参考要求显式画幅。
+
+本地 H3 路由在 `video.capabilities.routes[].image_guidance` 中声明 `modes: ["reference", "first_frame"]`、`hard_geometry_lock: false` 与 `conditioning_strength: "soft_under_multi_reference_cross_style"`。核查确认端到端未发现参数丢失证据，单图实验证明第 `0` 帧条件消费路径有效，但多参考跨画风下属于软条件、不保证硬几何锁定；要求固定机位写实定妆的镜头须先产出同构图写实首帧定妆图，再进入视频动作生成。
 
 ## 4. 状态与结果
 
@@ -77,9 +79,9 @@ Project提交保存文件、`run_refs`、Prompt和审核记录。MD作为普通�
 
 ## 5. 5090 加速档位、2K IC 重生成与可选插帧
 
-`route=h3-singularity` 支持 `quality_profile` 选择 `fasth3-nvfp4`（RTX 5090 默认 8-NFE QAD 主加速档）或 `du-0`（4-NFE 回退档）；省略时采用宿主运行时声明并经 `video.preflight` 一致性核对的默认档位，同时对升级前已落盘任务保留原档位输入摘要与幂等性。
+本地 H3 按基础模型拆分独立路由：默认路由 `route=h3-fasth3`（独立服务 `video-minimax-h3-fasth3`）固定唯一档位 `quality_profile=fasth3-nvfp4`（RTX 5090 8-NFE QAD，无 `du-0` 软回退档）；冷备路由 `route=h3-singularity`（独立服务 `video-minimax-h3-singularity`，默认 `replicas: 0`）固定唯一档位 `quality_profile=du-0`（4-NFE）。省略 `quality_profile` 时自动匹配所选路由唯一档位并经 `video.preflight` 一致性核对，跨路由混传返回 `quality_profile_not_available`；对升级前存量 `h3-singularity` 任务保留原路由与档位输入摘要及幂等性。
 
-发现 `video.capabilities.postprocess.regenerate_2k` 与 `video.capabilities.postprocess.interpolate`，提交前分别核对 `configured=true` 与 `readiness=ready`。生成集成只支持 `route=h3-singularity`，支持仅插帧（`{"interpolate":{"profile":"rife_2x"}}`，与历史请求体逐字节一致）、仅 2K 重生成（`{"regenerate_2k":{"profile":"open_h3_2k_ic","grid_mode":"budget_1440p"}}`）或 `P1 -> P2 -> P3` 全串联；CLI 使用 `generate --regenerate-2k [--grid-mode {budget_1440p,exact_2x}] [--interpolate]`，单独传 `--grid-mode` 未开启 `--regenerate-2k` 时在本地立即拒绝。预检与创建传相同选项，不静默改渠道，预检不预留 GPU。
+发现 `video.capabilities.postprocess.regenerate_2k`（独立服务 `video-minimax-h3-regenerate-2k`）与 `video.capabilities.postprocess.interpolate`，提交前分别核对 `configured=true` 与 `readiness=ready`。生成集成支持 `route=h3-fasth3` 与 `route=h3-singularity`，支持仅插帧（`{"interpolate":{"profile":"rife_2x"}}`，与历史请求体逐字节一致）、仅 2K 重生成（`{"regenerate_2k":{"profile":"open_h3_2k_ic","grid_mode":"budget_1440p"}}`）或 `P1 -> P2 -> P3` 全串联；CLI 使用 `generate --regenerate-2k [--grid-mode {budget_1440p,exact_2x}] [--interpolate]`，单独传 `--grid-mode` 未开启 `--regenerate-2k` 时在本地立即拒绝。预检与创建传相同选项，不静默改渠道，预检不预留 GPU。
 
 独立工具 `video.regenerate_2k`（CLI `regenerate-2k`）必填 `project_id`、`idempotency_key`、同项目 24 FPS H3 视频 `source_artifact_id`，可选 `grid_mode`（默认 `budget_1440p`：各画幅 `<= 3,686,400 px`，如 `16:9` `2464×1408`、`9:16` `1408×2464`、`21:9` `2560×1120`；可选 `exact_2x`：严格 2 倍边长如 `2688×1536`、`3072×1344`）、`prompt`（省略时自动继承同项目 H3 父任务提示词）、`seed`、`title` 及后置 `postprocess.interpolate`。独立工具 `video.interpolate` 必填 `project_id`、固定 `idempotency_key`、同项目 `source_artifact_id`；`backend=rife`，默认目标 `target_fps_num=48,target_fps_den=1`（30 FPS 源显式指定 60/1，仅接受源帧率的 2 倍且不超过 120 FPS，最大边长 `3072 px`）。
 

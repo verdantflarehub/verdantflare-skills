@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path, PureWindowsPath
+import re
 import sys
 
 MODES = {
@@ -18,7 +19,33 @@ FIELDS = {
     "inputs", "allowed_write_paths", "constraints", "deliverables", "verification",
     "completion_criteria", "authorization", "closeout_owner",
 }
+OPTIONAL_FIELDS = {"review_stage", "review_doc_path"}
 ENDPOINT_FIELDS = {"session_key", "service", "agent", "mode", "native_session_id", "generation"}
+REVIEW_STAGES = {
+    "claude_arch", "codex_detail", "claude_escalation", "claude_arch_audit", "acceptance_audit",
+    "claude_spot_check", "claude_acceptance_revision",
+}
+# claude_spot_check: T4 spot-check of 1-2 items of the Codex evaluation.
+# claude_arch_audit: legacy alias of claude_spot_check, kept for backward compatibility.
+# claude_acceptance_revision: T1 Claude direct revision/finalization of acceptance chapter 2.
+CLAUDE_CHAR_CAPS = {
+    "claude_escalation": 800,
+    "claude_spot_check": 1000,
+    "claude_arch_audit": 1000,
+    "claude_arch": 1200,
+    "claude_acceptance_revision": 1200,
+}
+ACCEPTANCE_DOC_STAGES = {"acceptance_audit", "claude_acceptance_revision"}
+RD_REVIEW_DOC_RE = re.compile(
+    r"^docs/reviews/review_\d{8}_[a-z0-9.-]+_(?:t1|t2|t4)(?:-r(?:[2-9]|[1-9]\d+))?\.md$"
+)
+ACCEPTANCE_DOC_RE = re.compile(r"^docs/acceptance/accept_\d{8}_[a-z0-9.-]+\.md$")
+CLAUDE_PLAN_DOC_RE = re.compile(r"^docs/(?:archive/)?plan/[A-Za-z0-9._/-]+\.plan\.md$")
+CLAUDE_CHANGE_DOC_RE = re.compile(r"^docs/(?:archive/)?changes/change_[A-Za-z0-9._-]+\.md$")
+CLAUDE_INPUT_DOC_RE = re.compile(r"^docs/(?:design|plan|reviews|acceptance)/[A-Za-z0-9._/-]+\.md$")
+CLAUDE_DELIVERABLE_DOC_RE = re.compile(r"^docs/(?:reviews|acceptance)/[A-Za-z0-9._/-]+\.md$")
+ASCII_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
+ID_FIELDS = ("plan_id", "task_key", "assignment_id")
 
 
 class InvalidHandoff(ValueError):
@@ -67,13 +94,105 @@ def relative_file(root, value, label, *, exists=False):
     return target
 
 
+def _total_text_chars(node) -> int:
+    """Count every string value recursively across the entire handoff payload (zero uncounted string arrays or path fields)."""
+    if isinstance(node, str):
+        return len(node)
+    if isinstance(node, list):
+        return sum(_total_text_chars(item) for item in node)
+    if isinstance(node, dict):
+        return sum(_total_text_chars(val) for val in node.values())
+    return 0
+
+
+def _validate_review_and_claude_scope(payload, root: Path) -> None:
+    present_opt = set(payload) & OPTIONAL_FIELDS
+    if present_opt and present_opt != OPTIONAL_FIELDS:
+        raise InvalidHandoff("handoff: review_stage and review_doc_path must be provided as a pair")
+
+    review_stage = None
+    review_doc_path = None
+    if present_opt:
+        review_stage = text(payload["review_stage"], "review_stage")
+        if review_stage not in REVIEW_STAGES:
+            raise InvalidHandoff("review_stage: unsupported review_stage enum")
+        review_doc_path = text(payload["review_doc_path"], "review_doc_path")
+        relative_file(root, review_doc_path, "review_doc_path")
+        if review_stage in ACCEPTANCE_DOC_STAGES:
+            if not ACCEPTANCE_DOC_RE.match(review_doc_path):
+                raise InvalidHandoff(
+                    f"review_doc_path: {review_stage} requires docs/acceptance/accept_YYYYMMDD_<topic>.md"
+                )
+        elif not RD_REVIEW_DOC_RE.match(review_doc_path):
+            raise InvalidHandoff("review_doc_path: stage requires docs/reviews/review_YYYYMMDD_<topic>_<t1|t2|t4>[-rN].md")
+
+    recipient_is_claude = payload["recipient"]["agent"].lower() == "claude"
+    stage_is_claude = review_stage in CLAUDE_CHAR_CAPS
+
+    if recipient_is_claude and not stage_is_claude:
+        raise InvalidHandoff(
+            "HO-CLAUDE-SCOPE: recipient claude requires review_stage in "
+            "claude_arch|claude_acceptance_revision|claude_spot_check|claude_escalation|claude_arch_audit"
+        )
+    if stage_is_claude and not recipient_is_claude:
+        raise InvalidHandoff("HO-CLAUDE-SCOPE: claude_* review_stage must target recipient agent claude")
+
+    if recipient_is_claude:
+        if review_stage == "claude_acceptance_revision":
+            # Claude directly revises and finalizes the acceptance procedure: only the bound accept_*.md is writable.
+            if any(item != review_doc_path for item in payload["allowed_write_paths"]):
+                raise InvalidHandoff(
+                    "HO-CLAUDE-SCOPE: claude_acceptance_revision may only write review_doc_path (docs/acceptance/accept_*.md)"
+                )
+        elif payload["allowed_write_paths"]:
+            raise InvalidHandoff("HO-CLAUDE-SCOPE: claude handoff must be read-only (allowed_write_paths must be [])")
+        if not CLAUDE_PLAN_DOC_RE.match(payload["plan_path"]):
+            raise InvalidHandoff("HO-CLAUDE-SCOPE: plan_path restricted to docs/[archive/]plan/*.plan.md")
+        if not CLAUDE_CHANGE_DOC_RE.match(payload["change_path"]):
+            raise InvalidHandoff("HO-CLAUDE-SCOPE: change_path restricted to docs/[archive/]changes/change_*.md")
+        for index, item in enumerate(payload["inputs"]):
+            if not CLAUDE_INPUT_DOC_RE.match(item):
+                raise InvalidHandoff(
+                    f"HO-CLAUDE-SCOPE: inputs[{index}] restricted to docs/{{design,plan,reviews,acceptance}}/**/*.md"
+                )
+        for index, item in enumerate(payload["deliverables"]):
+            if not CLAUDE_DELIVERABLE_DOC_RE.match(item):
+                raise InvalidHandoff(
+                    f"HO-CLAUDE-SCOPE: deliverables[{index}] restricted to docs/{{reviews,acceptance}}/**/*.md"
+                )
+        for key in ID_FIELDS:
+            if not ASCII_ID_RE.match(payload[key]):
+                raise InvalidHandoff(f"HO-CLAUDE-SCOPE: {key} must match ASCII identifier [A-Za-z0-9._:-]{{1,64}}")
+        for ep_key in ("sender", "recipient", "reply_to"):
+            for sub in ("session_key", "service", "native_session_id"):
+                if not ASCII_ID_RE.match(payload[ep_key][sub]):
+                    raise InvalidHandoff(
+                        f"HO-CLAUDE-SCOPE: {ep_key}.{sub} must match ASCII identifier [A-Za-z0-9._:-]{{1,64}}"
+                    )
+        cap = CLAUDE_CHAR_CAPS[review_stage]
+        total_chars = _total_text_chars(payload)
+        if total_chars > cap:
+            raise InvalidHandoff(
+                f"HO-CLAUDE-SCOPE: total_text_chars ({total_chars}) exceeds {review_stage} limit ({cap})"
+            )
+
+
 def validate(payload, workspace):
     root = Path(workspace).resolve()
     if not root.is_dir():
         raise InvalidHandoff("workspace: directory required")
-    exact(payload, FIELDS, "handoff")
-    scalar = FIELDS - {"revision", "sender", "recipient", "reply_to", "inputs",
-                      "allowed_write_paths", "constraints", "deliverables", "verification", "completion_criteria"}
+    if not isinstance(payload, dict):
+        raise InvalidHandoff("handoff: incorrect field set")
+    keys = set(payload)
+    unknown = keys - (FIELDS | OPTIONAL_FIELDS)
+    missing = FIELDS - keys
+    if unknown or missing:
+        raise InvalidHandoff("handoff: incorrect field set")
+
+    scalar = FIELDS - {
+        "revision", "sender", "recipient", "reply_to", "inputs",
+        "allowed_write_paths", "constraints", "deliverables", "verification", "completion_criteria",
+    }
     for key in scalar:
         text(payload[key], key)
     positive(payload["revision"], "revision")
@@ -101,9 +220,21 @@ def validate(payload, workspace):
                 relative_file(root, value, label)
             else:
                 text(value, label)
-    return {"valid": True, "plan_id": payload["plan_id"], "task_key": payload["task_key"],
-            "assignment_id": payload["assignment_id"], "revision": payload["revision"],
-            "checks": "fields-and-local-paths-only"}
+
+    _validate_review_and_claude_scope(payload, root)
+
+    result = {
+        "valid": True,
+        "plan_id": payload["plan_id"],
+        "task_key": payload["task_key"],
+        "assignment_id": payload["assignment_id"],
+        "revision": payload["revision"],
+        "checks": "fields-and-local-paths-only",
+    }
+    if "review_stage" in payload:
+        result["review_stage"] = payload["review_stage"]
+        result["review_doc_path"] = payload["review_doc_path"]
+    return result
 
 
 def unique_pairs(pairs):

@@ -664,9 +664,19 @@ def cmd_generate(args: argparse.Namespace) -> int:
         return 1
 
     engine = (args.engine or "codex").lower()
+    if engine == "google-flow":
+        if args.aspect_ratio not in ("16:9", "9:16", "1:1") or args.model not in (None, "", "nano2", "nano21", "nano-pro"):
+            raise ImageClientError("Google Flow model or aspect ratio unsupported")
+        if (len(getattr(args, "ref_images", None) or []) + int(bool(getattr(args, "image", None)
+                or getattr(args, "source_artifact_id", None)))) > 3:
+            raise ImageClientError("Google Flow supports at most three reference images")
+        if args.resolution or args.quality or getattr(args, "background", "auto") != "auto":
+            raise ImageClientError("Google Flow selects output resolution and quality")
+    else:
+        args.resolution = args.resolution or "2k"
     project_id = validate_project_id(args.project_id)
     idempotency_key = args.idempotency_key or f"cli-{int(time.time() * 1000)}-{os.urandom(3).hex()}"
-    resolved_model = args.model or ("gpt-image-2.6-sunburst" if engine == "codex" else "gemini-nano-banana-2.1")
+    resolved_model = args.model or ("gpt-image-2.6-sunburst" if engine == "codex" else "nano2" if engine == "google-flow" else "gemini-nano-banana-2.1")
 
     target_quality = getattr(args, "quality", "high") or "high"
     background = getattr(args, "background", "auto") or "auto"
@@ -740,8 +750,13 @@ def cmd_generate(args: argparse.Namespace) -> int:
             mcp_args["source_artifact_id"] = source_artifact_id
         if ref_artifact_ids:
             mcp_args["reference_artifact_ids"] = ref_artifact_ids
-        if engine in ("codex", "gemini", "grok") and getattr(args, "budget_limit", ""):
-            mcp_args["budget_limit"] = args.budget_limit
+        if engine in ("codex", "gemini", "grok"):
+            mcp_args["budget_limit"] = getattr(args, "budget_limit", None) or "1.00"
+        if engine == "google-flow":
+            for key in ("quality", "resolution"):
+                mcp_args.pop(key)
+            if args.budget_limit:
+                mcp_args["budget_limit"] = args.budget_limit
         if getattr(args, "channel_account_id", ""):
             mcp_args["channel_account_id"] = args.channel_account_id
 
@@ -776,6 +791,11 @@ def cmd_generate(args: argparse.Namespace) -> int:
             "quality": target_quality,
             "background": background,
         }
+        if engine == "google-flow":
+            for key in ("quality", "resolution", "size"):
+                payload.pop(key)
+            if args.budget_limit:
+                payload["budget_limit"] = args.budget_limit
         if source_artifact_id:
             payload["source_artifact_id"] = source_artifact_id
         if ref_artifact_ids:
@@ -924,7 +944,7 @@ def main() -> int:
     # list
     sub_list = subparsers.add_parser("list", help="列出任务列表")
     sub_list.add_argument("--project-id", default=None, help="按项目筛选")
-    sub_list.add_argument("--engine", choices=["codex", "gemini"], default=None, help="按引擎筛选")
+    sub_list.add_argument("--engine", choices=["codex", "gemini", "google-flow"], default=None, help="按引擎筛选")
     sub_list.add_argument("--status", choices=["queued", "running", "completed", "failed", "canceled"], default=None, help="按状态筛选")
     sub_list.add_argument("--limit", type=int, default=20, help="展示条数")
     sub_list.add_argument("--json", action="store_true", help="以完整 JSON 输出")
@@ -938,15 +958,15 @@ def main() -> int:
     # generate
     sub_gen = subparsers.add_parser("generate", help="提交生图或编辑任务")
     sub_gen.add_argument("--prompt", required=True, help="生图提示词")
-    sub_gen.add_argument("--engine", choices=["codex", "gemini", "grok", "moss-image"], default="codex", help="底层引擎驱动 (默认 codex)")
+    sub_gen.add_argument("--engine", choices=["codex", "gemini", "google-flow", "grok", "moss-image"], default="codex", help="底层引擎驱动 (默认 codex)")
     sub_gen.add_argument("--model", default="", help="指定模型覆盖默认值 (codex 默认 gpt-image-2.6-sunburst，可选 gpt-image-2.6-flare；gemini 默认 gemini-nano-banana-2.1)")
     sub_gen.add_argument("--aspect-ratio", choices=["16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3"], default="16:9", help="画幅比例 (默认 16:9)")
-    sub_gen.add_argument("--resolution", choices=["1k", "2k", "4k"], default="2k", help="分辨率 (默认 2k)")
-    sub_gen.add_argument("--quality", choices=["auto", "low", "medium", "high", "xhigh", "max", "hd", "standard"], default="high", help="图像质量 (默认 high)")
+    sub_gen.add_argument("--resolution", choices=["1k", "2k", "4k"], default=None, help="分辨率 (默认 2k)")
+    sub_gen.add_argument("--quality", choices=["auto", "low", "medium", "high", "xhigh", "max", "hd", "standard"], default=None, help="图像质量 (默认 high)")
     sub_gen.add_argument("--background", choices=["auto", "transparent", "opaque"], default="auto", help="背景模式 (transparent 生成纯透明通道 PNG)")
     sub_gen.add_argument("--project-id", required=True, help="当前 Studio Project 的小写 UUIDv7 标识")
     sub_gen.add_argument("--idempotency-key", default="", help="客户端幂等业务键")
-    sub_gen.add_argument("--budget-limit", default="1.00", help="USD 预算上限预留 (默认 1.00，moss-image 自动忽略)")
+    sub_gen.add_argument("--budget-limit", default=None, help="Google Flow 使用可选的非负整数积分上限。Codex、Gemini、Grok 的 USD 上限默认 1.00")
     sub_gen.add_argument("--channel-account-id", default="", help="可选渠道账号 ID")
     sub_gen.add_argument("--wait", action="store_true", help="等待任务生成完成")
     sub_gen.add_argument("--timeout", type=float, default=600.0, help="轮询超时时间 (秒，默认 600)")

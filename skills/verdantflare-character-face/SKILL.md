@@ -15,6 +15,8 @@ description: 将正脸身份参考经视频取姿态、抽帧和正脸参考纠�
 
 角色年龄、体型、表情和图数取当前任务，不把案例参数写成默认基线。新要求覆盖旧要求但保留历史记录。两张笑脸通常只修两张，不重置全库。
 
+制作角色设定页（服装造型母版）时读取[角色设定页规范](references/character-sheet.md)：版式固定为半身照＋无头三视图，服装按原片逐项核对，禁止以带脸全身三视图代替。
+
 ## 2. 组合生产能力
 
 按需要读取已安装的 `verdantflare-image`、Studio版 `verdantflare-video`、`verdantflare-artifact`、`verdantflare-project` 技能。核对Video的Studio客户端契约标识；不要混用公共API同名技能。依赖缺失时说明缺少哪项，继续不依赖它的整理，不臆造工具或绕过Studio。

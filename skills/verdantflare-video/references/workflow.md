@@ -14,7 +14,7 @@
 
 调用当前注册的创建工具前将Attempt置为 `submitting`。成功返回后先保存原始任务ID，再查询状态。未收到明确提交结果时记录 `submission_unknown`，按原幂等键/任务ID恢复；不能将网络超时猜成失败，也不能换渠道或新建幂等键重放。
 
-- `queued` / `running`：保存最近状态，继续查询原任务。
+- `queued` / `running`：保存最近状态，继续查询原任务（本地 GPU 路由出现 `waiting_gpu_lease` 或 `queue_reason` 表示正在 Station GPU 调度器排队等待显存或按需扩容，严禁当作故障重提或切换渠道）。
 - `succeeded`：读取结果，进入媒体验证。
 - `failed` / `cancelled`：保存错误或取消状态，结束本次Attempt。
 - 未知状态：保留原始值并核查协议，不映射成成功或已确认失败。
@@ -28,7 +28,7 @@
 运行前确认解释器为 Python 3.10 或更新版本；系统 `python3` 低于此版本时显式使用已安装的受支持解释器（如 `python3.10`），不要改系统默认或因下载失败重新生成。源码、安装包和实际调用均使用同一受支持版本验证。
 
 - `check`：分页发现工具，优先 `video.create`；读取 capabilities 的宿主默认渠道和适配器限制，不提交生成，不把 configured 当就绪。
-- `generate`：经 Studio 创建，显式模型／渠道优先，否则解析宿主明确默认；精确匹配能力行和工具 Schema。`route=h3-singularity` 可传 `--quality-profile {fasth3-nvfp4,du-0}`、`--regenerate-2k`、`--grid-mode {budget_1440p,exact_2x}`（须配合 `--regenerate-2k`）与 `--interpolate`。模型、模式、画幅、时长和分辨率不使用固定白名单；默认值只取已声明能力或匹配工具 Schema，声明不一致就停止。已注册预检时自动调用并保存结果，不静默改画幅或换渠道。
+- `generate`：经 Studio 创建，显式模型／渠道优先，否则解析宿主明确默认（5090 默认 `h3-fasth3`）；精确匹配能力行和工具 Schema。本地 H3（`h3-fasth3` 仅支持 `fasth3-nvfp4`，冷备 `h3-singularity` 仅支持 `du-0`）可传 `--quality-profile`、`--regenerate-2k`、`--grid-mode {budget_1440p,exact_2x}`（须配合 `--regenerate-2k`）与 `--interpolate`。模型、模式、画幅、时长和分辨率不使用固定白名单；默认值只取已声明能力或匹配工具 Schema，声明不一致就停止。已注册预检时自动调用并保存结果，不静默改画幅或换渠道。
 - `regenerate-2k`：经 Studio 调用 `video.regenerate_2k`，将同项目已有 24 FPS H3 视频（`--source-artifact-id`）严格等比重生成至 2K（默认 `budget_1440p`，可选 `--grid-mode exact_2x`），支持 `--prompt`、`--seed`、`--title` 及可选 `--interpolate` 后置 48 FPS 插帧。
 - `import`：本地 `--file` 或中央 `--content-ref-file` 优先走分块协议，支持图像、视频和音频；相同来源、文件名、用途、摘要生成固定导入键。中断后重跑同一命令查询并续传，commit 丢失响应时复用同一导入身份。`--purpose` 记录用途，允许来源 `--source-url` 仍走兼容入口。
 - `status` / `result`：查询原 Video 任务，确认返回格式兼容；含 `delivery` 的任务在 `result --output` 时自动下载并核验 `delivery.final_artifact_id`，若 `delivery.status=failed` 则拒绝写出并提示保留的 `M1 / M2` 重试入口。
@@ -72,3 +72,5 @@ python scripts/video_client.py generate --project-id <项目ID> --idempotency-ke
 ## 5. 任务 Title
 
 已有 Agent 在创作上下文生成或沿用 Title，CLI 生成可加 `--title "湖面漂流的纸船"`。Title 是命名快照，与固定 Generation Unit / Attempt 的生成 request 分离；原 project_id、幂等键、task ID 和输入摘要仍是恢复身份。resume/status/result 读取原任务，不以重复名称查找、重命名或重新生成；用户报告同名时附镜头上下文或时间。具体字段及旧宿主兼容见 [MCP 调用说明](video-mcp.md)。
+
+Google Flow 会员渠道使用显式参数 `--route google-flow`，模型取自当前 Video 能力目录。创建前必须通过项目写权限、会话、模型与积分预检。`--budget-limit` 使用正整数积分。结果不明时用原 Video 任务 ID 恢复查询。

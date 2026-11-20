@@ -55,7 +55,7 @@
 - `voice_source`：实际使用的 `world`（`asset_id`、`version_id`、`reference_sha256`）或 `project_candidate`（`voice_profile`、`profile_sha256`）。
 - `resolved_emotion_vector`：实际生效的八维情绪向量。
 - `text`：`{source, sent, lexicon_hits}`。
-- `timings`：`{queue_seconds, load_seconds, inference_seconds}`。
+- `timings`：`{queue_seconds, load_seconds, execution_seconds, execution_source, inference_seconds, turnaround_seconds, queue_wait_seconds}`（`execution_seconds` 优先读取 `report.json` 顶层 `elapsed_seconds`，次选 `report.metrics.elapsed_seconds`，缺失为 `null`，`inference_seconds` 与之保持一致，不再使用任务周转墙钟耗时 `turnaround_seconds` 冒充推理耗时）。
 
 在短剧合入或声线升级后，回读已选 take 的 `generation.json` 并与当前目标声线版本、当前词典计算出的 `sent_text` 及当前 `model_manifest_sha256` 比对：
 
@@ -67,7 +67,7 @@
 
 下载返回的原生音频、剪辑副本和报告，按返回的大小与 SHA-256 核验。`report.json`（`schema_version: 2`）记录：
 
-- `original`（22.05 kHz PCM16）与 `editing`（48 kHz PCM24 单声道；-16 LUFS / -1.0 dBTP为剪辑交付目标，必须实测，不表示服务已自动归一）各自的时长、采样率、声道、峰值、真峰值（`true_peak_dbfs`）、综合响度（`integrated_lufs`）、满幅采样数、首尾静音与语音活动区间。
+- `original`（原生 22.05 kHz PCM16，保持原始字节与时长零改动）与 `editing`（48 kHz PCM24 单声道纯线性增益剪辑副本：目标 `-16 LUFS`、真峰值上限 `-1.0 dBTP`（峰值优先，正增益上限 `+12 dB`，近静音 `<= -60 LUFS` 不放大；当 `report.json` 中 `editing.limited_by != "none"` 时实际响度可能达不到 `-16 LUFS`））各自的时长、采样率、声道、峰值、4 倍过采样真峰值（`true_peak_dbtp`）、综合响度（`integrated_lufs`）、满幅采样数、首尾静音，以及 `editing` 的 `applied_gain_db` 与 `limited_by`（`none | true_peak | max_boost | silence`）。原生音频另记录首尾静音与语音活动区间；实测指标不等于已通过听审。
 - `asr`：SenseVoiceSmall 回写文本、标准化文本、字错率 `cer` 与 `transcript_mismatch`。
 - `speaker_similarity`：WeSpeaker 参考声线余弦相似度。
 - `shot_window_seconds` 与 `window_diff_seconds`：镜头时间窗偏差。

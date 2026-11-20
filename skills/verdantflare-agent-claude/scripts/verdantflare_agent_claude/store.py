@@ -335,6 +335,36 @@ class Store:
             )
             return lost_count
 
+    def recovery_prompt(self, task):
+        """Only an acknowledged native turn with a persisted accepted command."""
+        with closing(self.connect()) as db:
+            injected = db.execute("SELECT payload FROM events WHERE task_id=? AND turn_id=? AND kind='panel_injected' ORDER BY seq DESC LIMIT 1", (task['id'], task['turn_id'])).fetchone()
+            cmd = db.execute("SELECT payload,state,result FROM commands WHERE task_id=? AND operation IN ('start','continue') ORDER BY created DESC,rowid DESC LIMIT 1", (task['id'],)).fetchone()
+            if not injected or not cmd or cmd['state'] != 'done' or json.loads(cmd['result'] or '{}').get('accepted') is not True:
+                return None
+            ack = json.loads(injected['payload'])
+            if ack.get('session_id') != task['thread_id'] or ack.get('turn_id') != task['turn_id']:
+                return None
+            return json.loads(cmd['payload']).get('prompt')
+
+    def recover_finished_panel(self, snapshot, outcome):
+        """CAS a proven lost panel turn; no caller-supplied state or lease target."""
+        with self.transaction() as db:
+            task = self._task(db, snapshot['id'])
+            if task['state'] == 'completed' and task['turn_id'] == snapshot['turn_id']:
+                return task
+            if any(task[k] != snapshot[k] for k in ('mode', 'cwd', 'thread_id', 'turn_id', 'state', 'owner', 'updated')):
+                raise BridgeError('STALE_TURN', 'Recovery observation no longer matches task')
+            proof = outcome.get('recovery_evidence', {})
+            if task['mode'] != 'panel' or task['state'] != 'interrupted_unknown' or task['owner'] is not None or proof.get('session_id') != task['thread_id'] or proof.get('turn_id') != task['turn_id'] or proof.get('user_message_uuid') != task['turn_id'] or proof.get('native_status') != 'idle' or proof.get('stop_reason') != 'end_turn' or not outcome.get('answer'):
+                raise BridgeError('BACKEND_DISCONNECTED', 'Finished native panel evidence is required')
+            db.execute("UPDATE tasks SET state='completed',updated=?,error=NULL WHERE id=?", (time.time(), task['id']))
+            db.execute("UPDATE turns SET state='completed',result=? WHERE task_id=? AND turn_id=?", (encode(outcome), task['id'], task['turn_id']))
+            db.execute('DELETE FROM leases WHERE task_id=?', (task['id'],))
+            db.execute("UPDATE pending SET state='expired' WHERE task_id=? AND state IN ('waiting','responding')", (task['id'],))
+            self._event(db, task, 'native_turn_recovered', proof)
+            return self._task(db, task['id'])
+
     def task(self, task_id):
         db = self.connect()
         try:

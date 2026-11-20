@@ -96,24 +96,58 @@ def read_selection(database):
         raise BridgeError('PERMISSIONS_UNAVAILABLE', 'Cannot read bound host permission selection') from None
 
 
-def assert_no_pending_permission_conflict(state, turns, selection):
-    """Never overwrite a thread's current policy with a shared host preference.
-
-    The turns argument is retained for callers; historical choices do not grant
-    authority to replace the current thread selection.
-    """
+def permission_comparison(state, selection):
+    """Report only policy fields, never host preferences or conversation content."""
     expected = selection.request_fields()
-    for source in (state.get('latestThreadSettings') or {}, state.get('currentPermissions') or {}):
-        active = source.get('activePermissionProfile') or {}
-        profile = active.get('id') or source.get('permissions')
-        if not profile:
-            raise BridgeError('PERMISSIONS_UNAVAILABLE', 'Current thread permission selection is unavailable')
-        for current, selected in ((profile, expected['permissions']),
-                                  (source.get('approvalPolicy'), expected['approvalPolicy']),
-                                  (source.get('approvalsReviewer'), expected['approvalsReviewer'])):
-            if current is not None and current != selected:
-                raise BridgeError('PERMISSIONS_CONFLICT',
-                                  'Current thread permissions conflict with the host selection; no turn was submitted')
+    sources = {}
+    mismatches = []
+    missing = False
+    for name in ('latestThreadSettings', 'currentPermissions'):
+        source = state.get(name) or {}
+        active = source.get('activePermissionProfile')
+        profile = active.get('id') if isinstance(active, dict) else None
+        fields = {'permissions': profile or source.get('permissions'),
+                  'approvalPolicy': source.get('approvalPolicy'),
+                  'approvalsReviewer': source.get('approvalsReviewer')}
+        sources[name] = fields
+        for key, value in fields.items():
+            missing |= value is None
+            if value is not None and value != expected[key]:
+                mismatches.append({'source': name, 'field': key})
+    return {'status': 'conflict' if mismatches else 'unknown' if missing else 'match',
+            'thread': sources, 'host': {'mode': selection.mode, **expected},
+            'mismatches': mismatches}
+
+
+def permission_remediation(comparison):
+    modes = []
+    for fields in comparison['thread'].values():
+        for mode in CATALOG:
+            if fields == PermissionSelection(mode, '').request_fields() and mode not in modes:
+                modes.append(mode)
+    return {'action': 'user_select_thread_policy_in_panel', 'matching_thread_modes': modes,
+            'instructions': 'In the target panel, select the existing thread policy shown in thread '
+            '(matching_thread_modes when available), then query capabilities again. '
+            'If thread sources disagree or fields are missing, inspect both in the panel first. '
+            'Changing the thread to the host policy requires an explicit user decision; '
+            'the bridge never changes permissions. For an originally managed task, the authorized '
+            'managed continuation is an alternative only with its own permitted policy and a '
+            'resumable thread; do not use it to bypass a permission conflict.'}
+
+
+def assert_no_pending_permission_conflict(state, turns, selection):
+    """Never overwrite current thread policy with a shared host preference."""
+    comparison = permission_comparison(state, selection)
+    if comparison['status'] == 'conflict':
+        remediation = permission_remediation(comparison)
+        raise BridgeError('PERMISSIONS_CONFLICT',
+                          'Current thread permissions conflict with the host selection; no turn was submitted. '
+                          + json.dumps({'thread': comparison['thread'], 'host': comparison['host']}, ensure_ascii=False)
+                          + '. ' + remediation['instructions'],
+                          reason='thread_host_selection_mismatch',
+                          details={**comparison, 'remediation': remediation})
+    if any(not fields['permissions'] for fields in comparison['thread'].values()):
+        raise BridgeError('PERMISSIONS_UNAVAILABLE', 'Current thread permission selection is unavailable')
 
 
 def default_vscode_database(extension):
