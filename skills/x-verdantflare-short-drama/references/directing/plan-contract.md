@@ -13,3 +13,7 @@
 可选 `generation_units` 数组包含 `id`、`start_ms`、`end_ms`、按时间顺序排列的 `shot_ids`、`form`（`continuous_single_shot` 或 `internal_multi_shot`）、`model`。同一 Shot 只能进入一个单元，单元不得跨连续性组、地点或同一人物的不同 Look，也不得跨越未覆盖的时间段。`model=h3` 或 `minimax-h3-ref2va` 时单元须为 4–15 秒，连续单镜只含一镜，内部多镜含 2–3 镜。未知模型不猜测能力：可以省略整个 `generation_units`。
 
 广告计划另有 `brief`：非空的 `benefit`、`evidence`、`cta` 与字符串数组 `prohibited_claims`。可选 `assumptions` 和 `open_questions` 都是字符串数组，用于说明资料缺口。校验器检查时码、引用和模型单元的确定性约束，不评价创意质量或证据真假。
+
+## 1. 表演与摄影交接附件
+
+不改变本地plan v1字段或Studio协议。每个生成单元通过固定索引关联动作卡、对白触发、相机证据和[执行包](../production/execution-gate.md)；校验器只能验证plan既有结构，不用其通过代替附件语义检查。请求参数由真实能力决定，本附件不新增模型控制能力。

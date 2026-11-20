@@ -1,20 +1,20 @@
 # VerdantFlare Film Production
 
+正式新生成从[执行入口](execution-gate.md)进入；对未知复杂动作先读[通用拆解](../performance/action-analysis.md)。缺失的实际输入不能靠长提示词补齐，既有任务优先恢复。
+
 以用户指定的交付阶段为范围；已有剧本、视觉圣经、批准资产和 Shot 版本是事实源。新项目先确定目标片长、画幅、故事约束和实际项目上下文，缺失但不影响当前阶段的选项写为假设。不要把编剧建议当作用户已经批准的剧本改动。
 
-| 当前任务 | 执行入口 |
-| --- | --- |
-| 新短剧立项、全流程顺序和跨阶段输入输出 | [短剧端到端制作模板](series-workflow-template.md)；正式项目 ID 与本地引用分开记录 |
-| 多版本宣传片、批次计划、素材盘点与粗剪交接 | [执行方案](execution-planning.md)；收敛最新要求，复用授权，逐项核对真实动作与时间窗口 |
-| 完整剧本包创作、修订或配套设定补齐 | [完整剧本 Skill](../writing/guide.md)；六类文字文档、版本索引和审核记录先于下游设计交接 |
-| 剧本或人物小传的锁稿前审核与返修 | [剧本审核 Skill](../review/guide.md)；发现与人工决定绑定具体版本 |
-| 从单场剧本提取有原文证据的人物、道具与动作 | [Local Scene Breakdown Skill](../local-breakdown/guide.md)；人工核对后再规划 |
-| 从剧本到场景、Shot 和资产需求 | [制作流程](workflow.md)；使用 [短剧 Director Skill](../directing/guide.md) 的计划契约与校验器 |
-| 场景正反打、人物站位、关键帧确认与视频返修 | [场景—关键帧—视频规范](scene-keyframe-video.md)；先确定空间与表演目标，再按真实模型能力生成和验片 |
-| 场景、道具、服装分别沉淀为跨集一致性资产 | [数字资产圣经模板](asset-bible-template.md)；地点本体、场次变体、道具状态、角色 Look 和逐镜引用分别记录 |
-| 角色、造型、场景或分镜图像候选 | [Image Skill](https://github.com/verdantflarehub/verdantflare-skills/blob/48ce44aa22e8c024e92cb79eb2c2da2b4bbcc45c/skills/verdantflare-image/SKILL.md)（默认出图模型 GPT Image 2.6 / `gpt-image-2.6-sunburst`） |
-| 已冻结 Generation Unit 的视频提示词、提交、查询和恢复 | [Video Skill](https://github.com/verdantflarehub/verdantflare-skills/blob/9320ed7f1af6dfe6dc3ad5d43cff4e68685df586/skills/verdantflare-video/SKILL.md) |
-| 已批准歌曲的 30 秒高潮 MV | [Music MV Skill](https://github.com/verdantflarehub/verdantflare-skills/blob/3c5a282fc4e8c30bda3bbfeef173f43d543bf93d/skills/verdantflare-music-mv/SKILL.md) |
+- 新短剧立项、全流程顺序和跨阶段输入输出：[短剧端到端制作模板](series-workflow-template.md)；正式项目 ID 与本地引用分开记录
+- 多版本宣传片、批次计划、素材盘点与粗剪交接：[执行方案](execution-planning.md)；收敛最新要求，复用授权，逐项核对真实动作与时间窗口
+- 完整剧本包创作、修订或配套设定补齐：[完整剧本 Skill](../writing/guide.md)；六类文字文档、版本索引和审核记录先于下游设计交接
+- 剧本或人物小传的锁稿前审核与返修：[剧本审核 Skill](../review/guide.md)；发现与人工决定绑定具体版本
+- 从单场剧本提取有原文证据的人物、道具与动作：[Local Scene Breakdown Skill](../local-breakdown/guide.md)；人工核对后再规划
+- 从剧本到场景、Shot 和资产需求：[制作流程](workflow.md)；使用 [短剧 Director Skill](../directing/guide.md) 的计划契约与校验器
+- 场景正反打、人物站位、关键帧确认与视频返修：[场景—关键帧—视频规范](scene-keyframe-video.md)；正式出图前先核比例、调度与跨镜证据，再按真实模型能力生成和验片
+- 场景、道具、服装分别沉淀为跨集一致性资产：[数字资产圣经模板](asset-bible-template.md)；地点本体、场次变体、道具状态、角色 Look 和逐镜引用分别记录
+- 角色、造型、场景或分镜图像候选：[Image Skill](https://github.com/verdantflarehub/verdantflare-skills/blob/48ce44a2513c8d1556eafec85f9a42ce80d3c9a9/skills/verdantflare-image/SKILL.md)（默认出图模型 GPT Image 2.6 / `gpt-image-2.6-sunburst`）
+- 已冻结 Generation Unit 的视频提示词、提交、查询和恢复：[Video Skill](https://github.com/verdantflarehub/verdantflare-skills/blob/9320ed7f1af6dfe6dc3ad5d43cff4e68685df586/skills/verdantflare-video/SKILL.md)
+- 已批准歌曲的 30 秒高潮 MV：[Music MV Skill](https://github.com/verdantflarehub/verdantflare-skills/blob/3c5a282fc4e8c30bda3bbfeef173f43d543bf93d/skills/verdantflare-music-mv/SKILL.md)
 
 交付前期方案时输出 `treatment.md`、`plan.json`、资产需求和待决事项；运行 Director 校验器。剧本审核的 P0/P1 只阻断受影响的锁稿、Shot 和生成任务，不妨碍无依赖部分的整理。实际制作时逐阶段交付候选及引用、任务 ID 和检查结果，不把候选写为获批成片。视频调用只通过 Video MCP，模型、route、输入模式和时长以当前宿主能力及 Video Skill 为准。
 
