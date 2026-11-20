@@ -1,0 +1,275 @@
+{
+  "candidateManifestSha256": "915df319189f12ef3b494c43c92eb27673bc5fdcddbb7830d3e6f307e6b48468",
+  "candidateReleaseId": "0.2.0-integration.6",
+  "distribution": "unavailable",
+  "example_version": "0.1.0",
+  "installable": false,
+  "installer": {
+    "path": null,
+    "sha256": null,
+    "status": "missing"
+  },
+  "production_usable": false,
+  "publishedReleaseId": null,
+  "sample": true,
+  "schema": "vf.hub-development-example/v1",
+  "skills": [
+    {
+      "artifact": {
+        "file_manifest": "manifests/verdantflare-artifact.json",
+        "file_manifest_sha256": "64d4bf10f40b641a56dfe16dbe4a29013861f4be9ee189eb308a29ea32c950ab",
+        "path": "candidate/packages/verdantflare-artifact.zip",
+        "sha256": "7debc39d1a97f8b363c8d07eaa04fd77fb9a1c266685080180548a72288ec72b",
+        "size": 9938
+      },
+      "id": "verdantflare-artifact",
+      "requires": [],
+      "version": "0.2.0-integration.6"
+    },
+    {
+      "artifact": {
+        "file_manifest": "manifests/verdantflare-project.json",
+        "file_manifest_sha256": "3c74dcbbd857c563ea564842aba040f2c29e88148360beebe4abf1363c4e14b5",
+        "path": "candidate/packages/verdantflare-project.zip",
+        "sha256": "a76bac2c44498238c48ec35e8ff2dee45f087f03006cf6fbf30c5a28262ab645",
+        "size": 27571
+      },
+      "id": "verdantflare-project",
+      "requires": [
+        "verdantflare-artifact"
+      ],
+      "version": "0.2.0-integration.6"
+    },
+    {
+      "artifact": {
+        "file_manifest": "manifests/verdantflare-blender.json",
+        "file_manifest_sha256": "b84d958441063dd5f7c3dd09aa3d20b1b55ff16361f8c86bd743776c11af5aa3",
+        "path": "candidate/packages/verdantflare-blender.zip",
+        "sha256": "b4f05e85ff51229f4a36ce591fb369a075b80be275ae6a135ad8dc6ea358b4fe",
+        "size": 93952
+      },
+      "id": "verdantflare-blender",
+      "requires": [
+        "verdantflare-project",
+        "verdantflare-artifact"
+      ],
+      "version": "0.2.0-integration.6"
+    },
+    {
+      "artifact": {
+        "file_manifest": "manifests/verdantflare-image.json",
+        "file_manifest_sha256": "b54a28175045588a213dc5e3692955822ac67a1895df85fb726550358d6238a7",
+        "path": "candidate/packages/verdantflare-image.zip",
+        "sha256": "985989192d2f5237d643c5e032b80fc68e09f649f4155da23958649d52b94935",
+        "size": 117041
+      },
+      "id": "verdantflare-image",
+      "requires": [
+        "verdantflare-project",
+        "verdantflare-artifact"
+      ],
+      "version": "0.2.0-integration.6"
+    },
+    {
+      "artifact": {
+        "file_manifest": "manifests/verdantflare-video.json",
+        "file_manifest_sha256": "cc260461d05382965b464ddeb76bb4e83c818d37de468ffa6e1aecf47753adcf",
+        "path": "candidate/packages/verdantflare-video.zip",
+        "sha256": "bb35c3b94208b5b623411e68e8d95b3fb30a2498f0385e82fa4e2ce495c2d88c",
+        "size": 168580
+      },
+      "id": "verdantflare-video",
+      "requires": [
+        "verdantflare-project",
+        "verdantflare-artifact"
+      ],
+      "version": "0.2.0-integration.6"
+    },
+    {
+      "artifact": {
+        "file_manifest": "manifests/verdantflare-music.json",
+        "file_manifest_sha256": "683ce86a32ff65f9ad98968bc39aee890f00c5bde1306caa9bfddf8354d3682c",
+        "path": "candidate/packages/verdantflare-music.zip",
+        "sha256": "b2a99b05ef9d29fc1868437c556c2663678cac8472fff240640820615fd50078",
+        "size": 301118
+      },
+      "id": "verdantflare-music",
+      "requires": [
+        "verdantflare-project",
+        "verdantflare-artifact"
+      ],
+      "version": "0.2.0-integration.6"
+    },
+    {
+      "artifact": {
+        "file_manifest": "manifests/verdantflare-speech.json",
+        "file_manifest_sha256": "427184b57a2a8020393294d25192bac6c798b4daf9f40efd2c3941fff4c53f28",
+        "path": "candidate/packages/verdantflare-speech.zip",
+        "sha256": "df1e4c2299e1b2baf8b8465709daeb6c8ea090c990f4bc81e373a8ae41105a33",
+        "size": 67341
+      },
+      "id": "verdantflare-speech",
+      "requires": [
+        "verdantflare-project",
+        "verdantflare-artifact"
+      ],
+      "version": "0.2.0-integration.6"
+    },
+    {
+      "artifact": {
+        "file_manifest": "manifests/verdantflare-character-face.json",
+        "file_manifest_sha256": "4bac9715e60d17fa81016b10baf6df6c2fe52ab6bfa5215dcebd0fed5585ba0a",
+        "path": "candidate/packages/verdantflare-character-face.zip",
+        "sha256": "3a1aec14bc16d8742eec32cd4cfcf8a9b385a0d26ff018091068cbc13fedd539",
+        "size": 19743
+      },
+      "id": "verdantflare-character-face",
+      "requires": [
+        "verdantflare-image",
+        "verdantflare-video",
+        "verdantflare-project",
+        "verdantflare-artifact"
+      ],
+      "version": "0.2.0-integration.6"
+    },
+    {
+      "artifact": {
+        "file_manifest": "manifests/verdantflare-reference-learning.json",
+        "file_manifest_sha256": "2197075d5aca4eafc665089d317dcefa86318b2e0bdbbf594e2acd914d508749",
+        "path": "candidate/packages/verdantflare-reference-learning.zip",
+        "sha256": "a66aebaae5766e39973a020c938ea6e3b28a5879778927c0c382b19ed6bb3714",
+        "size": 166883
+      },
+      "id": "verdantflare-reference-learning",
+      "requires": [
+        "verdantflare-project",
+        "verdantflare-artifact"
+      ],
+      "version": "0.2.0-integration.6"
+    },
+    {
+      "artifact": {
+        "file_manifest": "manifests/verdantflare-music-mv.json",
+        "file_manifest_sha256": "81f6898d856a6c8be493c4bb8e2f4d7b6ed48cd4b70795fb1b7d95492c4dfbe3",
+        "path": "candidate/packages/verdantflare-music-mv.zip",
+        "sha256": "0c16b034167ecc73e9c36051f0029ba2fd322489190279575f73d4591832876d",
+        "size": 68432
+      },
+      "id": "verdantflare-music-mv",
+      "requires": [
+        "verdantflare-image",
+        "verdantflare-video",
+        "verdantflare-music",
+        "verdantflare-project",
+        "verdantflare-artifact"
+      ],
+      "version": "0.2.0-integration.6"
+    },
+    {
+      "artifact": {
+        "file_manifest": "manifests/x-verdantflare-short-drama.json",
+        "file_manifest_sha256": "3d63f3bbf474fb8e45e2c60986dcabad5d0ab8b8133ffab01134b66ce8013458",
+        "path": "candidate/packages/x-verdantflare-short-drama.zip",
+        "sha256": "af93eecee6d20f1598a25d5799b5afc0fcc34293554b1a205c5ae90a118eebfa",
+        "size": 279165
+      },
+      "id": "x-verdantflare-short-drama",
+      "requires": [
+        "verdantflare-project",
+        "verdantflare-artifact",
+        "verdantflare-image",
+        "verdantflare-video",
+        "verdantflare-speech",
+        "verdantflare-music",
+        "verdantflare-music-mv",
+        "verdantflare-blender"
+      ],
+      "version": "0.2.0-integration.6"
+    }
+  ],
+  "sourceHandoffSha256": "529deb60b309edee7cb2c5b98c0b8a2fead15650a4811e1efa2a81dffca3102b",
+  "supportMatrix": [
+    {
+      "app_version": null,
+      "host": "codex",
+      "os": "windows",
+      "status": "not_run"
+    },
+    {
+      "app_version": null,
+      "host": "codex",
+      "os": "macos",
+      "status": "not_run"
+    },
+    {
+      "app_version": null,
+      "host": "claude-code",
+      "os": "windows",
+      "status": "not_run"
+    },
+    {
+      "app_version": null,
+      "host": "claude-code",
+      "os": "macos",
+      "status": "not_run"
+    },
+    {
+      "app_version": null,
+      "host": "antigravity",
+      "os": "windows",
+      "status": "not_run"
+    },
+    {
+      "app_version": null,
+      "host": "antigravity",
+      "os": "macos",
+      "status": "not_run"
+    },
+    {
+      "app_version": null,
+      "host": "workbuddy",
+      "os": "windows",
+      "status": "not_run"
+    },
+    {
+      "app_version": null,
+      "host": "workbuddy",
+      "os": "macos",
+      "status": "not_run"
+    },
+    {
+      "app_version": null,
+      "host": "deepseek-desktop",
+      "os": "windows",
+      "status": "not_run"
+    },
+    {
+      "app_version": null,
+      "host": "deepseek-desktop",
+      "os": "macos",
+      "status": "not_run"
+    }
+  ],
+  "testScenarios": [
+    {
+      "id": "preview",
+      "installationPerformed": false,
+      "simulated": true
+    },
+    {
+      "id": "missing-installer",
+      "installationPerformed": false,
+      "simulated": true
+    },
+    {
+      "id": "withdrawn",
+      "installationPerformed": false,
+      "simulated": true
+    },
+    {
+      "id": "checksum-mismatch",
+      "installationPerformed": false,
+      "simulated": true
+    }
+  ]
+}

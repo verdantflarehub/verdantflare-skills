@@ -700,6 +700,15 @@ def mcp_result(config: MCPConfig, task_id: str) -> dict[str, Any]:
     return call_mcp_tool(config, "video.result", {"video_task_id": _validate_mcp_task_id(task_id)})
 
 
+def _file_sha256(path: Path) -> str:
+    """Hash bounded chunks on every supported Python version (including 3.10)."""
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while block := stream.read(512 * 1024):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def download_mcp_result(config: MCPConfig, result: dict[str, Any], output: str) -> dict[str, Any]:
     """Download a native fixed Artifact without overwriting a different local file."""
     delivery = result.get("delivery")
@@ -734,8 +743,7 @@ def download_mcp_result(config: MCPConfig, result: dict[str, Any], output: str) 
     def matches(path):
         if not path.is_file() or path.stat().st_size != size:
             return False
-        with path.open("rb") as stream:
-            return hashlib.file_digest(stream, "sha256").hexdigest() == digest
+        return _file_sha256(path) == digest
     # Authorize even when reusing an existing matching download.
     with tempfile.TemporaryDirectory(prefix=".video-download-", dir=destination.parent) as directory:
         staged = Path(directory) / "video.mp4"
@@ -901,8 +909,7 @@ def _chunk_import(config: MCPConfig, *, project_id: str, filename: str, digest: 
     size = path.stat().st_size
     if not 0 < size <= file_max:
         raise ClientError(f"Import size exceeds the host/client transport limit of {file_max} bytes")
-    with path.open("rb") as stream:
-        checksum = hashlib.file_digest(stream, "sha256").hexdigest()
+    checksum = _file_sha256(path)
     if checksum != digest:
         raise ClientError("Local media does not match expected sha256")
     metadata = dict(project_id=project_id, filename=filename, size=size, sha256=digest,

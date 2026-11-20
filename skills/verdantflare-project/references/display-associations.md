@@ -23,3 +23,11 @@
 可用 `scripts/check_video_display.py --manifest open.json --content project-content.json --versions metadata.json` 做只读关联检查。versions 为 file_id 到 Artifact 实际 version 元数据的映射，不能用扩展名猜 MIME。只有本轮交付确需成片或完整卡片时添加 `--require-output`、`--require-covers`；用 `--expect-unit`、`--expect-cast` 核对明确的对象清单。校验器不执行上传、不创建批准，也不替代当前 Schema、权限、字节解码或浏览器渲染验证。
 
 MCP 核验给出关联、类型、内容可读的证据，不能声称看到了真实页面。明确进行前端修复／页面验收的任务按宿主规范另做真实页面检查；普通项目同步无需额外浏览器操作。
+
+## 4. 专用片场审阅与已有认可
+
+查询 `project.review_open`／`world.review_open` 前固定其具体目标版本；不要用旧候选的状态解释当前资产。返回后分别读取 `availability`、`missing`／`requirements`、`coverage` 和人工记录：文件不可读是内容或权限问题；`missing/unverified` 可能是证据职责未映射、报告格式尚无验证器，或确实缺少该范围的材料。`mapping_state=mapped` 仅表示目标可定位，不保证机位、工程恢复和完整片场都已验证。普通 `reference/doc` 附件也不能按文件名猜成工程或相机证据。
+
+既有用户认可按其固定版本、原话及用途继续沿用；例如“空间白模＋外观参考”不等于 `full_set`。专用审阅的 `unreviewed` 不撤销该既有认可，也不自动构成重新验收或重新生成的理由；同时不能把旧认可导入为新目标的完整人工批准。服务返回 agent 只可 comment 时，不能通过通用 commit、自造记录或请求头写成 approve。
+
+只在当前交付确实需要更大的复用范围时补其缺口；已存在的工程、图片和来源先核验固定引用，复用已验证字节，不重复上传。修正映射按实际契约与新业务修订进行，保留已发布版本；不为使审阅状态变绿而自动登记新 World 版本、切换选用或扩张资产用途。

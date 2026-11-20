@@ -1,0 +1,20 @@
+{
+  "kind": "exact-source-snapshots",
+  "records": [
+    {
+      "commit": "cce3dc47f0954bbce9c83ebc9c4a3a1aba81697f",
+      "path": "docs/design/contracts/v2/voice-model.schema.json",
+      "repository": "verdantflare-design",
+      "sha256": "21a85dd11ccd9c1a18a5dd13bff9aa21ec7d29e6b964b8d02eb3d40932387b65",
+      "snapshot": "voice-model.schema.json"
+    },
+    {
+      "commit": "cce3dc47f0954bbce9c83ebc9c4a3a1aba81697f",
+      "path": "docs/design/world/music/voice-model.md",
+      "repository": "verdantflare-design",
+      "sha256": "c170c8b4e98602f885ac3c39b894369fbde62a0009d29ac30c442b228e67d305",
+      "snapshot": "voice-model.md"
+    }
+  ],
+  "runtime_private_fetch_required": false
+}

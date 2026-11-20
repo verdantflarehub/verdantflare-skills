@@ -23,7 +23,9 @@ H3 Ref2VA 使用业务模型 `minimax-h3-ref2va`；`route` 单独指定推理渠
 
 H3 模型支持六种画幅，Omni Reference 还有 Auto；渠道适配器里的竖屏硬编码是接入缺口，不能据此宣称模型只支持9:16。模型规格、当前代码接入范围、实时配置和GPU实测必须分别说明。
 
-- H3 生成单元：按当前阶段读取 [输入模式](references/input-modes.md)、[提示词](references/prompting.md)、[MCP 契约](references/video-mcp.md)、[执行流程](references/workflow.md) 或 [校验](references/validation.md)。
+接收短剧交接时消费已冻结的实际请求、参考顺序／角色、起末状态、必要事件和配对音轨，不从项目最新候选重建一套输入。核对所选端点真正消费的控制：口型端点的任务说明不能当作走位或画圈指令，多图参考不能冒充硬首尾帧。变换后的目标可读性、音画窗口和动作终态在提交前核对；输入未变复用对应证据，新视频只增加动态与声画联合检查。普通独立视频及原任务恢复不强制新增短剧准备文件。
+
+- H3 生成单元：按当前阶段读取 [输入模式](references/input-modes.md)、[提示词](references/prompting.md)、[MCP 契约](references/video-mcp.md)、[执行流程](references/workflow.md) 或 [校验](references/validation.md)。 新建H3任务必须按提示词文档编译六段结构和精确引用标签，并核验保存的实际请求；原任务查询与下载不新增此检查。
 - 生成后 18+ 内容分级评估（K09 强制步骤）：每次取得新生成的视频产物后、在交付摘要展示与 Project/World 同步之前，必须按 [评估步骤](references/content-rating-step.md) 与 [评估规范](references/content-rating-rubric.md) 在本机临时目录抽帧（至少每 2 秒 1 帧、全片至少 8 帧，另补镜头切换处关键帧；评估后删除临时帧文件，并在 `reasons` 中记录抽帧数量），结合连续帧序列、音轨、正向提示词与标题完成判定，调用 `video.rate_content` 提交分级结果（`general` 与 `nsfw` 均须提交，`rubric_version` 取自规范副本文首；不确定即标 `nsfw`；超时用相同内容幂等重试，不重新生成）。判定为 `nsfw` 的产物在摘要中只写“N 个产物已标记为 NSFW 并隐藏”，不展示预览、联系表、链接、`ContentRef` 或提示词全文，也不同步到 Studio 项目或登记到 World。
 - SD2：读取 [SD2 工作流](references/sd2-workflow.md)。
 - Grok：先读取 [Grok 调用](references/grok.md)，通过同一 Studio Video MCP 显式选择 `route=grok`；不要套用 H3 的参考数量、24 FPS 或提示词标签。
@@ -35,3 +37,9 @@ H3 模型支持六种画幅，Omni Reference 还有 Auto；渠道适配器里的
 - 每次创建任务都显式传入当前项目的 `project_id`、已解析的 `route` 和固定幂等键；不能依赖服务端猜测项目或渠道。
 - 中央Artifact的 `ContentRef` 与Video原生引用按宿主适配流程转换；不直接替换ID，不把受控下载路径当成匿名公网素材URL。
 - 所有模型和渠道都通过 Studio MCP 统一网关进入，不直接调用 Runtime。
+
+定妆交接需保留完整Look与实际首帧的并看证据；裁去袖口不构成消除袖长冲突。创建前对照真实 `image_guidance` 与制作意图：普通 `reference` 模式不得因purpose写有“first-frame anchor”而标记首帧锁定；依赖首帧控制的镜头必须核实当前渠道对应模式及回显，不能凭历史发布记录假定可用。新制作批次不恢复用户已停止的旧任务；旧请求与摘要保持不可变。
+
+首帧输入先对照本次预检的实际输出宽高，不能只按“9:16”等名义画幅判断兼容。需要适配时保持人物纵横比，记录等比缩放、补边和最终裁区，实际查看后重新导入并绑定新摘要；不能直接拉伸脸和身体。尺寸不符属于输入问题，先修输入，不据通用invalid_request误报模型不支持。首帧控制只约束起点，不是图像局部编辑，也不证明后续帧保留场景或服装。
+
+单图原外观保持与白模转写实、多参考人物替换属于不同控制任务，前者通过不能替代后者验收。混合输入失效时先用最小输入检查条件是否有效，再按实际差异缩小问题；一次同时改动多个条件只能用于排查，不能宣称唯一根因。条件编码不等于逐像素强制覆盖；必须已有合格写实关键帧才能沿该帧进入动作生成，不能靠增加定妆图或否定词弥补未证明的空间控制。

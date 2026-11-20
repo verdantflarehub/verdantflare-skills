@@ -81,20 +81,50 @@ def inspect_reference(data):
             "peak_dbfs": 20 * math.log10(peak / full_scale), "clipped_samples": clipped}
 
 
+def selected_capability(capabilities):
+    """Read the current Studio declaration, or an explicitly legacy flat record."""
+    require(isinstance(capabilities, dict), "expected actual speech.capabilities")
+    if "engines" not in capabilities:
+        require(capabilities.get("engine") == "indextts2", "expected actual speech.capabilities for indextts2")
+        return capabilities
+    require(not any(key in capabilities for key in ("engine", "configured_model_manifest_sha256", "reference_seconds", "reference_max_bytes")),
+            "mixed legacy and current capability declarations")
+    engines = capabilities["engines"]
+    require(isinstance(engines, list) and all(isinstance(e, dict) and isinstance(e.get("engine"), str) for e in engines),
+            "invalid engines declaration")
+    matches = [e for e in engines if e["engine"] == "indextts2"]
+    require(len(matches) == 1, "expected exactly one indextts2 capability")
+    engine = matches[0]
+    audio = engine.get("reference_audio")
+    require(isinstance(audio, dict), "missing reference_audio limits")
+    rates = audio.get("sample_rates_hz")
+    require(isinstance(rates, list) and rates and all(type(rate) is int and rate > 0 for rate in rates)
+            and len(set(rates)) == len(rates), "invalid reference sample rates")
+    require(type(audio.get("channels")) is int and audio["channels"] == 1, "reference capability must support mono")
+    require(type(engine.get("ready")) is bool, "invalid engine readiness")
+    return {"engine": "indextts2", "configured_model_manifest_sha256": engine.get("model_manifest_sha256"),
+            "reference_seconds": {"min": audio.get("min_seconds"), "max": audio.get("max_seconds")},
+            "reference_max_bytes": audio.get("max_bytes"), "sample_rates_hz": rates,
+            "ready": engine["ready"], "service_version": capabilities.get("service_version")}
+
+
 def prepare(data, content_ref, capabilities, voice_id, label):
     require(isinstance(voice_id, str) and re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", voice_id), "invalid voice_id")
     require(isinstance(label, str) and 1 <= len(label) <= 128 and label.strip(), "label must contain 1–128 characters")
     require(isinstance(content_ref, dict) and set(content_ref) == {"store_id", "artifact_id", "version_id"}, "expected a complete Artifact ContentRef")
     require(all(isinstance(v, str) and UUID7.fullmatch(v) for v in content_ref.values()), "ContentRef requires UUIDv7 values")
-    require(isinstance(capabilities, dict) and capabilities.get("engine") == "indextts2", "expected actual speech.capabilities for indextts2")
+    capabilities = selected_capability(capabilities)
     model_hash = capabilities.get("configured_model_manifest_sha256", "")
-    require(isinstance(model_hash, str) and HASH.fullmatch(model_hash), "missing actual model manifest SHA-256")
+    require(isinstance(model_hash, str) and HASH.fullmatch(model_hash) and model_hash != "0" * 64,
+            "missing actual model manifest SHA-256")
     limits = capabilities.get("reference_seconds", {})
     require(isinstance(limits, dict), "invalid reference limits")
     bounds = [limits.get("min"), limits.get("max"), capabilities.get("reference_max_bytes")]
     require(all(type(v) in (int, float) and math.isfinite(v) and v > 0 for v in bounds), "missing finite reference limits")
     require(bounds[0] <= bounds[1], "invalid reference duration bounds")
     info = inspect_reference(data)
+    if "sample_rates_hz" in capabilities:
+        require(info["sample_rate_hz"] in capabilities["sample_rates_hz"], "reference sample rate exceeds current capability limits")
     require(bounds[0] <= info["duration_seconds"] <= bounds[1] and info["size"] <= bounds[2], "reference exceeds current capability limits")
     profile = {"schema_version": 1, "voice_id": voice_id, "label": label, "engine": "indextts2",
                "model_manifest_sha256": model_hash, "reference": {"content_ref": content_ref, "sha256": info["sha256"]},

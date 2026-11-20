@@ -245,11 +245,27 @@ class MCPAdapter:
         c.validate_capability(args, selected)
         c.validate_tool(self.inventory, tool, args)
         require('video.preflight' in self.inventory['tools'], 'registered_preflight_missing')
-        # Existing Video protocol excludes idempotency_key from preflight only.
-        preflight = {k: v for k, v in args.items() if k != 'idempotency_key'}
+        # Creation metadata is not accepted by the registered preflight protocol.
+        preflight = {k: v for k, v in args.items() if k not in {'idempotency_key', 'title'}}
         c.validate_tool(self.inventory, 'video.preflight', preflight)
         quote = c.call_mcp_tool(self.config, 'video.preflight', preflight)
-        require(quote.get('can_submit') is True, 'service_preflight_not_ready')
+        # Local H3 returns validated+resolved_output; priced channels may return can_submit.
+        local_validated = (args.get('route') == 'h3-fasth3'
+            and args.get('model') == 'minimax-h3-ref2va'
+            and quote.get('status') == 'validated'
+            and isinstance(quote.get('input_digest'), str)
+            and quote['input_digest'].startswith('sha256:')
+            and len(quote['input_digest']) == 71
+            and isinstance(quote.get('resolved_output'), dict)
+            and all(type(quote['resolved_output'].get(k)) is int
+                    and quote['resolved_output'][k] > 0 for k in ('frames', 'width', 'height'))
+            and isinstance(quote.get('prompt'), str)
+            and quote['prompt'].strip() == args.get('prompt', '').strip()
+            and quote.get('image_guidance') == args.get('image_guidance')
+            and quote.get('can_submit', True) is True)
+        require(not quote.get('error') and not quote.get('blocked_reason')
+                and (quote.get('can_submit') is True or local_validated),
+                'service_preflight_not_ready')
         self.admitted_digest = refs.request_digest(saved)
 
     def create(self, saved):

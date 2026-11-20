@@ -339,12 +339,20 @@ class GateTests(unittest.TestCase):
             validate_tool=lambda inventory, tool, args: None, call_mcp_tool=call)
         return adapter, calls, inventory
 
-    def test_adapter_sends_frozen_create_and_only_strips_preflight_idempotency(self):
+    def test_adapter_sends_frozen_create_and_strips_creation_metadata(self):
         adapter, calls, inventory = self.mcp_adapter({'can_submit': True})
+        self.request['title'] = '保护推送验证'
+        def validate(inv, tool, args):
+            if tool == 'video.preflight':
+                self.assertNotIn('title', args)
+                self.assertNotIn('idempotency_key', args)
+            else:
+                self.assertEqual(args['title'], '保护推送验证')
+        adapter.client.validate_tool = validate
         adapter.preflight(self.request)
         adapter.create(self.request)
         self.assertEqual(calls, [('video.preflight', {k: v for k, v in self.request.items()
-                               if k != 'idempotency_key'}), ('video.create', self.request)])
+                               if k not in {'idempotency_key', 'title'}}), ('video.create', self.request)])
 
     def test_adapter_blocks_unknown_readiness_and_missing_tool(self):
         for quote in ({'can_submit': False}, {}):
@@ -359,6 +367,27 @@ class GateTests(unittest.TestCase):
         with self.assertRaisesRegex(gate.GateError, 'registered_preflight_missing'):
             adapter.preflight(self.request)
         self.assertEqual(calls, [])
+
+    def test_adapter_accepts_local_h3_native_preflight_but_rejects_false_or_incomplete(self):
+        self.request.update(route='h3-fasth3', model='minimax-h3-ref2va', image_guidance='first_frame')
+        quote = {'status': 'validated', 'input_digest': 'sha256:' + 'a' * 64,
+                 'resolved_output': {'frames': 107, 'width': 768, 'height': 1344},
+                 'prompt': self.request['prompt'], 'image_guidance': 'first_frame'}
+        adapter, calls, _ = self.mcp_adapter(quote)
+        adapter.preflight(self.request)
+        adapter.create(self.request)
+        self.assertEqual(calls[-1][0], 'video.create')
+        for invalid in ({**quote, 'can_submit': False}, {**quote, 'status': 'queued'},
+                        {**quote, 'resolved_output': {}}, {**quote, 'prompt': 'different'},
+                        {**quote, 'error': 'not ready'}):
+            adapter, calls, _ = self.mcp_adapter(invalid)
+            with self.assertRaisesRegex(gate.GateError, 'service_preflight_not_ready'):
+                adapter.preflight(self.request)
+            self.assertEqual(len(calls), 1)
+        self.request['route'] = 'fal'
+        adapter, _, _ = self.mcp_adapter(quote)
+        with self.assertRaisesRegex(gate.GateError, 'service_preflight_not_ready'):
+            adapter.preflight(self.request)
 
     def test_adapter_cannot_send_changed_request_or_reuse_admission(self):
         adapter, calls, inventory = self.mcp_adapter({'can_submit': True})

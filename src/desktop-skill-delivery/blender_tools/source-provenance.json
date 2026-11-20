@@ -1,0 +1,12 @@
+{
+  "validator": {
+    "repository": "verdantflare-design",
+    "path": "scripts/set-package/validate_set_package.py",
+    "source_commit": "af8a6eda04a079bd534253cdbfe16973e7cc35be",
+    "worktree_modified": true,
+    "sha256": "9b21e29efb0c2065dce40f9d20b4ed4ff94817dc17ee144b0b73354bc87b57ee",
+    "review": "docs/reviews/review_20261119_agent-skill-compatibility_t1-r37.md",
+    "review_revision": 39,
+    "snapshot_policy": "exact bytes; update only from reviewed source"
+  }
+}

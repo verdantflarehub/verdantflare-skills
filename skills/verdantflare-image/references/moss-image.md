@@ -13,7 +13,7 @@
 
 - **不保证人物一致**：官方模型未以参考图训练，现行 R2I 只能传递构图、服装等粗粒度信息，五官与脸型会明显偏离参考图。要求人物身份一致时，选择用户已授权且实际可用的 Google 或 OpenAI 渠道；用户明确指定 MOSS 时说明能力限制，不自动换用收费渠道。确需 MOSS 的文字与版式效果且任务已授权换脸时，可先出图，再使用实际发现的 `image.faceswap`，逐张检查结果。
 
-- **统一入口**：先发现真实 Studio MCP 工具，优先 `image.create` / `image.edit`（现行 MOSS 编辑入口仍为参考图条件生成），仅在实际发现 `image.generate` 时使用该兼容入口；传入 `engine: "moss-image"`。底层 `image-moss-api` 仅在集群内受控可达，客户端不直连，也不调用内部 Edit 实验接口。
+- **统一入口**：先发现真实 Studio MCP 工具，优先 `image.create` / `image.edit`（未显式选择已开放的latent编辑模式时仍为语义参考生成），仅在实际发现 `image.generate` 时使用该兼容入口；传入 `engine: "moss-image"`。底层 `image-moss-api` 仅在集群内受控可达，客户端不直连，也不调用内部 Edit 实验接口；已公开的无人场景latent编辑见第3.4节。
 - **能力核验**：调用前通过 `image.capabilities` 核验 `engine="moss-image"` 已声明、支持 `rate_content` 且尺寸、参考图与版式规则匹配。
 - **非渠道引擎**：`moss-image` 是自托管 GPU 引擎，不经过渠道应用，没有上游 Key 或美元预算。
 
@@ -51,6 +51,15 @@
 - `edit_lora_strength` 仅用于 `edit` / `edit_identity`，范围 `0..2`、默认 `1`；参考图缩放由服务按输出长边固定处理，不向工具发送内部 `reference_max_edge`。`layout` 只适用于 `semantic` / `identity`。
 
 新安装的正式发行配置拟默认关闭 Edit；现有 dev 实验显式开启不代表公共入口已提供该能力。权重许可由用户在正式发布前确认，不由技能向外询问；路线 C 训练不在调用流程中自动启动。
+
+### 3.4 无人场景 latent 编辑（按实时能力启用）
+
+该限域路径与第3.3节的人物／服装组合模式分开。仅当 `image.capabilities` 中 `scene_edit.configured=true`、`entrypoint=image.edit`，且实际工具Schema声明 `moss_mode=edit` 时使用；能力声明不等于当前GPU运行已就绪。
+
+- 通过同一Studio入口调用 `image.edit`，显式传 `engine="moss-image"`、`moss_mode="edit"`、原图 `source_artifact_id`、零或一张材质／摄影参考 `reference_artifact_ids`，保留真实项目与幂等键。不混入人物身份、服装、遮罩或未开放参数。
+- 省略编辑模式仍保留旧语义路径；不能只因工具名是edit，就声称执行了latent编辑。结果须核对 `execution.mode=edit`、`conditioning_mode=moss_edit_reference_latents`、两份实际输入的顺序与摘要、原尺寸及编码尺寸。权重清单列出摘要不等于实际校验，另看 `weight_sha256_checked`。
+- latent编辑不是硬几何锁定，也不是遮罩局部编辑。实图检查窗洞内部是否新增窗扇、玻璃或横档，栏杆是否增减，背景是否添加未经设定的岸线；不能仅看外轮廓近似便进入穿窗等依赖动作制作。
+- 不沿用语义生成分支的默认步数／CFG推断编辑参数；以本次实际Schema与执行证据为准。旧停点恢复先复查原安装和原任务，其他任务已升级服务时不重复部署，不因已修复的旧阻点阻断尚未使用的有效单次授权。
 
 ## 4. GPU 租约、超时与恢复
 

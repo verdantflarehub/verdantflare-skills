@@ -1,6 +1,6 @@
 # Image经Studio调用说明
 
-本页说明Skill需要的调用语义，不替代宿主实际工具Schema或中央Project/Artifact契约。开始时使用真实Studio会话执行 `tools/list`，再选择已注册工具；认证见 [环境说明](../../ENVIRONMENT.md)。
+本页说明Skill需要的调用语义，不替代宿主实际工具Schema或中央Project/Artifact契约。开始时使用真实Studio会话执行 `tools/list`，再选择已注册工具；认证见 [环境说明](https://github.com/verdantflarehub/verdantflare-skills/blob/d52d2ad317ab8cd220c03682b1a88b212b995d45/skills/ENVIRONMENT.md)。
 
 ## 1. 工具名与必需上下文
 

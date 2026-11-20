@@ -1,0 +1,28 @@
+{
+  "candidateReleaseId": "0.2.0-integration.6",
+  "downloadBytes": 37509,
+  "engineeringDownloadAllowed": true,
+  "installAllowed": false,
+  "installationPerformed": false,
+  "orderedPackages": [
+    {
+      "id": "verdantflare-artifact",
+      "path": "candidate/packages/verdantflare-artifact.zip",
+      "sha256": "7debc39d1a97f8b363c8d07eaa04fd77fb9a1c266685080180548a72288ec72b",
+      "size": 9938
+    },
+    {
+      "id": "verdantflare-project",
+      "path": "candidate/packages/verdantflare-project.zip",
+      "sha256": "a76bac2c44498238c48ec35e8ff2dee45f087f03006cf6fbf30c5a28262ab645",
+      "size": 27571
+    }
+  ],
+  "reason": "INSTALLER_NOT_DELIVERED",
+  "requestedSkills": [
+    "verdantflare-project"
+  ],
+  "sample": true,
+  "scenario": "missing-installer",
+  "schema": "vf.hub-development-plan/v1"
+}

@@ -1,0 +1,15 @@
+{
+  "candidateReleaseId": "0.2.0-integration.6",
+  "environmentRef": null,
+  "host": "workbuddy",
+  "installAllowed": false,
+  "note": "Local test fixture; not a web-to-device authorization request or production API.",
+  "os": "windows",
+  "reason": "INSTALLER_AND_HOST_PROFILE_NOT_DELIVERED",
+  "sample": true,
+  "schema": "vf.hub-development-selection/v1",
+  "skillIds": [
+    "verdantflare-project"
+  ],
+  "supportStatus": "not_run"
+}

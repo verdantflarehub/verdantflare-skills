@@ -16,7 +16,11 @@ AI 短剧任务形成阶段成果后默认同步到原 Studio 项目，沿用真
 先核对真实 tools/list、绑定 project_id 和任务范围。现有名字包括 session.open、scene.get、object.create、project.save，以及 v0.1.14 的 workspace.clean、script.run_project、scene.inspect_file、scene.open_file、project.export_assets；不套用早期 blender.* 草案名。
 这里的 project.save 与 project.export_assets 属于实例入口，不发送到中央 Project 域。
 
+短剧沿已绑定的同剧固定实例接续，故障不另开实例。恢复先区分管理台账、实际工作进程、工作卷和工程加载证据；连接失败或 `WORKSPACE_BINDING_CONFLICT` 不能单独证明卷已丢失。经已开放的原实例受控恢复路径核对终态、精确 UID、租约和保存，再读取原场景；不能直接删 Pod、改绑或以最新项目文件覆盖未核实工作副本。
+
 ## 2. 场景操作与数字片场批处理
+
+影视白模交接固定工程版本、统一尺度、相机、路径及遮挡依据；只有本次确实依赖空间或运镜时准备对应预演，不要求每个独立 Video 任务重新渲染白模。人物姿态和皮肤、真实枝条与陈设外观交给图像参考；粗模不宣称完成精细接触或完整写实资产。已有相同工程／相机预演可复用，改变空间或相机才使相关投影和下游依据失效。
 
 按[会话与恢复](references/sessions-and-recovery.md)打开 read/edit 会话，核对实例、项目、代次与 `lease_ttl_seconds: 1800`（30 分钟租约超时）。
 GUI 或其他编辑者占用（`INSTANCE_EDIT_LEASE_HELD`）时报告，不抢占控制权或重启实例。

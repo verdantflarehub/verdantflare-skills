@@ -1,4 +1,5 @@
 import hashlib
+import copy
 import io
 import json
 from pathlib import Path
@@ -34,12 +35,66 @@ def ref():
                     [f"00000000-0000-7000-8000-{i:012d}" for i in range(1, 4)]))
 
 
+def current_capabilities():
+    return {"service_version": "0.2.0", "engines": [{"engine": "indextts2", "ready": True,
+            "model_manifest_sha256": "a" * 64,
+            "reference_audio": {"min_seconds": 3, "max_seconds": 15, "max_bytes": 10485760,
+                                "sample_rates_hz": [16000, 24000], "channels": 1}}]}
+
+
 def generation(data, text="同一句话。"):
     return {"request": {"text": text, "language": "zh-CN"},
             "runtime_outputs": [{"name": "original.wav", "sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}]}
 
 
 class ReferenceTests(unittest.TestCase):
+    def test_current_engines_result_uses_selected_model_limits_and_version(self):
+        caps = current_capabilities()
+        original = copy.deepcopy(caps)
+        profile, intake = prepare(wav(seconds=3), ref(), caps, "voice-b", "Test")
+        self.assertEqual(profile["model_manifest_sha256"], "a" * 64)
+        self.assertEqual(intake["service_version"], "0.2.0")
+        self.assertTrue(intake["ready_at_discovery"])
+        self.assertFalse(intake["remote_membership_verified"])
+        self.assertEqual(caps, original)
+        caps["engines"][0]["ready"] = False
+        self.assertFalse(prepare(wav(seconds=3), ref(), caps, "voice-b", "Test")[1]["ready_at_discovery"])
+
+    def test_current_limits_reject_short_duration_rate_and_size(self):
+        caps = current_capabilities()
+        for data in (wav(), wav(seconds=3, rate=22050)):
+            with self.assertRaisesRegex(ValueError, "current capability limits"):
+                prepare(data, ref(), caps, "test", "Test")
+        caps["engines"][0]["reference_audio"]["max_bytes"] = 100
+        with self.assertRaisesRegex(ValueError, "current capability limits"):
+            prepare(wav(seconds=3), ref(), caps, "test", "Test")
+
+    def test_current_ambiguous_missing_and_malformed_engines_rejected(self):
+        engine = current_capabilities()["engines"][0]
+        cases = [{"engines": []}, {"engines": [engine, engine]}, {"engines": {}},
+                 {"engines": [None]}, {"engines": [{"engine": "unknown"}]},
+                 dict(current_capabilities(), engine="indextts2"),
+                 dict(current_capabilities(), reference_seconds={"min": 1, "max": 15})]
+        for key, value in (("reference_audio", None), ("model_manifest_sha256", "0" * 64), ("ready", "true")):
+            candidate = current_capabilities();candidate["engines"][0][key] = value;cases.append(candidate)
+        for key, value in (("sample_rates_hz", [True]), ("sample_rates_hz", [16000, 16000]),
+                           ("channels", True), ("min_seconds", float("nan"))):
+            candidate = current_capabilities();candidate["engines"][0]["reference_audio"][key] = value;cases.append(candidate)
+        for caps in cases:
+            with self.subTest(caps=caps), self.assertRaises(ValueError):
+                prepare(wav(seconds=3), ref(), caps, "test", "Test")
+
+    def test_cli_accepts_current_result_without_inference(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "reference.wav").write_bytes(wav(seconds=3))
+            (root / "ref.json").write_text(json.dumps(ref()))
+            (root / "caps.json").write_text(json.dumps(current_capabilities()))
+            command = [sys.executable, str(SCRIPTS / "prepare_voice_profile.py"), "--reference", str(root / "reference.wav"), "--content-ref", str(root / "ref.json"), "--capabilities", str(root / "caps.json"), "--voice-id", "test", "--label", "Test", "--out", str(root / "out")]
+            result = subprocess.run(command, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stdout)
+            self.assertEqual(json.loads((root / "out/profile.json").read_text())["candidate_state"], "candidate")
+
     def test_candidate_profile_has_only_contract_fields_and_actual_digest(self):
         data = wav()
         profile, intake = prepare(data, ref(), capabilities(), "voice-b", "旁白B")

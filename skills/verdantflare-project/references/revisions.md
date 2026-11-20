@@ -25,7 +25,7 @@ studio-workspace call --input request.json
 
 ## 3. 内容与固定资产
 
-文本 upsert 使用真实 path、role、mime、text；二进制引用使用服务返回的完整 ContentRef。
+文本 upsert 使用真实 path、role、mime、text；二进制引用使用服务返回的完整 ContentRef。 更新同路径既有文件也须传当前清单中的 file_id；缺失表示新增，可能因路径重复被拒绝，不能用新路径逃避原文件更新。
 MD 与关联 JSON、选用在同一次提交保持一致；原生任务保留原 service_id/run_id，不为符合平台 UUID 改写它们。
 
 AI 短剧素材提交还须维护 `project-content` 的所属对象、剧情状态、制作版本及固定 `file_refs`。人物身份与关联 Look 分开；每个状态的返修保留在同一状态历史中；原稿依据使用对应章节或有来源的分项摘录。多人拼图不能批量充当每个人物参考。仅添加 Manifest 文件时只能报告“已归档，素材关联待完成”；回读逐项验证分类、对象、状态、版本及实际输出后才报告素材已同步。

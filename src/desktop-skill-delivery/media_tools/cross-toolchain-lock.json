@@ -1,0 +1,9 @@
+{
+  "schema": "vf.media-cross-toolchain-source/v1",
+  "source": {
+    "filename": "llvm-mingw-20261117-ucrt-macos-universal.tar.xz",
+    "root": "llvm-mingw-20261117-ucrt-macos-universal",
+    "sha256": "98d340bbb8d46b09ad6886ffba88bd9d5415e131c316de48e6bd7647377446aa",
+    "url": "https://github.com/mstorsjo/llvm-mingw/releases/download/20261117/llvm-mingw-20261117-ucrt-macos-universal.tar.xz"
+  }
+}

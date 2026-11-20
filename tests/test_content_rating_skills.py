@@ -78,8 +78,9 @@ class ContentRatingSkillTests(unittest.TestCase):
         self.assertIn("moss-image", skill_md)
         self.assertIn("references/moss-image.md", skill_md)
         moss_text = moss_ref.read_text(encoding="utf-8")
-        self.assertIn("abs_centralized", moss_text)
-        self.assertIn("yxyx", moss_text)
+        self.assertIn("reference_artifact_ids", moss_text)
+        self.assertIn("1～3 张参考图", moss_text)
+        self.assertIn("mask_artifact_id", moss_text)
         self.assertIn("gpu-task-moss-image", moss_text)
         self.assertIn("image.rate_content", moss_text)
 

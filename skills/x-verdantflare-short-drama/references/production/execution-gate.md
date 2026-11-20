@@ -41,7 +41,7 @@ adapter = MCPAdapter(video_client_path)  # 专业Video技能实际安装位置
 result = submit(packet, basis, pinned_basis_sha256, original_journal, adapter)
 ```
 
-真实适配器复用Video客户端发现目录／Schema／能力，要求可用的video.preflight返回can_submit=true。按现行协议预检只排除idempotency_key；create使用原冻结arguments，不重新拼装或改变模型参数。缺失能力则阻断，不能切外部渠道或重建请求绕过。
+真实适配器复用Video客户端发现目录／Schema／能力，要求video.preflight明确通过：报价型渠道使用can_submit=true；本地h3-fasth3按实际协议核对status=validated、输入摘要、输出尺寸／帧数及prompt和image_guidance回显。明确can_submit=false、错误、未知或缺项均阻断。按现行协议预检排除仅用于创建的idempotency_key和title；create使用原冻结arguments，不重新拼装或改变模型参数。缺失能力则阻断，不能切外部渠道或重建请求绕过。
 
 预检后重验文件和语义绑定，独占创建journal，先持久化完整请求再create；成功写任务ID。请求异常保留submission_unknown；再次调用只恢复原journal，不再次create，也不因输入缺失阻止查询旧任务。未知回执无任务ID则返回reconciliation_required，由专业技能查原任务；不能删除journal重试。不同生成单元须独立journal，恢复结果不表示新请求已提交。
 

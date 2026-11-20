@@ -1,0 +1,3 @@
+# D03 installer editor dependency; source: https://pypi.org/project/tomlkit/0.15.2/
+# Official wheel: tomlkit-0.15.2-py3-none-any.whl, MIT, Python >=3.9.
+tomlkit==0.15.2 --hash=sha256:05562412163a3037b94497385fb7f9204c637bc605af7a48199e41cf2272f437

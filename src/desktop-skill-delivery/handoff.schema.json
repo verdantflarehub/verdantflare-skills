@@ -1,0 +1,460 @@
+{
+  "$defs": {
+    "package": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "artifact": {
+                "type": "null"
+              },
+              "blockers": {
+                "minItems": 1
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "status": {
+                "const": "assembled"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "artifact": {
+                "additionalProperties": false,
+                "properties": {
+                  "file_manifest": {
+                    "pattern": "^[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)*$",
+                    "type": "string"
+                  },
+                  "file_manifest_sha256": {
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "path": {
+                    "pattern": "^[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)*$",
+                    "type": "string"
+                  },
+                  "sha256": {
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "size": {
+                    "maximum": 33554432,
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "path",
+                  "size",
+                  "sha256",
+                  "file_manifest",
+                  "file_manifest_sha256"
+                ],
+                "type": "object"
+              },
+              "blockers": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "artifact": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "file_manifest": {
+                  "pattern": "^[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)*$",
+                  "type": "string"
+                },
+                "file_manifest_sha256": {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "path": {
+                  "pattern": "^[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)*$",
+                  "type": "string"
+                },
+                "sha256": {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "size": {
+                  "maximum": 33554432,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "path",
+                "size",
+                "sha256",
+                "file_manifest",
+                "file_manifest_sha256"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "blockers": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "id": {
+          "enum": [
+            "verdantflare-artifact",
+            "verdantflare-project",
+            "verdantflare-blender",
+            "verdantflare-image",
+            "verdantflare-video",
+            "verdantflare-music",
+            "verdantflare-speech",
+            "verdantflare-character-face",
+            "verdantflare-reference-learning",
+            "verdantflare-music-mv",
+            "x-verdantflare-short-drama"
+          ]
+        },
+        "requires": {
+          "items": {
+            "enum": [
+              "verdantflare-artifact",
+              "verdantflare-project",
+              "verdantflare-blender",
+              "verdantflare-image",
+              "verdantflare-video",
+              "verdantflare-music",
+              "verdantflare-speech",
+              "verdantflare-character-face",
+              "verdantflare-reference-learning",
+              "verdantflare-music-mv",
+              "x-verdantflare-short-drama"
+            ]
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "status": {
+          "enum": [
+            "assembled",
+            "blocked"
+          ]
+        },
+        "version": {
+          "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "requires",
+        "status",
+        "blockers",
+        "artifact"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:verdantflare:skills:handoff:2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authentication": {
+      "const": "unsigned"
+    },
+    "components": {
+      "const": {
+        "installer": "missing",
+        "profiles": "missing",
+        "user_guides": "missing"
+      }
+    },
+    "content_review": {
+      "const": "pending"
+    },
+    "installable": {
+      "const": false
+    },
+    "limitations": {
+      "const": [
+        "engineering_integrity_only",
+        "no_signature_or_download_authorization",
+        "runtime_closure_not_verified",
+        "no_desktop_acceptance"
+      ]
+    },
+    "packages": {
+      "items": false,
+      "maxItems": 11,
+      "minItems": 11,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/package"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "verdantflare-artifact"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/package"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "verdantflare-project"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/package"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "verdantflare-blender"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/package"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "verdantflare-image"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/package"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "verdantflare-video"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/package"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "verdantflare-music"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/package"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "verdantflare-speech"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/package"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "verdantflare-character-face"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/package"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "verdantflare-reference-learning"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/package"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "verdantflare-music-mv"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/package"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "x-verdantflare-short-drama"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "type": "array"
+    },
+    "public_distribution": {
+      "const": false
+    },
+    "release_id": {
+      "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$",
+      "type": "string"
+    },
+    "release_stage": {
+      "const": "integration-candidate"
+    },
+    "schema_version": {
+      "const": "vf.skills.handoff/v2"
+    },
+    "source_lock_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "support_matrix": {
+      "const": [
+        {
+          "app_version": null,
+          "host": "codex",
+          "os": "windows",
+          "status": "not_run"
+        },
+        {
+          "app_version": null,
+          "host": "codex",
+          "os": "macos",
+          "status": "not_run"
+        },
+        {
+          "app_version": null,
+          "host": "claude-code",
+          "os": "windows",
+          "status": "not_run"
+        },
+        {
+          "app_version": null,
+          "host": "claude-code",
+          "os": "macos",
+          "status": "not_run"
+        },
+        {
+          "app_version": null,
+          "host": "antigravity",
+          "os": "windows",
+          "status": "not_run"
+        },
+        {
+          "app_version": null,
+          "host": "antigravity",
+          "os": "macos",
+          "status": "not_run"
+        },
+        {
+          "app_version": null,
+          "host": "workbuddy",
+          "os": "windows",
+          "status": "not_run"
+        },
+        {
+          "app_version": null,
+          "host": "workbuddy",
+          "os": "macos",
+          "status": "not_run"
+        },
+        {
+          "app_version": null,
+          "host": "deepseek-desktop",
+          "os": "windows",
+          "status": "not_run"
+        },
+        {
+          "app_version": null,
+          "host": "deepseek-desktop",
+          "os": "macos",
+          "status": "not_run"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "release_id",
+    "release_stage",
+    "public_distribution",
+    "installable",
+    "authentication",
+    "content_review",
+    "source_lock_sha256",
+    "packages",
+    "support_matrix",
+    "components",
+    "limitations"
+  ],
+  "type": "object"
+}

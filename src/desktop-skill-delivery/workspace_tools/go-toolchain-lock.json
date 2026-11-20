@@ -1,0 +1,11 @@
+{
+  "schema": "vf.workspace-build-toolchain-source/v1",
+  "version": "go1.26.11",
+  "filename": "go1.26.11.darwin-arm64.tar.gz",
+  "sha256": "e3a42e67a7a8acf450ebada2b074c7ca863000ca514907b7185b45e8f5cdff57",
+  "bytes": 64730001,
+  "url": "https://go.dev/dl/go1.26.11.darwin-arm64.tar.gz",
+  "metadata_url": "https://go.dev/dl/?mode=json",
+  "install_global": false,
+  "user_runtime": false
+}
