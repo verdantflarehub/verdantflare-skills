@@ -17,6 +17,7 @@ Project 归属、换电脑恢复、Artifact 保存及 World 固定资产引用�
 | Google Nano Banana 生图与多参考编辑    | [Google 图像调用](references/google.md)                         |
 | MOSS-Image 文字海报与 JSON 版式文生图  | [MOSS-Image 调用](references/moss-image.md)                     |
 | 角色四视图、服装三视图、分镜或场景规格 | [视觉规格](references/visual-specs.md)                          |
+| 写实画面假纹理、过锐或质感返修         | [表面质感控制](references/surface-quality.md)                   |
 | 角色五视图合成板                       | [五视图模式选择](references/visual-specs.md#6-角色五视图合成板) |
 | 提交、轮询、恢复、下载与归档           | [执行流程](references/workflow.md)                              |
 | 生成后 18+ 分级评估步骤                | [评估步骤](references/content-rating-step.md)                   |
