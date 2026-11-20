@@ -29,7 +29,7 @@ SCHEMAS = {
     "codex_task_result": obj({"task_id": ID, "turn_id": ID, "cursor": CURSOR}, ("task_id",)),
     "codex_task_continue": obj({"task_id": ID, "request_id": ID, "prompt": TEXT,
         "expected_turn_id": ID}, ("task_id", "request_id", "prompt", "expected_turn_id")),
-    "codex_task_cancel": obj({"task_id": ID, "expected_turn_id": ID}, ("task_id", "expected_turn_id")),
+    "codex_task_cancel": obj({"task_id": ID, "expected_turn_id": {**ID, "type": ["string", "null"]}}, ("task_id", "expected_turn_id")),
     "codex_task_respond": obj({"task_id": ID, "request_id": ID, "pending_request_id": ID,
         "expected_turn_id": ID, "response": {"type": "object"}},
         ("task_id", "request_id", "pending_request_id", "expected_turn_id", "response")),
