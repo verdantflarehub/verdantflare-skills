@@ -1,5 +1,7 @@
 # Video经Studio调用说明
 
+`video.character_swap` 接收 `source_artifact_id`、`character_image_artifact_id`、提示词及固定种子。`--preflight-only` 读取参数和引擎就绪状态，提交后用返回的任务 ID 查询。
+
 本页描述Skill与领域Video服务的边界，不是Runtime或供应商API手册。工具名、参数、渠道和输入规格需在当前Studio会话中核实；认证与旧CLI差异见 [环境说明](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-video-v0.4.0/skills/ENVIRONMENT.md)。
 
 ## 1. 工具发现与创建

@@ -461,7 +461,7 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
         raise ClientError("--grid-mode requires --regenerate-2k")
     if regenerate_2k:
         regen_cap = capabilities.get("postprocess", {}).get("regenerate_2k", {})
-        if route not in {"h3-fasth3", "h3-singularity"} or not regen_cap.get("configured") or regen_cap.get("readiness") != "ready":
+        if route not in {"h3-fasth3", "h3-singularity"} or not regen_cap.get("configured") or regen_cap.get("readiness") not in {"ready", "scaled_to_zero"}:
             raise ClientError("--regenerate-2k requires a ready local H3 open_h3_2k_ic capability")
         regen_payload: dict[str, Any] = {"profile": "open_h3_2k_ic"}
         if grid_mode is not None:
@@ -556,7 +556,7 @@ def regenerate_2k_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, 
         raise ClientError("Host has no registered video.regenerate_2k tool")
     capabilities = inventory.get("capabilities") or {}
     regen_cap = capabilities.get("postprocess", {}).get("regenerate_2k", {})
-    if not regen_cap.get("configured") or regen_cap.get("readiness") != "ready":
+    if not regen_cap.get("configured") or regen_cap.get("readiness") not in {"ready", "scaled_to_zero"}:
         raise ClientError("regenerate-2k requires a ready open_h3_2k_ic capability")
     request: dict[str, Any] = {
         "project_id": project_id,
@@ -585,10 +585,30 @@ def regenerate_2k_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, 
         if not interpolation.get("configured") or interpolation.get("readiness") != "ready":
             raise ClientError("--interpolate requires a ready H3-Sing rife_2x capability")
         request["postprocess"] = {"interpolate": {"profile": "rife_2x"}}
-    supports_title = "title" in inventory.get("schemas", {}).get("video.regenerate_2k", {}).get("properties", {})
+    return _submit_artifact_edit(config, args, inventory, request, "video.regenerate_2k")
+
+
+def character_swap_mcp(config, args):
+    project_id = _validate_project_id(args.project_id)
+    request = {key: getattr(args, key) for key in (
+        "source_artifact_id", "character_image_artifact_id", "idempotency_key", "prompt",
+        "character_lora_version", "turbo_variant", "lora_strength", "resolution_preset", "seed")}
+    request["project_id"] = project_id
+    inventory = check_mcp_tools(config)
+    if args.preflight_only:
+        payload = {k: v for k, v in request.items() if k != "idempotency_key"}
+        validate_tool(inventory, "video.preflight", payload)
+        return call_mcp_tool(config, "video.preflight", payload)
+    return _submit_artifact_edit(config, args, inventory, request, "video.character_swap")
+
+
+def _submit_artifact_edit(config, args, inventory, request, tool):
+    project_id = request["project_id"]
+    idempotency_key = request["idempotency_key"]
+    supports_title = "title" in inventory.get("schemas", {}).get(tool, {}).get("properties", {})
     naming = {"title": args.title} if getattr(args, "title", None) is not None and supports_title else {}
     try:
-        validate_tool(inventory, "video.regenerate_2k", {**request, **naming})
+        validate_tool(inventory, tool, {**request, **naming})
     except ValueError as exc:
         raise ClientError(str(exc)) from exc
     attempt = {
@@ -620,14 +640,14 @@ def regenerate_2k_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, 
             error = quote.get("error") or {
                 "code": reason,
                 "message": quote.get("message") or str(reason),
-                "source": "regenerate_2k",
+                "source": tool.removeprefix("video."),
                 "retryable": False,
                 "accepted": False,
             }
             raise MCPToolError(error if isinstance(error, dict) else {"code": "preflight_blocked", "message": str(error), "accepted": False})
     _save_mcp_attempt(path, attempt)
     try:
-        result = call_mcp_tool(config, "video.regenerate_2k", {**request, **naming})
+        result = call_mcp_tool(config, tool, {**request, **naming})
         if getattr(args, "title", None) is not None and not supports_title:
             result = {**result, "title_warning": "host_does_not_support_title; requested title was not saved"}
     except Exception as exc:
@@ -642,7 +662,7 @@ def regenerate_2k_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, 
         attempt["state"] = "submission_unknown"
         attempt["updated_at"] = utc_now()
         _save_mcp_attempt(path, attempt)
-        raise ClientError("video.regenerate_2k returned an invalid task id")
+        raise ClientError(f"{tool} returned an invalid task id")
     attempt.update(state="confirmed", updated_at=utc_now(), video_task_id=task_id, response=result)
     _save_mcp_attempt(path, attempt)
     return {**result, "attempt_path": str(path)}
@@ -2247,6 +2267,15 @@ def make_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--generate-audio", dest="generate_audio", action="store_true", default=True)
     generate_parser.add_argument("--no-generate-audio", dest="generate_audio", action="store_false")
     generate_parser.add_argument("--watermark", action="store_true", default=False)
+    swap = sub.add_parser("character-swap", help="replace a person using two project Artifacts")
+    for name in ("project-id", "idempotency-key", "source-artifact-id", "character-image-artifact-id", "prompt"):
+        swap.add_argument("--" + name, required=True)
+    swap.add_argument("--character-lora-version", choices=["v1", "v1.5"], default="v1.5")
+    swap.add_argument("--turbo-variant", choices=["fl2v_turbo_8step", "pika_h3_flex_turbo_8step_hd_ref2va"], default="fl2v_turbo_8step")
+    swap.add_argument("--resolution-preset", choices=["480p", "768p"], default="768p")
+    swap.add_argument("--lora-strength", type=float, default=1.0)
+    swap.add_argument("--seed", type=int, default=7)
+    swap.add_argument("--preflight-only", action="store_true")
     regen_parser = sub.add_parser(
         "regenerate-2k",
         help="regenerate an existing 24 FPS H3 project video into strict aspect-preserving 2K via video.regenerate_2k",
@@ -2300,6 +2329,10 @@ def main() -> int:
             return 0
         if args.command == "generate":
             value = generate_mcp(load_mcp_config(), args)
+            print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+        if args.command == "character-swap":
+            value = character_swap_mcp(load_mcp_config(), args)
             print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
         if args.command == "regenerate-2k":

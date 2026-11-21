@@ -1,5 +1,7 @@
 # H3单元执行与恢复
 
+天龙 L5 以同一组素材、提示词和固定种子运行 V1.5/V1 与两款 Turbo 的四种组合。每版使用独立幂等键，遇到中断用原任务 ID 恢复。
+
 ## 1. 提交前
 
 1. 确认真实Studio会话，发现当前创建、状态、结果工具。现有网关为 `video.create/status/result`；管理工具缺失或403先按 [环境说明](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-video-v0.4.0/skills/ENVIRONMENT.md) 排查旧共享令牌。

@@ -11,6 +11,33 @@ CREATE_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["
         for kind in ("images", "videos", "audios")}},
     "postprocess": {"type": "object"}}}
 
+CHARACTER_SWAP_SCHEMA = {'type': 'object',
+ 'additionalProperties': False,
+ 'required': ['project_id',
+              'idempotency_key',
+              'source_artifact_id',
+              'character_image_artifact_id',
+              'prompt'],
+ 'properties': {'project_id': {'type': 'string'},
+                'idempotency_key': {'type': 'string'},
+                'source_artifact_id': {'type': 'string'},
+                'character_image_artifact_id': {'type': 'string'},
+                'prompt': {'type': 'string',
+                           'minLength': 1,
+                           'maxLength': 16384},
+                'seed': {'type': 'integer',
+                         'minimum': 0,
+                         'maximum': 4294967295,
+                         'default': 7},
+                'seed_mode': {'enum': ['fixed']},
+                'character_lora_version': {'enum': ['v1.5', 'v1']},
+                'turbo_variant': {'enum': ['fl2v_turbo_8step',
+                                           'pika_h3_flex_turbo_8step_hd_ref2va']},
+                'resolution_preset': {'enum': ['768p', '480p']},
+                'lora_strength': {'type': 'number',
+                                  'minimum': 0.5,
+                                  'maximum': 1.2}}}
+
 REGENERATE_2K_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -41,11 +68,14 @@ def schemas():
         "grid_mode": {"type": "string", "enum": ["budget_1440p", "exact_2x"]},
         "seed": {"type": "integer", "minimum": 0, "maximum": 4294967295},
     })
+    preflight["properties"].update({key: value for key,value in CHARACTER_SWAP_SCHEMA["properties"].items()
+                                     if key != "idempotency_key"})
     preflight["required"] = ["project_id"]
     return {
         "video.create": create,
         "video.generate": deepcopy(create),
         "video.preflight": preflight,
+        "video.character_swap": deepcopy(CHARACTER_SWAP_SCHEMA),
         "video.regenerate_2k": deepcopy(REGENERATE_2K_SCHEMA),
     }
 

@@ -1,13 +1,13 @@
 ---
 name: verdantflare-image-character
-description: 生成人物五视图和人物半身照。人物五视图由一张参考人脸和指定服装生成，是供 H3 或 SD2.5 使用的单张五格设定图。人物半身照特指胸部以上的正脸照。两类图像均通过 verdantflare-image 生成并核验。
+description: 生成人物五视图、人物半身照和人物视觉档案卡。人物五视图由一张参考人脸和指定服装生成，是供 H3 或 SD2.5 使用的单张五格设定图；人物半身照特指胸部以上的正脸照；人物视觉档案卡是面向 GPT Image 的 16:9 横版完整角色设定表（含信息栏、等高全身三视图与面部微距矩阵）。三类图像均通过 verdantflare-image 生成并核验。
 ---
 
 # verdantflare-image-character
 
 ## 1. 范围与边界
 
-人物五视图与人物半身照的取景、参考素材和逐格验收归本技能管理。生成与返修统一通过 verdantflare-image 执行。
+人物五视图、人物半身照与人物视觉档案卡的取景、参考素材、版式约束和逐格验收归本技能管理。生成与返修统一通过 verdantflare-image 执行。
 
 ## 2. 按任务读取
 
@@ -15,6 +15,7 @@ description: 生成人物五视图和人物半身照。人物五视图由一张�
 
 - [人物五视图](references/character-five-views.md)
 - [人物半身照](references/character-portrait.md)
+- [人物视觉档案卡](references/character-sheet.md)
 
 ### 2.2 参考资料
 

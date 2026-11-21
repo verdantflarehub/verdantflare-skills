@@ -7,6 +7,8 @@ metadata:
 
 # VerdantFlare Video
 
+换人使用 `character-swap` 子命令，传入同项目源视频与角色图 ID。详见 [Video MCP](references/video-mcp.md)。
+
 AI 短剧任务形成阶段成果后默认同步到原 Studio 项目，沿用真实 project_id；用户指定仅本地或只读讨论时遵循其范围。候选、返修与最终结果保留固定版本、修改原因、来源设定和任务记录，按当前 Project / Artifact 契约提交并回读修订；只上传或本地保存不算已同步。响应未知先对账恢复，不重复收费生成。同步不自动批准、选用或发布 World。
 
 本 Skill 通过 Studio MCP 统一网关调用 Video 能力。用户未指定模型或渠道时，解析当前宿主配置并核实可用性；不把历史环境的 `h3-vdn`、`h3-sol` 或工具 Schema 中的 `fal` 默认值当成全局生产默认。用户可指定模型简称（如 H3、SD2）与渠道；只有宿主已接入的组合才能提交，失败不静默换渠道。
@@ -30,6 +32,7 @@ H3 模型支持六种画幅，Omni Reference 还有 Auto；渠道适配器里的
 - SD2：读取 [SD2 工作流](references/sd2-workflow.md)。
 - Grok：先读取 [Grok 调用](references/grok.md)，通过同一 Studio Video MCP 显式选择 `route=grok`；不要套用 H3 的参考数量、24 FPS 或提示词标签。
 - Google：读取 [Google 调用](references/google.md)，按实际注册的新模型与别名选择；退役模型返回 `model_retired` 时保留原错误，不自动切换收费模型。
+- Google Flow：读取 [Google Flow 调用](references/google-flow.md)，显式选择 `route=google-flow`。**`veo-quality` 不支持参考图（`ref_cap=0`，仅 `text_to_video`），严禁携带 `references.images` 或 `mode=reference_to_video` 提交**；多参考图锁脸/场景使用 `veo-fast` / `veo-lite`（最多 3 图）或 `omni-1.2-flash`（最多 7 图，Google AI Ultra 单段 3–15 秒）。
 - Higgsfield：读取 [会员渠道与官方 Skills 适配](references/higgsfield.md)，通过同一 Studio Video MCP 显式选择 `route=higgsfield`。Seedance 2.5 Draft 的 R2V／ref2va 使用 `model=seedance_2_5_draft`、480p、4–15 秒、最多 4 图＋1 视频，不替换为普通 2.5 或首尾帧。官方 CLI 封装在本 Skill 私有运行时，仅供管理员授权维护；成员生成、查询及结果通过 Studio，会员凭据留在服务器。
 - 已有任务沿原任务记录的模型与渠道恢复，不按当前默认值重新生成。
 - 有剧情动作、连续运镜、跨镜物体或剪辑选段要求时，按[叙事动作验收](references/shot-acceptance.md)检查实际动作和可用区间，不能用首尾构图或技术成功代替动态验收。
