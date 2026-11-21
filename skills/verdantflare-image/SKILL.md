@@ -1,6 +1,6 @@
 ---
 name: verdantflare-image
-description: 通过 VerdantFlare Image MCP 生成或编辑图像候选（默认出图模型为 GPT Image 2.6 / gpt-image-2.6-sunburst），包括角色视图、服装人台、分镜单格和局部重绘。
+description: 通过 VerdantFlare Image MCP 生成或编辑图像候选（默认出图模型为 GPT Image 2.6 / gpt-image-2.6-sunburst），包括人物五视图、人物半身照、角色视图、服装人台、分镜单格和局部重绘。
 ---
 
 # VerdantFlare Image
@@ -25,7 +25,7 @@ Project 归属、换电脑恢复、Artifact 保存及 World 固定资产引用�
 | 使用本地客户端                         | [CLI](references/cli.md)                                        |
 | 连接或配置问题                         | [环境说明](../ENVIRONMENT.md)                                   |
 
-用户或项目选用五视图时，明确指定的图格与角度优先；固定身份长相优先[三脸＋身体正背 3＋2](references/visual-specs.md#64-身份优先三脸与身体正背)，衣装造型优先[两脸＋身体正侧背 2＋3](references/visual-specs.md#61-五格布局与裁切)。3＋2 未包含身体侧视，交付须说明；原有四视图和含头全身三视图按各自用途继续适用。
+用户要求人物五视图或人物半身照时，读取[人物设定技能](../verdantflare-image-character/SKILL.md)确定版式，再由本技能调用 image.edit 出图。明确点名既有三脸或衣装优先合成板时，沿用对应的[合成板规格](references/visual-specs.md#6-角色五视图合成板)。
 
 **默认出图模型与分辨率边界**：本技能将 **GPT Image 2.6**（`engine="codex"`，默认 `model="gpt-image-2.6-sunburst"`；亦支持高速变体 `gpt-image-2.6-flare` 及向下兼容 `gpt-image-2.5-sunburst` / `gpt-image-2.5-flare`）标记为默认出图模型；用户未指定引擎或模型时一律使用 `codex` / `gpt-image-2.6-sunburst`。显式选择 Google 渠道（`engine="gemini"`）时默认 `gemini-nano-banana-2.1`（展示名 `Nano Banana 2.1`）；用户明确选择优先，模型支持以宿主能力和调用契约为准。注意各渠道对 `resolution="2k"` 与 `9:16` / `16:9` 画幅的实际像素输出（详见 [调用契约第 1.1 节](references/contracts.md#11-各渠道画幅与分辨率实际行为与防坑指南)）：`codex` 通过 `/v1/responses` 的 `[Aspect Ratio <ratio>]` 指令注入输出正确画幅，但 ChatGPT Web 端原生像素上限使 `9:16` / `16:9` 返回 `941×1672` / `1672×941` PNG（`1:1` 返回 `1254×1254`）；`gemini` 通过 `generationConfig.imageConfig.imageSize="2K"` 原生返回 `1536×2752` / `2752×1536`（`9:16` / `16:9`）或 `2048×2048`（`1:1`）；`grok`（`grok-imagine-image-2.0`）原生支持 `9:16` / `16:9` `2k`（`1584×2816` / `2816×1584`）。不绕过 MCP/受控客户端直连供应商。
 

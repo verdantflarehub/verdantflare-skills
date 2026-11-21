@@ -143,6 +143,10 @@ Higgsfield 专用插件现为 **0.1.2**，在本仓库 marketplace 更新；依�
 
 当前 `scripts/video_client.py` 的新生成统一通过 Studio 工具发现、能力检查及 `video.preflight/create` 提交，恢复保持原模型、渠道和任务 ID。历史 SD2 只保留恢复兼容；不要为 Studio 认证运行旧配置安装器或安装 S3 客户端。当前配置使用 `STUDIO_MCP_URL` 和 `STUDIO_MCP_BEARER_TOKEN`。
 
+## verdantflare-image-character
+
+[人物设定技能](skills/verdantflare-image-character/SKILL.md) 管理 H3 或 SD2.5 人物五视图、人物半身照和逐格验收，由 verdantflare-image 出图。
+
 ## verdantflare-image
 
 [`verdantflare-image`](skills/verdantflare-image/SKILL.md) 生成、编辑与局部重绘图像候选。**技能默认出图模型为 GPT Image 2.6**（`codex` / `gpt-image-2.6-sunburst`，亦支持高速变体 `gpt-image-2.6-flare` 及向下兼容 `2.5`）；选择 Google 渠道（`engine="gemini"`）时默认 `gemini-nano-banana-2.1`（`Nano Banana 2.1`，另支持 `Nano Banana Pro` / `gemini-3-pro-image`、`Nano Banana 2` / `gemini-3.1-flash-image`、`Nano Banana 2 Lite` / `gemini-3.1-flash-lite-image` 与兼容底座 `Nano Banana` / `gemini-2.5-flash-image`，详见 [Google 图像调用](skills/verdantflare-image/references/google.md)），也可按用户选择和宿主能力使用 Grok 或自托管 `moss-image`。输出须验证实际尺寸、字节数及SHA-256，完成 K09 内容分级评估后再归档到当前Project；技术成功不代替创作审核。
