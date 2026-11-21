@@ -26,6 +26,8 @@ CATALOG = {
         'request_permissions': True, 'mcp_elicitations': True}}, 'user'),
     'guardian-approvals': (':workspace', 'on-request', 'guardian_subagent'),
     'full-access': (':danger-full-access', 'never', 'user'),
+    'unattended-workspace': (':workspace', 'never', 'user'),
+    'unattended-read-only': (':read-only', 'never', 'user'),
 }
 
 
@@ -52,7 +54,7 @@ def selection_from_atoms(atoms):
             or set(selected) != {'kind', 'agentMode'}):
         raise BridgeError('PERMISSIONS_UNAVAILABLE', 'Explicit built-in host permission selection is required')
     mode = selected['agentMode']
-    if not isinstance(mode, str) or mode not in CATALOG:
+    if not isinstance(mode, str) or mode not in CATALOG or mode.startswith('unattended-'):
         raise BridgeError('PERMISSIONS_UNAVAILABLE', 'Host permission selection requires its native resolver')
     if legacy != mode:
         raise BridgeError('PERMISSIONS_CONFLICT', 'Host permission selections disagree; no turn was submitted')

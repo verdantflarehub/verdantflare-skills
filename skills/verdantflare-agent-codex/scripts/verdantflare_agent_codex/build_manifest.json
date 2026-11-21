@@ -1,18 +1,19 @@
 {
   "files": {
     "__init__.py": "1509853060ad38cab7a11ae4695c7abc826e716e4cf305d308586c1ce5074d81",
-    "__main__.py": "300ea318c0461af67a926cabb296213e31dd078ddd8f0b2f76199cde8724eab5",
+    "__main__.py": "1334492c4cef476249d6b30ec50524da7c71ebfd41bfb68d90ccbabd61d288a4",
     "approval_ui.py": "6cb4c0123e201dcce78be628a3383ac1b2ec1cb7a696fe253026de847b29355e",
     "build_info.py": "8441bc1f6f710620a898877519b3199844a96dd2634133c2d14d7402dc4e9f75",
-    "engine.py": "d787448b57f9218060bf5b523b3c71b72d02891b17162dccccb47bed2b0574bd",
+    "engine.py": "4a6046251572776cf5746fec781d297a1dfe56d716ed3bdb8919b2a16ff5d419",
     "errors.py": "229d7f9c1218986cd7b7351a09c077241d1f354d77faffd454db142e806713b7",
-    "permissions.py": "1ffc14b1cc590dc25d233c13fd3c4d62df577ed5ca764a5956a1661d2ffcb528",
-    "plugin.py": "8ca9f682cf50e279abc4fe4c1163bfaeee272939067e30cf9ca8375c1e0efeca",
-    "plugin_transport.mjs": "5784d00d8af52c606406680f67efc3cf6f833b82d563eed0b7b3b297ad87266a",
-    "recovery.py": "c58190af8f754de5c0caccf058814b5e65ceab12f494a104cda3fcc5b81fe7eb",
-    "rpc.py": "a45796c39b723b215656776e6ba5bb0826fb03c9ea8f53ddb76988478b493eb8",
-    "schema.py": "ad8ac06bf16316fd74fb60d05ba830f36e9d0fc893a114ec1025128fd68e76df",
+    "panel.py": "c9d3b9f8d692246fa1ab62392d360927605024779cbe30841628cd936c2f1538",
+    "permissions.py": "9d1d9a3bf104290d61beae28662e14d21efa7c6e62215c1a9a90c5d0ebedeb44",
+    "plugin.py": "d82ee91b62ecb37b93741a797a846ff7914e4bcb198b6d0d26e0f008b44c170d",
+    "plugin_transport.mjs": "b062af67fb2b7ce2d9e6853c25728692b78b446e7ea5d79fa6543ae26a60a1c5",
+    "recovery.py": "558aa4f394427e13152b4dc426f182929196b683f87a17ef4c47b20372297da4",
+    "rpc.py": "3fdcecb96d0b1b87fb6458173e70aba78c0bfb4a7aa41755b7fa470f2a47e24f",
+    "schema.py": "7afc637ff5126ebeae772de7da174aa86bf58e72e776f4afe24e78f831db44fe",
     "snapshot.py": "986c60a41574d0e607ee9e89ccc158aa7d9e3a105ffb3a83214ca74dea8665a8",
-    "store.py": "a91eb3ab6cc44c6ea639b1e1c4d20615969a4b63476d2d78dcd879b38f4e3606"
+    "store.py": "fe569d4da305ee6714bb639ec7071c4b977cfbf489fc7dfacce3cfc70b400e98"
   }
 }

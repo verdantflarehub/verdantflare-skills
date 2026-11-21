@@ -9,6 +9,7 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent, CallToolResult
 from .engine import Engine
+from .panel import validate_panel_config
 from .errors import BridgeError
 from .schema import SCHEMAS
 
@@ -16,7 +17,7 @@ from .schema import SCHEMAS
 def load_config(path):
     config = json.loads(Path(path).read_text('utf-8'))
     required = {'database', 'codex', 'node', 'extension', 'allowed_roots'}
-    if set(config) != required or not isinstance(config['allowed_roots'], list):
+    if not required <= set(config) or set(config) - required - {'panel_transport'} or not isinstance(config['allowed_roots'], list):
         raise ValueError('Configuration must contain database, codex, node, extension and allowed_roots list')
     for value in [config[k] for k in required - {'allowed_roots'}]:
         if not isinstance(value, str) or not Path(value).is_absolute():
@@ -24,6 +25,8 @@ def load_config(path):
     for root in config['allowed_roots']:
         if not isinstance(root, str) or (root != '*' and not Path(root).is_absolute()):
             raise ValueError('allowed_roots entries must be "*" or absolute paths')
+    if 'panel_transport' in config:
+        validate_panel_config(config['panel_transport'])
     return config
 
 

@@ -3,6 +3,9 @@ import asyncio
 import json
 import hashlib
 import os
+from pathlib import Path
+import shutil
+import tomllib
 from .errors import BridgeError
 
 
@@ -18,6 +21,12 @@ def backend_rejection(method, error):
     details = {'method': method,
                'backend_error_code': error.get('code') if type(error.get('code')) is int else None,
                'backend_message_sha256': hashlib.sha256(message.encode()).hexdigest()}
+    if method == 'thread-owner-discovery' and message == 'Plugin transport request failed':
+        reason = error.get('reason')
+        if reason in ('pipe_missing', 'pipe_unavailable', 'pipe_denied', 'initialize_rejected',
+                      'disconnected', 'timeout', 'transport_failed'):
+            return BridgeError('OWNER_UNAVAILABLE', 'Plugin IPC discovery failed: ' + reason,
+                               reason=reason, details=details)
     if method != 'thread/resume':
         return BridgeError('BACKEND_ERROR', 'Backend rejected the request', details=details)
     normalized = message.strip().lower().rstrip('.')
@@ -121,10 +130,41 @@ class JsonlProcess:
             await self.reader_task
 
 
+def windows_tool_path_args(config_file, tools):
+    """Repair a POSIX-only PATH override for this Windows managed process."""
+    try:
+        config = tomllib.loads(config_file.read_text('utf-8-sig'))
+    except (OSError, ValueError):
+        return []
+    settings = config.get('shell_environment_policy', {}).get('set', {})
+    for name, value in settings.items():
+        if name.upper() != 'PATH' or not isinstance(value, str):
+            continue
+        parts = value.split(':')
+        if ';' in value or len(parts) < 2 or not all(part.startswith('/') for part in parts):
+            continue
+        directories = [str(tool.parent) for tool in tools if tool.is_absolute() and tool.is_file()]
+        if directories:
+            amended = ';'.join([value, *directories])
+            return ['-c', f'shell_environment_policy.set.{name}=' + json.dumps(amended, ensure_ascii=False)]
+    return []
+
+
 class AppServer(JsonlProcess):
     def __init__(self, binary):
         env = dict(os.environ, VERDANTFLARE_AGENT_CODEX_DEPTH='1')
-        super().__init__([binary, 'app-server', '--listen', 'stdio://'], env=env)
+        options = []
+        if os.name == 'nt':
+            tool_path = env.get('PATH', '')
+            git = Path(os.environ.get('ProgramFiles', r'C:\Program Files')) / 'Git/cmd/git.exe'
+            rg = Path(binary).parent / 'codex-path/rg.exe'
+            config_dir = Path(env.get('CODEX_HOME') or Path.home() / '.codex')
+            options = windows_tool_path_args(config_dir / 'config.toml', (git, rg))
+            for tool in (git, rg):
+                if tool.is_absolute() and tool.is_file() and not shutil.which(tool.name, path=tool_path):
+                    tool_path = os.pathsep.join(filter(None, (tool_path, str(tool.parent))))
+            env['PATH'] = tool_path
+        super().__init__([binary, *options, 'app-server', '--listen', 'stdio://'], env=env)
 
     async def start(self):
         await super().start()

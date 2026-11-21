@@ -104,27 +104,9 @@ def sync_service_tree(service_source: Path, destination: Path, replace: bool, pr
     return expected
 
 
-def _read_vscode_obsolete(ext_root: Path) -> dict:
-    obs = ext_root / ".obsolete"
-    if obs.is_file():
-        try:
-            data = json.loads(obs.read_text("utf-8"))
-            if isinstance(data, dict):
-                return data
-        except Exception:
-            pass
-    return {}
-
-
 def auto_find_codex_extension() -> Path:
-    ext_root = Path.home() / ".vscode" / "extensions"
-    obsolete = _read_vscode_obsolete(ext_root)
-    dirs = [d for d in ext_root.glob("openai.chatgpt-*") if d.is_dir() and (d / "package.json").is_file()]
-    active = [d for d in dirs if not obsolete.get(d.name)] or dirs
-    candidates = sorted(active, key=lambda p: p.stat().st_mtime, reverse=True)
-    if not candidates:
-        raise FileNotFoundError("Could not locate openai.chatgpt-* under ~/.vscode/extensions")
-    return candidates[0].resolve()
+    from verdantflare_agent_codex.plugin import resolve_codex_extension
+    return resolve_codex_extension()
 
 
 def auto_find_codex_binary(extension_dir: Path) -> Path:
@@ -201,6 +183,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--replace", "--replace-config", dest="replace", action="store_true", help="Replace existing skill/runtime copies or config when hashes differ.")
     parser.add_argument("--register-mcp", action="store_true", help="Idempotently register verdantflare-agent-codex in peer hosts (Antigravity, Claude Code, Grok).")
     parser.add_argument("--workspace-sessions", action="store_true", help="Explicitly apply the optional workspace-only VS Code session list patch; requires a compatible extension and a later UI reload.")
+    parser.add_argument("--panel-transport", type=Path, help="JSON file containing the client and project window hosts for plugin dispatch.")
     parser.add_argument("--target", type=Path, default=Path(os.environ.get("LOCALAPPDATA", Path.home() / ".local/share")) / SKILL_NAME)
     parser.add_argument("--skills-root", action="append", default=None, help=f"Global skills root (default: {DEFAULT_SKILLS_ROOT}).")
     parser.add_argument("--skill-target", type=Path, default=None, help="Explicit skill destination override.")
@@ -227,6 +210,13 @@ def main(argv: list[str] | None = None) -> int:
     ]
 
     target = args.target.expanduser().resolve()
+    config_path = target / "config.json"
+    previous_config = json.loads(config_path.read_text("utf-8")) if config_path.is_file() else {}
+    panel_transport = previous_config.get("panel_transport")
+    if args.panel_transport:
+        from verdantflare_agent_codex.panel import validate_panel_config
+        panel_transport = json.loads(args.panel_transport.read_text("utf-8-sig"))
+        validate_panel_config(panel_transport)
     target.mkdir(parents=True, exist_ok=True)
     manifest_path = target / "install-manifest.json"
     previous_service = None
@@ -247,8 +237,9 @@ def main(argv: list[str] | None = None) -> int:
     for st in skill_targets:
         skill_hashes = sync_skill_tree(skill_source, st, replace=args.replace)
 
-    raw_roots = args.allow_root or ["*"]
-    allowed_roots = ["*"] if "*" in raw_roots else [str(Path(p).resolve(strict=True)) for p in raw_roots]
+    allowed_roots = previous_config.get("allowed_roots", ["*"])
+    if args.allow_root:
+        allowed_roots = ["*"] if "*" in args.allow_root else [str(Path(p).resolve(strict=True)) for p in args.allow_root]
     # Auto-detected paths are stored as the version-free VS Code extensions
     # root; the runtime resolves the active (non-obsolete) openai.chatgpt-*
     # directory on every call, so extension auto-updates need no reinstall.
@@ -260,7 +251,8 @@ def main(argv: list[str] | None = None) -> int:
         "extension": str(extension_dir) if args.extension else vscode_extensions,
         "allowed_roots": allowed_roots,
     }
-    config_path = target / "config.json"
+    if panel_transport is not None:
+        config["panel_transport"] = panel_transport
     if config_path.exists() and json.loads(config_path.read_text("utf-8")) != config and not args.replace:
         raise ValueError("Existing runtime configuration differs; re-run with --replace to apply updated config")
     config_path.write_text(json.dumps(config, indent=2) + "\n", "utf-8")

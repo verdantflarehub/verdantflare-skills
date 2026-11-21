@@ -1,5 +1,6 @@
 import contextlib
 import io
+import json
 import tempfile
 from pathlib import Path
 import unittest
@@ -10,6 +11,42 @@ import workspace_sessions
 
 
 class InstallerOptionTests(unittest.TestCase):
+    def test_upgrade_uses_registered_extension_and_preserves_explicit_paths(self):
+        from verdantflare_agent_codex.plugin import resolve_codex_binary, resolve_codex_extension
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / ".vscode" / "extensions"
+            registered = root / "openai.chatgpt-2"
+            old = root / "openai.chatgpt-1"
+            for folder in (registered, old):
+                folder.mkdir(parents=True)
+                (folder / "package.json").write_text("{}")
+            entry = {"identifier": {"id": "OpenAI.chatgpt"}, "relativeLocation": registered.name}
+            (root / "extensions.json").write_text(json.dumps([entry]))
+            with patch.object(Path, "home", return_value=Path(directory)):
+                self.assertEqual(install.auto_find_codex_extension(), registered)
+            self.assertEqual(resolve_codex_extension(root), registered)
+            self.assertEqual(resolve_codex_extension(old), old)
+            binary = old / "codex.exe"
+            binary.touch()
+            self.assertEqual(resolve_codex_binary(binary, root), str(binary))
+            (root / ".obsolete").write_text(json.dumps({registered.name: True}))
+            with self.assertRaises(FileNotFoundError):
+                resolve_codex_extension(root)
+
+    def test_upgrade_preserves_project_window_and_workspace_scope(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            panel = {"client": str(base / "client.exe"), "hosts": [
+                {"cwd": str(base), "socket": str(base / "panel.sock")}
+            ]}
+            settings = base / "panel.json"
+            settings.write_text(json.dumps(panel), encoding="utf-8")
+            self.run_installer(directory, ["--panel-transport", str(settings), "--allow-root", directory])
+            self.run_installer(directory, ["--replace"])
+            config = json.loads((base / "runtime" / "config.json").read_text("utf-8"))
+            self.assertEqual(config["panel_transport"], panel)
+            self.assertEqual(config["allowed_roots"], [str(base.resolve())])
+
     def run_installer(self, directory, extra):
         base = Path(directory)
         args = ["--extension",str(base/"extension"),"--codex",str(base/"codex.exe"),

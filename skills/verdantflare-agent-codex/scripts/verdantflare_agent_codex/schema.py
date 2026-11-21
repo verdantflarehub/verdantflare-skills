@@ -14,15 +14,17 @@ def obj(properties, required=()):
 
 
 SCHEMAS = {
+    "codex_session_create": obj({"cwd": TEXT, "request_id": ID,
+        "name": {"type": "string", "minLength": 1, "maxLength": 256}}, ("cwd", "request_id")),
     "codex_session_rename": obj({"thread_id": ID, "cwd": TEXT,
         "name": {"type": "string", "minLength": 1, "maxLength": 256}},
         ("thread_id", "cwd", "name")),
-    "codex_capabilities": obj({"cwd": TEXT, "cursor": {"type": "string", "minLength": 1, "maxLength": 8192},
+    "codex_capabilities": obj({"cwd": TEXT, "thread_id": ID, "cursor": {"type": "string", "minLength": 1, "maxLength": 8192},
         "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20}}),
-    "codex_task_start": obj({"request_id": ID, "mode": {"type": "string", "enum": ["plugin", "managed"]},
+    "codex_task_start": obj({"request_id": ID, "mode": {"type": "string", "enum": ["plugin"]},
         "cwd": TEXT, "prompt": TEXT, "thread_id": ID,
         "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 86400, "default": 3600}},
-        ("request_id", "mode", "cwd", "prompt")),
+        ("request_id", "mode", "cwd", "prompt", "thread_id")),
     "codex_task_status": obj({"task_id": ID,
         "after_event": {"type": "integer", "minimum": 0, "default": 0},
         "limit": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}}, ("task_id",)),
@@ -37,10 +39,10 @@ SCHEMAS = {
 # Keep advertised schemas within common model tool-schema subsets. Conditional
 # requirements are enforced below, even when a host drops JSON Schema conditionals.
 SCHEMAS["codex_task_start"]["properties"]["request_id"]["description"] = (
-    "Required for both plugin and managed modes. Client-generated idempotency key unique within this service."
+    "Client-generated idempotency key unique within this service."
 )
 SCHEMAS["codex_task_start"]["properties"]["mode"]["description"] = (
-    "Execution mode: 'plugin' (attach to an active VS Code Codex thread_id) or 'managed' (spawn a standalone App Server session)."
+    "Attach to the specified VS Code plugin Session."
 )
 SCHEMAS["codex_task_start"]["properties"]["cwd"]["description"] = (
     "Required absolute workspace directory path."
@@ -49,7 +51,7 @@ SCHEMAS["codex_task_start"]["properties"]["prompt"]["description"] = (
     "Required non-empty task instruction (max 64 KiB UTF-8)."
 )
 SCHEMAS["codex_task_start"]["properties"]["thread_id"]["description"] = (
-    "Target conversation thread_id: required when mode='plugin'; omit when mode='managed' (do not confuse with request_id, which is always required)."
+    "ID of the target plugin conversation."
 )
 
 
@@ -61,10 +63,8 @@ def validate(name, arguments):
     if errors:
         # Do not reflect prompt text, secrets, or arbitrary caller values.
         raise BridgeError("INVALID_ARGUMENT", "Arguments do not match the tool schema")
-    if name == "codex_task_start" and (
-        (arguments["mode"] == "plugin") != ("thread_id" in arguments)
-    ):
-        raise BridgeError("INVALID_ARGUMENT", "thread_id is required only in plugin mode")
+    if name == "codex_capabilities" and "thread_id" in arguments and "cursor" in arguments:
+        raise BridgeError("INVALID_ARGUMENT", "Use thread_id or a pagination cursor")
     result = deepcopy(arguments)
     for key, value in result.items():
         if isinstance(value, str) and (not value.strip() or "\x00" in value):

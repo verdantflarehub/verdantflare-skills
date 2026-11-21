@@ -39,7 +39,7 @@ class LeaseMatrixTests(unittest.TestCase):
         sibling = self.root / 'other'
         nested.mkdir()
         sibling.mkdir()
-        for modes in [('plugin', 'plugin'), ('plugin', 'managed'), ('managed', 'managed')]:
+        for modes in [('plugin', 'plugin')]:
             for relation, dirs in [('same', (nested, nested)), ('parent', (self.root, nested)),
                                    ('different', (nested, sibling))]:
                 for reverse in (False, True):
@@ -64,7 +64,7 @@ class LeaseMatrixTests(unittest.TestCase):
             self.assertEqual(160, db.execute('SELECT COUNT(*) FROM tasks').fetchone()[0])
             self.assertEqual(160, db.execute('SELECT COUNT(*) FROM commands').fetchone()[0])
 
-    def test_A02_same_thread_race_and_null_binding_rollback(self):
+    def test_A02_same_thread_race(self):
         barrier = threading.Barrier(8)
         def start(i):
             barrier.wait(timeout=10)
@@ -75,14 +75,6 @@ class LeaseMatrixTests(unittest.TestCase):
                 return None
         with ThreadPoolExecutor(max_workers=8) as pool:
             self.assertEqual(1, sum(v is not None for v in pool.map(start, range(8))))
-        first = self.store.start(self.payload('null-a', 'managed') | {'thread_id': None})
-        second = self.store.start(self.payload('null-b', 'managed') | {'thread_id': None})
-        while self.store.claim('worker'):
-            pass
-        self.store.transition(first['id'], 'worker', 'starting', thread_id='bound')
-        with self.assertRaises(BridgeError):
-            self.store.transition(second['id'], 'worker', 'starting', thread_id='bound')
-        self.assertIsNone(self.store.task(second['id'])['thread_id'])
 
     def test_A04_unknown_only_blocks_its_thread_and_retries_are_persistent(self):
         task = self.store.start(self.payload('lost'))

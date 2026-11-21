@@ -68,6 +68,9 @@ class Store:
                     thread_id TEXT, turn_id TEXT, state TEXT NOT NULL,
                     created REAL NOT NULL, deadline REAL NOT NULL, timeout INTEGER NOT NULL,
                     owner TEXT, updated REAL NOT NULL, error TEXT);
+                CREATE TABLE IF NOT EXISTS panel_creations(
+                    request_id TEXT PRIMARY KEY, digest TEXT NOT NULL, thread_id TEXT, opened INTEGER DEFAULT 0);
+                CREATE INDEX IF NOT EXISTS panel_created_thread ON panel_creations(thread_id);
                 CREATE TABLE IF NOT EXISTS requests(
                     id TEXT PRIMARY KEY, digest TEXT NOT NULL, task_id TEXT NOT NULL,
                     command_id TEXT NOT NULL);
@@ -88,6 +91,12 @@ class Store:
                 CREATE TABLE IF NOT EXISTS pending(
                     id TEXT PRIMARY KEY, task_id TEXT NOT NULL, turn_id TEXT NOT NULL,
                     kind TEXT NOT NULL, payload TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'waiting');
+                CREATE TRIGGER IF NOT EXISTS plugin_only_new_tasks BEFORE INSERT ON tasks
+                WHEN NEW.mode <> 'plugin' BEGIN SELECT RAISE(ABORT, 'Standalone dispatch retired'); END;
+                CREATE TRIGGER IF NOT EXISTS plugin_only_commands BEFORE INSERT ON commands
+                WHEN NEW.operation IN ('start','continue','respond') AND
+                    EXISTS(SELECT 1 FROM tasks WHERE id=NEW.task_id AND mode <> 'plugin')
+                BEGIN SELECT RAISE(ABORT, 'Standalone dispatch retired'); END;
             ''')
 
     def connect(self):
@@ -148,11 +157,39 @@ class Store:
 
     def _command(self, db, operation, payload, task_id, request_id, digest):
         command_id = str(uuid.uuid4())
-        db.execute("INSERT INTO commands(id,task_id,operation,payload,created) VALUES(?,?,?,?,?)",
-                   (command_id, task_id, operation, encode(payload), time.time()))
+        # Older workers share this database and cannot execute this panel protocol.
+        state = 'panel_queued_v2' if payload.get('panel_queue') else 'queued'
+        db.execute("INSERT INTO commands(id,task_id,operation,payload,created,state) VALUES(?,?,?,?,?,?)",
+                   (command_id, task_id, operation, encode(payload), time.time(), state))
         db.execute("INSERT INTO requests VALUES(?,?,?,?)", (request_id, digest, task_id, command_id))
 
-    def start(self, payload):
+    def reserve_panel_creation(self, args):
+        digest = self._digest('create_plugin_session', args)
+        with self.transaction() as db:
+            row = db.execute('SELECT * FROM panel_creations WHERE request_id=?', (args['request_id'],)).fetchone()
+            if row:
+                if row['digest'] != digest:
+                    raise BridgeError('REQUEST_CONFLICT', 'Session creation request parameters changed')
+                return False, row['thread_id'], bool(row['opened'])
+            db.execute('INSERT INTO panel_creations(request_id,digest) VALUES(?,?)', (args['request_id'], digest))
+            return True, None, False
+
+    def known_panel_session(self, thread_id):
+        with closing(self.connect()) as db:
+            return db.execute('SELECT 1 FROM panel_creations WHERE thread_id=? AND opened=1 LIMIT 1',
+                              (thread_id,)).fetchone() is not None
+
+    def record_panel_creation(self, request_id, thread_id, opened=False):
+        with self.transaction() as db:
+            updated = db.execute("""UPDATE panel_creations SET thread_id=?,opened=MAX(opened,?)
+                WHERE request_id=? AND (thread_id IS NULL OR thread_id=?)""",
+                (thread_id, int(opened), request_id, thread_id))
+            if updated.rowcount != 1:
+                raise BridgeError('REQUEST_CONFLICT', 'Session creation receipt differs')
+
+    def start(self, payload, *, panel_queue=False):
+        if payload.get("mode") != "plugin":
+            raise BridgeError("MODE_RETIRED", "Only plugin Sessions accept tasks")
         digest = self._digest("start", payload)
         with self.transaction() as db:
             replay = self._replay(db, payload["request_id"], digest)
@@ -164,8 +201,10 @@ class Store:
                        (task_id, payload["mode"], payload["cwd"], payload.get("thread_id"), None,
                         "queued", now, now + timeout, timeout, None, now, None))
             task = self._task(db, task_id)
-            self._lease(db, task)
-            self._command(db, "start", payload, task_id, payload["request_id"], digest)
+            if not panel_queue:
+                self._lease(db, task)
+            self._command(db, "start", dict(payload, panel_queue=True) if panel_queue else payload,
+                          task_id, payload["request_id"], digest)
             self._event(db, task, "queued", {})
             return task
 
@@ -260,7 +299,7 @@ class Store:
             if command is None or request is None:
                 raise BridgeError('TASK_NOT_FOUND', 'Exact queued request not found')
             task = self._task(db, command['task_id'])
-            if (command['state'] != 'queued' or command['owner'] is not None
+            if (command['state'] not in ('queued', 'panel_queued_v2') or command['owner'] is not None
                     or command['operation'] not in ('start', 'continue')
                     or task['state'] != 'queued' or task['owner'] is not None or task['turn_id'] is not None):
                 raise BridgeError('STALE_TURN', 'Only a never-claimed queued submission can be withdrawn')
@@ -282,14 +321,18 @@ class Store:
         """Only the connected owner may handle subsequent commands for a task."""
         with self.transaction() as db:
             row = db.execute("""SELECT c.* FROM commands c JOIN tasks t ON c.task_id=t.id
-                WHERE c.state='queued' AND (t.owner IS NULL OR t.owner=?)
+                WHERE c.state IN ('queued','panel_queued_v2') AND (t.owner IS NULL OR t.owner=?)
+                  AND (COALESCE(json_extract(c.payload,'$.panel_queue'),0)=0 OR NOT EXISTS
+                    (SELECT 1 FROM leases l WHERE l.thread_id=t.thread_id AND l.task_id<>t.id))
                 ORDER BY c.created,c.rowid LIMIT 1""", (owner,)).fetchone()
             if row is None:
                 return None
             result = dict(row)
+            result["payload"] = json.loads(result["payload"])
+            if result["payload"].get("panel_queue"):
+                self._lease(db, self._task(db, row["task_id"]))
             db.execute("UPDATE commands SET state='claimed',owner=? WHERE id=?", (owner, row["id"]))
             db.execute("UPDATE tasks SET owner=?,updated=? WHERE id=?", (owner, time.time(), row["task_id"]))
-            result["payload"] = json.loads(result["payload"])
             return result
 
     def command_done(self, command_id, owner, result):

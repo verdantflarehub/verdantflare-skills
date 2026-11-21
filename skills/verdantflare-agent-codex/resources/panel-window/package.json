@@ -1,0 +1,16 @@
+{
+  "name": "codex-panel-window",
+  "displayName": "VerdantFlare Codex Session",
+  "publisher": "verdantflare",
+  "version": "0.1.1",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionDependencies": [
+    "openai.chatgpt"
+  ]
+}

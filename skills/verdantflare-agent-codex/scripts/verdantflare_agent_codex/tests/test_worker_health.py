@@ -34,7 +34,7 @@ class WorkerHealthTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_claim_exception_logged_and_original_queue_consumed_once(self):
         store = self.engine.store
-        task = store.start(dict(request_id='one', mode='managed', cwd=canonical(self.root),
+        task = store.start(dict(request_id='one', mode='plugin',thread_id='fixture-thread', cwd=canonical(self.root),
                                 prompt='fixture', timeout_seconds=60))
         original = store.claim
         attempts = []
@@ -89,7 +89,7 @@ class WorkerHealthTests(unittest.IsolatedAsyncioTestCase):
         await self.engine.start()
         await self.until(lambda: self.engine.worker_health()['healthy'])
         store = self.engine.store
-        task = store.start(dict(request_id='owned',mode='managed',cwd=canonical(self.root),prompt='fixture',timeout_seconds=60))
+        task = store.start(dict(request_id='owned',mode='plugin',thread_id='fixture-thread',cwd=canonical(self.root),prompt='fixture',timeout_seconds=60))
         store.claim(self.engine.owner)
         # Block this event loop while the pulse thread and separate Store remain alive.
         time.sleep(.20)
@@ -125,7 +125,7 @@ class WorkerHealthTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_withdraw_exact_unclaimed_command_preserves_history(self):
         store=self.engine.store
-        task=store.start(dict(request_id='withdraw',mode='managed',cwd=canonical(self.root),prompt='fixture',timeout_seconds=60))
+        task=store.start(dict(request_id='withdraw',mode='plugin',thread_id='fixture-thread',cwd=canonical(self.root),prompt='fixture',timeout_seconds=60))
         with store.transaction() as db:
             command=db.execute('SELECT id FROM commands WHERE task_id=?',(task['id'],)).fetchone()[0]
         with self.assertRaises(BridgeError):store.cancel_unclaimed(command,'wrong','fixture')
@@ -136,14 +136,14 @@ class WorkerHealthTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_withdraw_cannot_cancel_claimed_submission(self):
         store=self.engine.store
-        task=store.start(dict(request_id='claimed',mode='managed',cwd=canonical(self.root),prompt='fixture',timeout_seconds=60))
+        task=store.start(dict(request_id='claimed',mode='plugin',thread_id='fixture-thread',cwd=canonical(self.root),prompt='fixture',timeout_seconds=60))
         c=store.claim('worker')
         with self.assertRaises(BridgeError):store.cancel_unclaimed(c['id'],'claimed','fixture')
         self.assertEqual('queued',store.task(task['id'])['state'])
 
     async def test_cancel_during_committed_claim_does_not_replay(self):
         store=self.engine.store
-        task=store.start(dict(request_id='claim-cancel',mode='managed',cwd=canonical(self.root),prompt='fixture',timeout_seconds=60))
+        task=store.start(dict(request_id='claim-cancel',mode='plugin',thread_id='fixture-thread',cwd=canonical(self.root),prompt='fixture',timeout_seconds=60))
         original=store.claim
         entered,release=threading.Event(),threading.Event()
         def claim(owner):

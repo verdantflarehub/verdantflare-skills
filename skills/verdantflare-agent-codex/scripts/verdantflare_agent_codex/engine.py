@@ -13,8 +13,9 @@ import traceback
 
 from .errors import BridgeError
 from .build_info import SERVICE_BUILD
-from .recovery import read_native_result
+from .recovery import panel_turn_id, read_native_result
 from .plugin import Plugin, detect_codex_plugin_version, resolve_codex_binary
+from .panel import PanelConnection, connect_panel, create_panel_session, current_window_has_tab, open_panel_tab, probe_panel_hosts
 from .rpc import AppServer
 from .schema import validate
 from .snapshot import Snapshot, turn_result
@@ -97,6 +98,13 @@ class Engine:
         args = validate(name, arguments)
         if name == 'codex_capabilities':
             return await self.capabilities(args)
+        if name == 'codex_session_create':
+            if os.environ.get('VERDANTFLARE_AGENT_CODEX_DEPTH'):
+                raise BridgeError('WORKSPACE_DENIED', 'Recursive delegation to this service is disabled')
+            args['cwd'] = allowed_cwd(args['cwd'], self.config['allowed_roots'])
+            if not self.config.get('panel_transport'):
+                raise BridgeError('OWNER_UNAVAILABLE', 'Configure a project-bound plugin window for session creation')
+            return await create_panel_session(self.config['panel_transport'], self.store, args)
         if name == 'codex_session_rename':
             return await self.rename_session(args)
         if name == 'codex_task_start':
@@ -106,6 +114,10 @@ class Engine:
             replay = self.store.replay('start', args)
             if replay:
                 return public_task(replay)
+            if args['mode'] == 'plugin' and self.config.get('panel_transport'):
+                cfg = self.config['panel_transport']
+                if any(canonical(host['cwd']) == args['cwd'] for host in cfg['hosts']):
+                    return public_task(self.store.start(args, panel_queue=True))
             if args['mode'] == 'plugin':
                 connection = await Plugin(self.config['node'], self.config['extension']).start()
                 try:
@@ -129,6 +141,8 @@ class Engine:
                           next_cursor=str(offset + 32768) if offset + 32768 < len(payload) else None)
             return result
         operation = name.removeprefix('codex_task_')
+        if operation in ('continue', 'respond') and self.store.task(args['task_id'])['mode'] != 'plugin':
+            raise BridgeError('MODE_RETIRED', 'Standalone tasks are historical records')
         if operation == 'cancel' and args['expected_turn_id'] is None:
             task = self.store.task(args['task_id'])
             candidate = self.store.queued_continue(task)
@@ -222,9 +236,24 @@ class Engine:
         app = await AppServer(codex_bin).start()
         plugin = None
         try:
-            result = await app.call('thread/list', {'cwd': cwd, 'limit': args['limit'],
-                'sourceKinds': ['vscode'], 'modelProviders': [], 'useStateDbOnly': True,
-                'cursor': args.get('cursor')})
+            tab_confirmed = False
+            panel_hosts = (await probe_panel_hosts(self.config['panel_transport'], cwd, self.config['allowed_roots'], args.get('thread_id'))
+                           if self.config.get('panel_transport') else {})
+            if args.get('thread_id') in panel_hosts:
+                result = {'data': [panel_hosts[args['thread_id']][0][0]], 'nextCursor': None}
+            elif args.get('thread_id'):
+                metadata = await app.call('thread/read', {'threadId': args['thread_id'], 'includeTurns': False})
+                thread = metadata['thread']
+                if cwd and thread['id'] == args['thread_id'] and thread.get('cwd') and canonical(thread['cwd']) == cwd:
+                    tab_confirmed = await current_window_has_tab(cwd, thread['id'])
+                matches = (thread['id'] == args['thread_id'] and
+                           (tab_confirmed or thread.get('source') == 'vscode' or self.store.known_panel_session(thread['id'])))
+                result = {'data': [thread] if matches else [], 'nextCursor': None}
+            else:
+                result = await app.call('thread/list', {'cwd': cwd, 'limit': args['limit'],
+                    'sourceKinds': [] if self.config.get('panel_transport') else ['vscode'],
+                    'modelProviders': [], 'useStateDbOnly': True,
+                    'cursor': args.get('cursor')})
             try:
                 plugin = await Plugin(self.config['node'], self.config['extension']).start()
             except (BridgeError, OSError):
@@ -232,16 +261,35 @@ class Engine:
             rows = []
             filtered_out_count = 0
             for thread in result['data']:
+                if (self.config.get('panel_transport') and thread.get('source') != 'vscode'
+                        and not tab_confirmed and thread['id'] not in panel_hosts and not self.store.known_panel_session(thread['id'])):
+                    continue
                 if not thread.get('cwd'):
                     continue
                 try:
-                    allowed_cwd(thread['cwd'], self.config['allowed_roots'])
+                    thread_cwd = allowed_cwd(thread['cwd'], self.config['allowed_roots'])
+                    if args.get('thread_id') and cwd and thread_cwd != cwd:
+                        continue
                 except BridgeError:
                     filtered_out_count += 1
                     continue
                 reachable = False
                 alignment = {'status': 'unknown', 'reason': 'owner_unavailable'}
-                if plugin:
+                live_hosts = panel_hosts.get(thread['id'], [])
+                if live_hosts:
+                    reachable = len(live_hosts) == 1
+                    alignment = {'status': 'unknown', 'reason': 'panel_permissions_unverified' if reachable else 'multiple_panel_hosts'}
+                    if reachable and args.get('thread_id'):
+                        from .permissions import read_selection
+                        try:
+                            bound = await open_panel_tab(live_hosts[0][1]['socket'], thread_cwd, thread['id'], inspect_only=True)
+                            selection = await asyncio.to_thread(read_selection, bound['permission_database'])
+                            alignment = {'status': 'host_selected', 'source': 'bound_panel_selection',
+                                         'mode': selection.mode, 'expected': selection.request_fields(),
+                                         'effective_check': 'before_submission_and_at_native_turn'}
+                        except (BridgeError, OSError, KeyError) as error:
+                            alignment['reason'] = getattr(error, 'code', 'permission_read_failed')
+                elif plugin:
                     try:
                         await plugin.settings(thread['id'])
                         reachable = True
@@ -258,7 +306,10 @@ class Engine:
                     except Exception as error:
                         alignment = {'status': 'unknown', 'reason': error.code if isinstance(error, BridgeError)
                                      else 'permission_read_failed'}
+                        if isinstance(error, BridgeError) and error.code == 'OWNER_UNAVAILABLE' and error.reason:
+                            alignment['transport_reason'] = error.reason
                 rows.append({'thread_id': thread['id'], 'title': thread.get('name') or thread.get('preview'),
+                             **({'current_window_tab_open': True} if tab_confirmed else {}),
                              'cwd': thread['cwd'], 'owner_reachable': reachable,
                              'permission_alignment': alignment})
             plugin_ver = detect_codex_plugin_version(self.config.get('extension'))
@@ -268,13 +319,12 @@ class Engine:
                     'plugin_concurrency': {'scope': 'thread', 'limit': None, 'automatic_queue': False},
                     'recovery_protocol': 'thread-recovery-v1',
                     'plugin': 'read_verified' if any(r['owner_reachable'] for r in rows) else ('discovered' if plugin else 'unavailable'),
-                    'managed': 'read_verified', 'threads': rows, 'filtered_out_count': filtered_out_count,
+                    'threads': rows, 'filtered_out_count': filtered_out_count,
                     'next_cursor': result.get('nextCursor'),
-                    'operations': ['capabilities', 'session_rename', 'start', 'status', 'result', 'continue', 'cancel', 'respond'],
+                    'operations': ['capabilities', *(['session_create'] if self.config.get('panel_transport') else []), 'session_rename', 'start', 'status', 'result', 'continue', 'cancel', 'respond'],
                     'permission_approval': 'human_ui_required',
                     'permission_inheritance': 'host-selection-native-turn-context-v1',
-                    'managed_approval': 'pending.approval_url',
-                    'managed_concurrency': {'scope': 'thread', 'limit': None, 'automatic_queue': False}}
+                    }
         finally:
             if plugin:
                 await plugin.close()
@@ -464,6 +514,16 @@ class Engine:
     async def _recover(self, task):
         connection = None
         try:
+            captured = self.store.submission(task['id']) or {}
+            if task['mode'] == 'plugin' and captured.get('transport') == 'panel_queue' and self.config.get('panel_transport'):
+                connection, _ = await connect_panel(self.config['panel_transport'], task)
+                self.connections[task['id']] = connection
+                marker = captured.get('client_message_id')
+                original = task['turn_id'] or await panel_turn_id(connection, task, marker)
+                selection = PermissionSelection(captured['permission_mode'], '')
+                self.store.transition(task['id'], self.owner, 'running', turn_id=original)
+                await self._watch_panel_queue(connection, task, marker, selection, original)
+                return
             if task['mode'] == 'plugin':
                 connection = await Plugin(self.config['node'], self.config['extension']).start()
                 self.connections[task['id']] = connection
@@ -527,14 +587,17 @@ class Engine:
                     if current['owner'] != self.owner or current['state'] in TERMINAL:
                         return
                     captured = self.store.submission(task['id']) or {}
-                    if not current['thread_id'] or not current['turn_id'] or not captured.get('permission_mode'):
+                    if not current['thread_id'] or not captured.get('permission_mode'):
                         raise BridgeError('RECOVERY_UNCONFIRMED', 'Exact turn or captured permissions are unavailable')
                     app = await AppServer(resolve_codex_binary(self.config.get('codex'), self.config.get('extension'))).start()
+                    if not current['turn_id'] and captured.get('transport') == 'panel_queue':
+                        original = await panel_turn_id(app, current, captured.get('client_message_id'))
+                        current = {**current, 'turn_id': original}
                     probe = Plugin(self.config['node'], self.config['extension'])
                     state, result, actual = await read_native_result(app, probe, current, captured)
                     self.store.append_event(task['id'], 'result_recovered', {'source': 'native_history',
                         'thread_id': current['thread_id'], 'turn_id': current['turn_id'], 'actual_permissions': actual})
-                    self.store.transition(task['id'], self.owner, state, result=result)
+                    self.store.transition(task['id'], self.owner, state, turn_id=current['turn_id'], result=result)
                     recovered = True
                 except Exception as fallback_error:
                     self.store.append_event(task['id'], 'recovery_unconfirmed', {
@@ -558,8 +621,66 @@ class Engine:
         connection = None
         try:
             self.store.transition(task_id, self.owner, 'starting')
+            if task['mode'] != 'plugin':
+                raise BridgeError('MODE_RETIRED', 'Standalone dispatch has been removed')
             prompt = DELEGATION_PREFIX + payload['prompt']
-            if task['mode'] == 'plugin':
+            if payload.get('panel_queue'):
+                from .permissions import read_selection, assert_selection_current
+                connection, host = await connect_panel(self.config['panel_transport'], task)
+                self.connections[task_id] = connection
+                window = await open_panel_tab(host['socket'], task['cwd'], task['thread_id'], inspect_only=True)
+                database = window.get('permission_database')
+                if not database:
+                    raise BridgeError('PERMISSIONS_UNAVAILABLE', 'Missing bound panel permission database')
+                selection = await asyncio.to_thread(read_selection, database)
+                thread_id = task['thread_id']
+                resume = await connection.call('thread/resume', {'threadId': thread_id, 'excludeTurns': True})
+                if resume['thread']['id'] != thread_id or canonical(resume['thread']['cwd']) != task['cwd']:
+                    raise BridgeError('OWNER_UNAVAILABLE', 'Panel thread changed')
+                await asyncio.to_thread(assert_selection_current, database, selection)
+                unattended = selection.mode == 'full-access'
+                if unattended:
+                    profile = resume.get('activePermissionProfile') or {}
+                    mode = {':workspace': 'unattended-workspace', ':read-only': 'unattended-read-only',
+                            ':danger-full-access': 'full-access'}.get(profile.get('id'))
+                    if not mode or profile.get('extends') or resume.get('approvalsReviewer') != 'user':
+                        raise BridgeError('PERMISSIONS_UNAVAILABLE', 'Unrecognized native thread policy')
+                    selection = PermissionSelection(mode, selection.fingerprint)
+                    assert_effective_selection(selection, {**resume, 'approvalPolicy': 'never'})
+                else:
+                    assert_effective_selection(selection, resume)
+                if time.time() >= task['deadline']:
+                    self.store.transition(task_id, self.owner, 'timed_out')
+                    self.store.command_done(command['id'], self.owner, {'submitted': False})
+                    return
+                marker = str(uuid.uuid4())
+                self.store.append_event(task_id, 'submission', {'client_message_id': marker,
+                    'permission_mode': selection.mode, 'transport': 'panel_queue'})
+                submitted = True
+                if unattended:
+                    reply = await connection.call('turn/start', {'threadId': thread_id,
+                        'clientUserMessageId': marker, 'approvalPolicy': 'never',
+                        'input': [{'type': 'text', 'text': prompt, 'text_elements': []}]})
+                    turn_id = reply['turn']['id']
+                    self.store.transition(task_id, self.owner, 'running', turn_id=turn_id)
+                    self.store.command_done(command['id'], self.owner, {'turn_id': turn_id})
+                    probe = Plugin(self.config['node'], self.config['extension'])
+                    actual = await probe.effective_turn_permissions(thread_id, turn_id, task['cwd'])
+                    try:
+                        assert_effective_selection(selection, actual)
+                    except BridgeError:
+                        await connection.call('turn/interrupt', {'threadId': thread_id, 'turnId': turn_id})
+                        raise
+                    await self._watch_panel_queue(connection, task, marker, selection, turn_id)
+                    return
+                reply = await connection.call('thread/queue/add', {'threadId': thread_id,
+                    'clientUserMessageId': marker, 'input': [{'type': 'text', 'text': prompt, 'text_elements': []}]})
+                receipt = reply['queuedSubmission']
+                if receipt.get('clientUserMessageId') != marker or not receipt.get('id'):
+                    raise BridgeError('RECOVERY_UNCONFIRMED', 'Panel queue receipt differs from submission')
+                self.store.command_done(command['id'], self.owner, {'queued_submission_id': receipt['id']})
+                await self._watch_panel_queue(connection, task, marker, selection)
+            elif task['mode'] == 'plugin':
                 connection = await Plugin(self.config['node'], self.config['extension']).start()
                 self.connections[task_id] = connection
                 owner = await connection.follow(task['thread_id'])
@@ -593,26 +714,6 @@ class Engine:
                         'context': {'inheritThreadSettings': True}}}, expected_owner=owner)
                 self.store.command_done(command['id'], self.owner, {'accepted': True})
                 await self._watch_plugin(task_id, connection, snapshot, marker, owner, selection)
-            else:
-                codex_bin = resolve_codex_binary(self.config.get('codex'), self.config.get('extension'))
-                connection = await AppServer(codex_bin).start()
-                self.connections[task_id] = connection
-                if task['thread_id']:
-                    reply = await connection.call('thread/resume', {'threadId': task['thread_id']})
-                    thread_id = task['thread_id']
-                else:
-                    reply = await connection.call('thread/start', {'cwd': task['cwd']})
-                    thread_id = reply['thread']['id']
-                self.store.append_event(task_id, 'effective_permissions', {
-                    'source': 'managed-app-server', 'actual': effective_permissions(reply)})
-                self.store.transition(task_id, self.owner, 'starting', thread_id=thread_id)
-                submitted = True
-                reply = await connection.call('turn/start', {'threadId': thread_id,
-                    'input': [{'type': 'text', 'text': prompt, 'text_elements': []}]})
-                turn_id = reply['turn']['id']
-                self.store.transition(task_id, self.owner, 'running', turn_id=turn_id)
-                self.store.command_done(command['id'], self.owner, {'accepted': True})
-                await self._watch_managed(task_id, connection)
         except asyncio.CancelledError:
             current = self.store.task(task_id)
             if current['state'] not in TERMINAL:
@@ -629,6 +730,42 @@ class Engine:
                 await connection.close()
             self.connections.pop(task_id, None)
 
+    async def _watch_panel_queue(self, connection, task, marker, selection, turn_id=None):
+        native = Plugin(self.config['node'], self.config['extension'])
+        while time.time() < task['deadline']:
+            if turn_id is None:
+                try:
+                    turn_id = await panel_turn_id(connection, task, marker)
+                except BridgeError as error:
+                    if error.reason != 'message_not_visible':
+                        raise
+                if turn_id:
+                    self.store.transition(task['id'], self.owner, 'running', turn_id=turn_id)
+                    actual = await native.effective_turn_permissions(task['thread_id'], turn_id, task['cwd'])
+                    try:
+                        assert_effective_selection(selection, actual)
+                    except BridgeError:
+                        await connection.call('turn/interrupt', {'threadId': task['thread_id'], 'turnId': turn_id})
+                        raise
+            if turn_id:
+                try:
+                    state, result, _ = await read_native_result(connection, native,
+                        {**task, 'turn_id': turn_id}, {'permission_mode': selection.mode})
+                except BridgeError as error:
+                    if error.reason != 'turn_in_progress':
+                        raise
+                    thread = (await connection.call('thread/read', {'threadId': task['thread_id']}))['thread']
+                    flags = thread.get('status', {}).get('activeFlags', [])
+                    state = ('waiting_approval' if 'waitingOnApproval' in flags else
+                             'waiting_input' if 'waitingOnUserInput' in flags else 'running')
+                    if self.store.task(task['id'])['state'] not in (state, 'cancelling'):
+                        self.store.transition(task['id'], self.owner, state)
+                else:
+                    self.store.transition(task['id'], self.owner, state, turn_id=turn_id, result=result)
+                    return
+            await asyncio.sleep(.5)
+        raise BridgeError('BACKEND_TIMEOUT', 'Native queue outcome is unconfirmed')
+
     async def _control(self, command):
         task = self.store.task(command['task_id'])
         if task['turn_id'] != command['payload']['expected_turn_id'] or task['state'] in TERMINAL:
@@ -636,6 +773,14 @@ class Engine:
         connection = self.connections.get(task['id'])
         if connection is None:
             raise BridgeError('BACKEND_DISCONNECTED', 'Task connection is unavailable')
+        if isinstance(connection, PanelConnection):
+            if command['operation'] != 'cancel':
+                raise BridgeError('APPROVAL_REQUIRES_UI', 'Respond in the bound Codex panel')
+            if not task['turn_id'] or task['thread_id'] not in await connection.loaded():
+                raise BridgeError('STALE_TURN', 'The bound panel no longer holds this turn')
+            await connection.call('turn/interrupt', {'threadId': task['thread_id'], 'turnId': task['turn_id']})
+            self.store.command_done(command['id'], self.owner, {'accepted': True})
+            return
         plugin_owner = None
         if task['mode'] == 'plugin':
             plugin_owner = await connection.owner(task['thread_id'])

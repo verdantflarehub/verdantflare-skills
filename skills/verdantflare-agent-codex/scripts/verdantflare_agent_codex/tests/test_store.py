@@ -28,6 +28,17 @@ class StoreTests(unittest.TestCase):
             operation()
         self.assertEqual(code, caught.exception.code)
 
+    def test_panel_queue_orders_same_thread_without_blocking_other_threads(self):
+        first = self.store.start(self.payload(), panel_queue=True)
+        second = self.store.start(self.payload('second'), panel_queue=True)
+        other = self.store.start(self.payload('other', thread_id='thread-b'), panel_queue=True)
+        self.assertEqual(first['id'], self.store.start(self.payload(), panel_queue=True)['id'])
+        self.assertEqual(first['id'], self.store.claim('w1')['task_id'])
+        self.assertEqual(other['id'], self.store.claim('w2')['task_id'])
+        self.assertIsNone(self.store.claim('w3'))
+        self.store.transition(first['id'], 'w1', 'completed')
+        self.assertEqual(second['id'], self.store.claim('w3')['task_id'])
+
     def test_cross_connection_idempotency(self):
         def run(_):
             return Store(self.store.path).start(self.payload())['id']
@@ -58,16 +69,16 @@ class StoreTests(unittest.TestCase):
         self.assertIsNone(self.store.claim('replacement'))
         self.assert_code('SESSION_BUSY', lambda: self.store.start(self.payload('retry-with-new-id')))
 
-    def test_managed_parallel_leases_are_atomic_and_thread_scoped(self):
+    def test_plugin_parallel_leases_are_atomic_and_thread_scoped(self):
         def run(i):
-            return Store(self.store.path).start(self.payload(str(i), mode='managed', thread_id=None))
+            return Store(self.store.path).start(self.payload(str(i), mode='plugin', thread_id='thread-'+str(i)))
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as workers:
             tasks = list(workers.map(run, range(4)))
         self.assertEqual(4, len({task['id'] for task in tasks}))
         for i in range(4):
             command = self.store.claim('owner')
-            self.store.transition(command['task_id'], 'owner', 'running', thread_id='thread-' + str(i), turn_id='turn')
-        self.assert_code('SESSION_BUSY', lambda: self.store.start(self.payload('same-thread', mode='managed', thread_id='thread-0')))
+            self.store.transition(command['task_id'], 'owner', 'running', turn_id='turn')
+        self.assert_code('SESSION_BUSY', lambda: self.store.start(self.payload('same-thread', mode='plugin', thread_id='thread-0')))
         self.store.start(self.payload('plugin'))
 
     def test_owner_fencing_and_heartbeat(self):

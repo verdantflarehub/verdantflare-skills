@@ -9,38 +9,29 @@ from .errors import BridgeError
 from .permissions import default_vscode_database, read_selection, assert_selection_current, rollout_path, read_turn_permissions
 
 
-def _latest_vscode_extension(prefix: str) -> Path | None:
-    ext_root = Path.home() / '.vscode' / 'extensions'
-    if not ext_root.is_dir():
-        return None
-    obsolete: dict = {}
-    obs_file = ext_root / '.obsolete'
-    if obs_file.is_file():
-        try:
-            loaded = json.loads(obs_file.read_text('utf-8'))
-            if isinstance(loaded, dict):
-                obsolete = loaded
-        except Exception:
-            obsolete = {}
-    dirs = [d for d in ext_root.glob(f'{prefix}*') if d.is_dir() and (d / 'package.json').is_file()]
-    active = [d for d in dirs if not obsolete.get(d.name)] or dirs
-    if not active:
-        return None
-    return max(active, key=lambda p: p.stat().st_mtime).resolve()
-
-
 def resolve_codex_extension(configured: str | Path | None = None) -> Path:
-    cfg_str = str(configured or '')
-    if not cfg_str or '.vscode' in cfg_str.lower():
-        latest = _latest_vscode_extension('openai.chatgpt-')
-        if latest is not None:
-            return latest
-    return Path(cfg_str) if cfg_str else Path('.')
+    root = Path(configured) if configured else Path.home() / '.vscode' / 'extensions'
+    if root.name.lower() != 'extensions' or (root / 'package.json').is_file():
+        return root
+    candidates = {d.name: d for d in root.glob('openai.chatgpt-*') if (d / 'package.json').is_file()}
+    index = root / 'extensions.json'
+    if index.is_file():
+        entries = json.loads(index.read_text('utf-8-sig'))
+        names = {record.get('relativeLocation') for record in entries
+                 if record.get('identifier', {}).get('id', '').lower() == 'openai.chatgpt'}
+        candidates = {name: path for name, path in candidates.items() if name in names}
+    obsolete = root / '.obsolete'
+    if obsolete.is_file():
+        retired = json.loads(obsolete.read_text('utf-8-sig'))
+        candidates = {name: path for name, path in candidates.items() if not retired.get(name)}
+    if len(candidates) != 1:
+        raise FileNotFoundError('Cannot identify one active Codex extension in the VS Code extensions directory')
+    return next(iter(candidates.values())).resolve()
 
 
 def resolve_codex_binary(configured: str | Path | None = None, extension: str | Path | None = None) -> str:
     cfg_str = str(configured or '')
-    if cfg_str and '.vscode' not in cfg_str.lower():
+    if cfg_str:
         if Path(cfg_str).is_file() or not os.path.isabs(cfg_str):
             return cfg_str
     ext = resolve_codex_extension(extension or cfg_str)
@@ -59,7 +50,10 @@ def resolve_codex_binary(configured: str | Path | None = None, extension: str | 
 
 
 def detect_codex_plugin_version(extension: str | Path | None = None) -> str:
-    ext = resolve_codex_extension(extension)
+    try:
+        ext = resolve_codex_extension(extension)
+    except (OSError, ValueError):
+        return 'unknown'
     manifest_path = ext / 'package.json'
     if manifest_path.is_file():
         try:

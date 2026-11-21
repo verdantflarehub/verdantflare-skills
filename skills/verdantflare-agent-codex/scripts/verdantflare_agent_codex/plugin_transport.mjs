@@ -56,6 +56,9 @@ const ready = new Promise((resolve, reject) => {
   socket.once('connect', async () => {
     try {
       const init = await request('initialize', { clientType: 'verdantflare-agent-codex' });
+      if (typeof init.result?.clientId !== 'string' || !init.result.clientId) {
+        throw new Error('initialize-rejected');
+      }
       clientId = init.result.clientId;
       resolve();
     } catch (error) { reject(error); }
@@ -128,8 +131,15 @@ lines.on('line', async line => {
       result = await request(method, params.payload, params.owner);
     } else throw new Error('unsupported-method');
     output({ id: incoming.id, result });
-  } catch {
-    output({ id: incoming?.id ?? null, error: { code: -32000, message: 'Plugin transport request failed' } });
+  } catch (error) {
+    const reasons = {
+      ENOENT: 'pipe_missing', ECONNREFUSED: 'pipe_unavailable', EACCES: 'pipe_denied',
+      EPERM: 'pipe_denied', disconnected: 'disconnected', timeout: 'timeout',
+      'initialize-rejected': 'initialize_rejected',
+    };
+    const key = error.code ?? error.message;
+    const reason = Object.hasOwn(reasons, key) ? reasons[key] : 'transport_failed';
+    output({ id: incoming?.id ?? null, error: { code: -32000, message: 'Plugin transport request failed', reason } });
   }
 });
 lines.on('close', () => {

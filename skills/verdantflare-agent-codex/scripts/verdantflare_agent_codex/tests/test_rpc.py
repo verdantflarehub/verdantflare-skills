@@ -1,7 +1,10 @@
 import asyncio
 import sys
+import json
+import tempfile
+from pathlib import Path
 import unittest
-from verdantflare_agent_codex.rpc import JsonlProcess
+from verdantflare_agent_codex.rpc import JsonlProcess, windows_tool_path_args
 from verdantflare_agent_codex.errors import BridgeError
 
 FAKE = '''import sys,json,time
@@ -15,6 +18,20 @@ for line in sys.stdin:
 
 
 class RpcTests(unittest.IsolatedAsyncioTestCase):
+    def test_windows_tools_extend_only_posix_path_override(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / 'config.toml'
+            tool = Path(tmp) / 'git.exe'
+            tool.touch()
+            for value in ('/usr/bin:/bin', '', 'C:/Tools', 'C:/Tools;D:/Apps'):
+                config.write_text('[shell_environment_policy.set]\nPath=' + json.dumps(value), encoding='utf8')
+                args = windows_tool_path_args(config, [tool, Path(tmp) / 'missing.exe'])
+                if value == '/usr/bin:/bin':
+                    self.assertEqual(args, ['-c', 'shell_environment_policy.set.Path=' +
+                                            json.dumps(value + ';' + tmp, ensure_ascii=False)])
+                else:
+                    self.assertEqual(args, [])
+
     async def test_separate_server_request_id_namespace(self):
         rpc = await JsonlProcess([sys.executable, '-u', '-c', FAKE]).start()
         try:
