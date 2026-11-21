@@ -4,14 +4,15 @@
 
 在 VF 开发机上，将下列跨项目技能安装到 `~/.agents/skills/`。按职责选装的技能列在第 2 节。此清单用于新机配置和更新已有机器。
 
-| 全局技能 | 跨项目用途 |
-| --- | --- |
-| [verdantflare-download](verdantflare-download/SKILL.md) | 通用下载与资料研究 |
-| [verdantflare-meta-markdown](verdantflare-meta-markdown/SKILL.md) | 文档编写、格式与检查 |
-| [verdantflare-meta-plan](verdantflare-meta-plan/SKILL.md) | 研发计划与验收 |
-| [verdantflare-meta-skill](verdantflare-meta-skill/SKILL.md) | 技能设计与安装 |
-| [verdantflare-meta-googledrive](verdantflare-meta-googledrive/SKILL.md) | 跨机素材管理 |
-| [verdantflare-meta-agent](verdantflare-meta-agent/SKILL.md) | 多助手协作 |
+| 全局技能                                                                | 跨项目用途           |
+| ----------------------------------------------------------------------- | -------------------- |
+| [verdantflare-download](verdantflare-download/SKILL.md)                 | 通用下载与资料研究   |
+| [verdantflare-reverse-prompt](verdantflare-reverse-prompt/SKILL.md)     | 单图场景反推提示词   |
+| [verdantflare-meta-markdown](verdantflare-meta-markdown/SKILL.md)       | 文档编写、格式与检查 |
+| [verdantflare-meta-plan](verdantflare-meta-plan/SKILL.md)               | 研发计划与验收       |
+| [verdantflare-meta-skill](verdantflare-meta-skill/SKILL.md)             | 技能设计与安装       |
+| [verdantflare-meta-googledrive](verdantflare-meta-googledrive/SKILL.md) | 跨机素材管理         |
+| [verdantflare-meta-agent](verdantflare-meta-agent/SKILL.md)             | 多助手协作           |
 
 ## 2. 按职责选装
 
