@@ -410,6 +410,10 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
     if mode is None and selected.get("modes"):
         if not any(references.values()):
             mode = "text_to_video"
+        elif (references["videos"] and not references["audios"] and "video_editing" in selected["modes"]
+              and "reference_to_video" not in selected["modes"] or (
+                  references["videos"] and route == "google-flow" and "video_editing" in selected["modes"])):
+            mode = "video_editing"
         elif (len(references["images"]) == 1 and references["images"][0]["purpose"] == "first_frame"
               and not references["videos"] and not references["audios"] and "image_to_video" in selected["modes"]):
             mode = "image_to_video"
@@ -427,6 +431,11 @@ def generate_mcp(config: MCPConfig, args: argparse.Namespace) -> dict[str, Any]:
             value = declared_default(selected, schema, field, limit, mode)
         if value is not None:
             request[field] = value
+    upscale = getattr(args, "upscale", None)
+    if upscale is not None:
+        if route != "google-flow" or upscale != "1080p":
+            raise ClientError("--upscale is only supported as 1080p on route=google-flow")
+        request["upscale"] = upscale
     budget = getattr(args, "budget_limit", None)
     if budget is not None:
         try:
@@ -2250,6 +2259,7 @@ def make_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument("--output")
     generate_parser.add_argument("--duration", type=int)
     generate_parser.add_argument("--resolution", help="must match the selected route/model capabilities and tool schema")
+    generate_parser.add_argument("--upscale", choices=["1080p"], default=None, help="Google Flow optional 1080p upscale export (0 credits; supported on omni-1.2-flash, veo-fast, veo-quality)")
     generate_parser.add_argument("--ratio", help="must match the selected route/model aspect ratios")
     generate_parser.add_argument("--mode", help="registered operation, otherwise inferred from reference purpose")
     generate_parser.add_argument("--budget-limit", help="explicit positive budget ceiling in the channel's declared currency")

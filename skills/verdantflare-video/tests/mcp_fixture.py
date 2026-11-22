@@ -2,7 +2,7 @@
 from copy import deepcopy
 
 CREATE_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["project_id", "idempotency_key", "model", "route", "prompt", "references"], "properties": {
-    **{key: {"type": "string"} for key in ("project_id", "idempotency_key", "model", "route", "prompt", "aspect_ratio", "resolution", "mode", "budget_limit", "channel_account_id", "title", "quality_profile")},
+    **{key: {"type": "string"} for key in ("project_id", "idempotency_key", "model", "route", "prompt", "aspect_ratio", "resolution", "upscale", "mode", "budget_limit", "channel_account_id", "title", "quality_profile")},
     "duration_seconds": {"type": "integer", "default": 5, "minimum": 1, "maximum": 30},
     "price_ceiling": {"type": "number", "minimum": 0},
     "references": {"type": "object", "properties": {kind: {"type": "array", "items": {

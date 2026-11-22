@@ -76,19 +76,34 @@ def validate_tool(inventory: dict, name: str, request: dict) -> None:
     validate_schema(request, schema)
 
 
+_GOOGLE_FLOW_DEFAULT_MODELS = {"veo-lite", "veo-fast", "veo-quality", "omni-1.2-flash"}
+
+
 def select_route(capabilities: dict, route: str | None, model: str | None) -> tuple[str, str, dict]:
     if not capabilities or not isinstance(capabilities.get("routes"), list):
         raise ValueError("Host video.capabilities is unavailable; no generation submitted")
+    def aliases(row):
+        return {row.get("model"), *[item for item in row.get("models", []) if isinstance(item, str)]}
+    if not route and model:
+        flow_rows = [
+            row for row in capabilities["routes"]
+            if isinstance(row, dict) and row.get("route") == "google-flow" and model in aliases(row)
+        ]
+        if flow_rows or model in _GOOGLE_FLOW_DEFAULT_MODELS:
+            route = "google-flow"
     route = route or capabilities.get("default_route")
     if not isinstance(route, str) or not route:
         raise ValueError("Host default route is unavailable; explicitly select --route")
     rows = [row for row in capabilities["routes"] if isinstance(row, dict) and row.get("route") == route]
-    def aliases(row):
-        return {row.get("model"), *[item for item in row.get("models", []) if isinstance(item, str)]}
     if not model:
         defaults = {row.get("default_model") for row in rows if row.get("default_model")}
         host_default = capabilities.get("default_model")
         model = next(iter(defaults)) if len(defaults) == 1 else host_default
+        if route == "google-flow" and (not model or not any(model in aliases(r) for r in rows)):
+            for pref in ("veo-lite", "omni-1.2-flash", "veo-fast", "veo-quality"):
+                if any(pref in aliases(r) for r in rows):
+                    model = pref
+                    break
     matching = [row for row in rows if model and model in aliases(row)]
     if len(matching) != 1:
         raise ValueError("Host must declare exactly one matching route/model; explicitly select --model; no generation submitted")
@@ -150,5 +165,7 @@ def validate_capability(request: dict, selected: dict) -> None:
         raise ValueError("image_to_video requires exactly one first_frame image")
     if mode == "reference_to_video" and (not total or any(item["purpose"] in {"first_frame", "last_frame"} for item in references["images"])):
         raise ValueError("reference_to_video requires reference inputs without first_frame/last_frame semantics")
+    if mode == "video_editing" and (len(references["videos"]) != 1 or references["audios"]):
+        raise ValueError("video_editing requires exactly one source video reference and no audio references")
     if isinstance(selected.get('parameter_schema'), dict):
         validate_schema(request, selected['parameter_schema'], 'capability')

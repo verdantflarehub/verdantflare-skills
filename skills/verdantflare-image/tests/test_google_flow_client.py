@@ -26,3 +26,14 @@ class FlowClientTests(unittest.TestCase):
                 patch.object(image_client, "cmd_list", return_value=0) as run:
             self.assertEqual(image_client.main(), 0)
         self.assertEqual(run.call_args.args[0].engine, "google-flow")
+
+    def test_google_nano_models_default_to_google_flow_and_support_upscale(self):
+        args = ["image_client", "generate", "--project-id", "0199c6d3-6d00-7a21-8b4c-123456789abc", "--prompt", "portrait",
+                "--model", "nano-pro", "--upscale", "2k"]
+        with patch.object(sys, "argv", args), patch.object(image_client, "load_config", return_value=("/mcp", "")), \
+                patch.object(image_client, "is_mcp_endpoint", return_value=True), \
+                patch.object(image_client, "call_mcp_tool", return_value={"task_id": "test", "status": "queued"}) as call:
+            self.assertEqual(image_client.main(), 0)
+        tool, body = call.call_args.args[2:4]
+        self.assertEqual((tool, body["engine"], body["model"], body["upscale"]),
+                         ("image.create", "google-flow", "nano-pro", "2k"))

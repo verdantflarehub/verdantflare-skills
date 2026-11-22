@@ -23,4 +23,4 @@ python3 scripts/image_client.py generate --help
 
 后续CLI适配应复用Studio工具发现、真实会话和受控传输，并验证提交幂等、任务恢复、项目归属与内容哈希；在实现及检查完成前，不把文档修正标为客户端已修复。
 
-使用 Google Flow 时显式传入 `--engine google-flow`。生成与筛选沿用同一引擎名。支持 `nano2`（默认）、`nano21`、`nano-pro`，画幅为 1:1、16:9 或 9:16，最多三张参考图。可通过 `--budget-limit` 指定整数积分上限。
+使用 Google Nano Banana 系列图像模型（`nano2` / `nano21` / `nano-pro`）时，CLI 自动默认路由至 `--engine google-flow`（除非显式指定 `--engine gemini`）。支持 `nano2`（默认）、`nano21`、`nano-pro`，画幅为 1:1、16:9 或 9:16，最多三张参考图，生成/编辑时可选 `--upscale 2k` 或 `--upscale 4k`（默认关闭，0 积分免费超分）。可通过 `--budget-limit` 指定整数积分上限。

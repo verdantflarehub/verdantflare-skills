@@ -44,6 +44,25 @@ class DynamicChannelTests(unittest.TestCase):
         with self.assertRaisesRegex(client.ClientError, "video.preflight"):
             client.generate_mcp(self.config, args)
 
+    def test_google_models_default_to_google_flow_over_google_ai_studio_and_support_upscale_and_video_editing(self):
+        self.inventory["capabilities"]["routes"].extend([
+            {"route": "google", "model": "omni-1.2-flash", "configured": True, "enabled": True,
+             "duration_seconds": {"minimum": 3, "maximum": 15}, "aspect_ratios": ["16:9", "9:16"],
+             "modes": ["text_to_video", "reference_to_video"], "reference_limits": {"images": 3, "videos": 0, "audios": 0}},
+            {"route": "google-flow", "model": "omni-1.2-flash", "configured": True, "enabled": True,
+             "duration_seconds": {"minimum": 3, "maximum": 15}, "aspect_ratios": ["16:9", "9:16"],
+             "modes": ["text_to_video", "reference_to_video", "video_editing"],
+             "reference_limits": {"images": 7, "videos": 1, "audios": 0},
+             "parameter_schema": {"type": "object", "properties": {"upscale": {"type": "string", "enum": ["1080p"]}}}},
+        ])
+        args = self.args("--model", "omni-1.2-flash", "--duration", "4", "--ratio", "16:9", "--upscale", "1080p",
+                         "--video-ref", "art_vid1=source_video", "--image-ref", "art_img1=character")
+        request = self.submit(args)
+        self.assertEqual(request["route"], "google-flow")
+        self.assertEqual(request["model"], "omni-1.2-flash")
+        self.assertEqual(request["mode"], "video_editing")
+        self.assertEqual(request["upscale"], "1080p")
+
     def test_fal_sd2_selects_second_model_and_sends_exact_budget(self):
         self.inventory["capabilities"]["routes"].append({"route": "fal", "model": "bytedance-seedance-2.0-reference-to-video",
             "configured": True, "duration_seconds": {"minimum": 4, "maximum": 15}, "aspect_ratios": ["21:9"],

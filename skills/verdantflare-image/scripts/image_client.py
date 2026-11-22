@@ -655,6 +655,17 @@ def cmd_rate(args: argparse.Namespace) -> int:
         return 1
 
 
+_GOOGLE_FLOW_MODELS = {"nano2", "nano21", "nano-pro"}
+_GOOGLE_FLOW_MODEL_ALIASES = {
+    "nano-banana-2": "nano2",
+    "nano-banana-2.1": "nano21",
+    "nano-banana-pro": "nano-pro",
+    "gemini-nano-banana-2.1": "nano21",
+    "gemini-3-pro-image": "nano-pro",
+    "gemini-3.1-flash-image": "nano2",
+}
+
+
 def cmd_generate(args: argparse.Namespace) -> int:
     """提交原子生图/编辑任务（统一经由 Studio Image MCP 或兼容 REST 网关）。"""
     base_url, token = load_config()
@@ -663,7 +674,17 @@ def cmd_generate(args: argparse.Namespace) -> int:
         print("[-] 错误: --prompt 不能为空", file=sys.stderr)
         return 1
 
-    engine = (args.engine or "codex").lower()
+    raw_engine = getattr(args, "engine", None)
+    raw_model = (getattr(args, "model", "") or "").strip()
+    if raw_engine:
+        engine = raw_engine.lower()
+    elif raw_model.lower() in _GOOGLE_FLOW_MODELS or raw_model.lower() in _GOOGLE_FLOW_MODEL_ALIASES:
+        # 凡指定 Google Nano Banana 系列模型且未显式指定 --engine gemini 时，默认走 google-flow
+        engine = "google-flow"
+        if raw_model.lower() in _GOOGLE_FLOW_MODEL_ALIASES:
+            args.model = _GOOGLE_FLOW_MODEL_ALIASES[raw_model.lower()]
+    else:
+        engine = "codex"
     if engine == "google-flow":
         if args.aspect_ratio not in ("16:9", "9:16", "1:1") or args.model not in (None, "", "nano2", "nano21", "nano-pro"):
             raise ImageClientError("Google Flow model or aspect ratio unsupported")
@@ -672,6 +693,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
             raise ImageClientError("Google Flow supports at most three reference images")
         if args.resolution or args.quality or getattr(args, "background", "auto") != "auto":
             raise ImageClientError("Google Flow selects output resolution and quality")
+        if getattr(args, "upscale", None) and args.upscale.lower() not in ("2k", "4k"):
+            raise ImageClientError("Google Flow image upscale only supports 2k or 4k")
     else:
         args.resolution = args.resolution or "2k"
     project_id = validate_project_id(args.project_id)
@@ -757,6 +780,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
                 mcp_args.pop(key)
             if args.budget_limit:
                 mcp_args["budget_limit"] = args.budget_limit
+            if getattr(args, "upscale", None):
+                mcp_args["upscale"] = args.upscale.lower()
         if getattr(args, "channel_account_id", ""):
             mcp_args["channel_account_id"] = args.channel_account_id
 
@@ -796,6 +821,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
                 payload.pop(key)
             if args.budget_limit:
                 payload["budget_limit"] = args.budget_limit
+            if getattr(args, "upscale", None):
+                payload["upscale"] = args.upscale.lower()
         if source_artifact_id:
             payload["source_artifact_id"] = source_artifact_id
         if ref_artifact_ids:
@@ -958,10 +985,11 @@ def main() -> int:
     # generate
     sub_gen = subparsers.add_parser("generate", help="提交生图或编辑任务")
     sub_gen.add_argument("--prompt", required=True, help="生图提示词")
-    sub_gen.add_argument("--engine", choices=["codex", "gemini", "google-flow", "grok", "moss-image"], default="codex", help="底层引擎驱动 (默认 codex)")
-    sub_gen.add_argument("--model", default="", help="指定模型覆盖默认值 (codex 默认 gpt-image-2.6-sunburst，可选 gpt-image-2.6-flare；gemini 默认 gemini-nano-banana-2.1)")
+    sub_gen.add_argument("--engine", choices=["codex", "gemini", "google-flow", "grok", "moss-image"], default=None, help="底层引擎驱动 (未指定时：Google Nano Banana 模型默认走 google-flow，其余默认 codex)")
+    sub_gen.add_argument("--model", default="", help="指定模型覆盖默认值 (google-flow 默认 nano2，可选 nano21 / nano-pro；codex 默认 gpt-image-2.6-sunburst)")
     sub_gen.add_argument("--aspect-ratio", choices=["16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3"], default="16:9", help="画幅比例 (默认 16:9)")
     sub_gen.add_argument("--resolution", choices=["1k", "2k", "4k"], default=None, help="分辨率 (默认 2k)")
+    sub_gen.add_argument("--upscale", choices=["2k", "4k"], default=None, help="Google Flow 生成时可选免费超分导出 (2k | 4k，默认关闭)")
     sub_gen.add_argument("--quality", choices=["auto", "low", "medium", "high", "xhigh", "max", "hd", "standard"], default=None, help="图像质量 (默认 high)")
     sub_gen.add_argument("--background", choices=["auto", "transparent", "opaque"], default="auto", help="背景模式 (transparent 生成纯透明通道 PNG)")
     sub_gen.add_argument("--project-id", required=True, help="当前 Studio Project 的小写 UUIDv7 标识")
