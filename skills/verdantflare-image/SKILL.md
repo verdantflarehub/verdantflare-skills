@@ -14,7 +14,7 @@ Project 归属、换电脑恢复、Artifact 保存及 World 固定资产引用�
 | 当前操作                               | 按需读取                                                        |
 | :------------------------------------- | :-------------------------------------------------------------- |
 | 构造生成、编辑、遮罩或导入请求         | [调用契约](references/contracts.md)                             |
-| Google Nano Banana 生图与多参考编辑    | [Google 图像调用](references/google.md)                         |
+| Google Nano Banana 生图（默认走 Flow） | 见文末 Google Flow 规范；仅显式指定 AI Studio 时读 [Google 图像调用](references/google.md) |
 | MOSS-Image 文字海报与 JSON 版式文生图  | [MOSS-Image 调用](references/moss-image.md)                     |
 | 角色四视图、服装三视图、分镜或场景规格 | [视觉规格](references/visual-specs.md)                          |
 | 写实画面假纹理、过锐或质感返修         | [表面质感控制](references/surface-quality.md)                   |
@@ -27,9 +27,9 @@ Project 归属、换电脑恢复、Artifact 保存及 World 固定资产引用�
 
 用户要求人物五视图或人物半身照时，读取[人物设定技能](../verdantflare-image-character/SKILL.md)确定版式，再由本技能调用 image.edit 出图。明确点名既有三脸或衣装优先合成板时，沿用对应的[合成板规格](references/visual-specs.md#6-角色五视图合成板)。
 
-**默认出图模型与分辨率边界**：本技能将 **GPT Image 2.6**（`engine="codex"`，默认 `model="gpt-image-2.6-sunburst"`；亦支持高速变体 `gpt-image-2.6-flare` 及向下兼容 `gpt-image-2.5-sunburst` / `gpt-image-2.5-flare`）标记为默认出图模型；用户未指定引擎或模型时一律使用 `codex` / `gpt-image-2.6-sunburst`。显式选择 Google 渠道（`engine="gemini"`）时默认 `gemini-nano-banana-2.1`（展示名 `Nano Banana 2.1`）；用户明确选择优先，模型支持以宿主能力和调用契约为准。注意各渠道对 `resolution="2k"` 与 `9:16` / `16:9` 画幅的实际像素输出（详见 [调用契约第 1.1 节](references/contracts.md#11-各渠道画幅与分辨率实际行为与防坑指南)）：`codex` 通过 `/v1/responses` 的 `[Aspect Ratio <ratio>]` 指令注入输出正确画幅，但 ChatGPT Web 端原生像素上限使 `9:16` / `16:9` 返回 `941×1672` / `1672×941` PNG（`1:1` 返回 `1254×1254`）；`gemini` 通过 `generationConfig.imageConfig.imageSize="2K"` 原生返回 `1536×2752` / `2752×1536`（`9:16` / `16:9`）或 `2048×2048`（`1:1`）；`grok`（`grok-imagine-image-2.0`）原生支持 `9:16` / `16:9` `2k`（`1584×2816` / `2816×1584`）。不绕过 MCP/受控客户端直连供应商。
+**默认出图模型与分辨率边界**：本技能将 **GPT Image 2.6**（`engine="codex"`，默认 `model="gpt-image-2.6-sunburst"`；亦支持高速变体 `gpt-image-2.6-flare` 及向下兼容 `gpt-image-2.5-sunburst` / `gpt-image-2.5-flare`）标记为默认出图模型；用户未指定引擎或模型时一律使用 `codex` / `gpt-image-2.6-sunburst`。**凡调用 Google 系列图像模型（Nano Banana 2 / 2.1 / Pro），默认一律走 Google Flow（`engine="google-flow"`，默认 `model="nano2"`，可选 `nano21` / `nano-pro`，生成时可选 `upscale="2k" | "4k"`），除非用户显式指定，否则不考虑 Google AI Studio（`engine="gemini"`）**。用户明确选择优先，模型支持以宿主能力和调用契约为准。注意各渠道对 `resolution="2k"` 与 `9:16` / `16:9` 画幅的实际像素输出（详见 [调用契约第 1.1 节](references/contracts.md#11-各渠道画幅与分辨率实际行为与防坑指南)）：`codex` 通过 `/v1/responses` 的 `[Aspect Ratio <ratio>]` 指令注入输出正确画幅，但 ChatGPT Web 端原生像素上限使 `9:16` / `16:9` 返回 `941×1672` / `1672×941` PNG（`1:1` 返回 `1254×1254`）；`gemini`（仅显式指定 Google AI Studio 时使用）通过 `generationConfig.imageConfig.imageSize="2K"` 原生返回 `1536×2752` / `2752×1536`（`9:16` / `16:9`）或 `2048×2048`（`1:1`）；`grok`（`grok-imagine-image-2.0`）原生支持 `9:16` / `16:9` `2k`（`1584×2816` / `2816×1584`）。不绕过 MCP/受控客户端直连供应商。
 
-Google 渠道（`engine="gemini"`）Nano Banana 系列生图与最多 6 张参考图编辑读取 [Google 图像调用](references/google.md)，区分卡片展示名（`Nano Banana 2.1` / `Nano Banana Pro` / `Nano Banana 2` / `Nano Banana 2 Lite` / `Nano Banana`）与请求 `model` 编码（`gemini-nano-banana-2.1` / `gemini-3-pro-image` / `gemini-3.1-flash-image` / `gemini-3.1-flash-lite-image` / `gemini-2.5-flash-image`），不支持遮罩局部重绘（`max_Reference_masks=0`）。
+**Google AI Studio（`engine="gemini"`，仅显式指定时使用）**：仅在用户明确要求走 Google AI Studio 或 `engine="gemini"` 时才读取 [Google 图像调用](references/google.md)，区分卡片展示名（`Nano Banana 2.1` / `Nano Banana Pro` / `Nano Banana 2` / `Nano Banana 2 Lite` / `Nano Banana`）与请求 `model` 编码（`gemini-nano-banana-2.1` / `gemini-3-pro-image` / `gemini-3.1-flash-image` / `gemini-3.1-flash-lite-image` / `gemini-2.5-flash-image`），不支持遮罩局部重绘（`max_Reference_masks=0`）。
 
 Grok 生成与单图编辑读取 [Grok 调用](references/grok.md)，以 `image.capabilities` 的实际模型为准；现有 REST CLI 不用于 Grok，使用 Studio MCP。
 
@@ -45,4 +45,4 @@ MOSS-Image 自托管文生图（`engine="moss-image"`）读取 [MOSS-Image 调�
 
 本地准备、检查及可恢复技术修复自主执行。已有任务按 ID 查询，不因等待超时重新生成；新收费尝试限定在已授权次数或预算内。下载后验证文件、实际尺寸与服务端 SHA-256，完成 `image.rate_content` 分级评估后，`general` 产物按项目受控路径归档并保留原始产物。完成所请求的技术交付后返回候选及检查结果，艺术批准由用户或上层审核记录决定。
 
-使用 Google Flow 时显式传入 `--engine google-flow`。生成与筛选沿用同一引擎名。支持 `nano2`（默认）、`nano21`、`nano-pro`，画幅为 1:1、16:9 或 9:16，最多三张参考图。可通过 `--budget-limit` 指定整数积分上限。
+**Google Flow（Google 图像模型默认渠道）**：凡使用 Google Nano Banana 系列模型（`nano2` / `nano21` / `nano-pro`），默认传入 `--engine google-flow`（不考虑 Google AI Studio `gemini`，除非用户显式指定）。支持 `nano2`（默认）、`nano21`、`nano-pro`，画幅为 `1:1`、`16:9` 或 `9:16`，最多 3 张参考图；生成/编辑时可选 `upscale="2k" | "4k"`（默认关闭，0 积分免费超分，`4k` 需 Ultra 账号，偶发失败自动降级保留 1K 原图并标 `upscale_status="fallback_original"`）。可通过 `--budget-limit` 指定整数积分上限。

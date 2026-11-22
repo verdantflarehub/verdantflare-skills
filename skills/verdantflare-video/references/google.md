@@ -1,4 +1,6 @@
-# Google 渠道调用
+# Google 渠道调用（Google AI Studio，仅显式指定时使用）
+
+> **默认路由边界**：凡调用 Google 系列视频模型（Veo / Omni），**默认一律走 [Google Flow 渠道](google-flow.md)（`route=google-flow`）**；仅当用户**显式指定** Google AI Studio 或 `route=google` 时才使用本渠道。
 
 ## 1. 模型与模式
 

@@ -1,4 +1,6 @@
-# Google 图像调用（Nano Banana 系列）
+# Google 图像调用（Google AI Studio / Nano Banana 系列，仅显式指定时使用）
+
+> **默认路由边界**：凡调用 Google 系列图像模型（Nano Banana 2 / 2.1 / Pro），**默认一律走 Google Flow 渠道（`engine="google-flow"`，`nano2` / `nano21` / `nano-pro`，可选 `upscale="2k" | "4k"`）**；仅当用户**显式指定** Google AI Studio 或 `engine="gemini"` 时才使用本渠道。
 
 ## 1. 发现与渠道归属
 
