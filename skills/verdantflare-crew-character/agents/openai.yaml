@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Crew Character"
+  short_description: "剧组角色设计专员：五视图、半身照、16:9 档案卡、多角度锁脸参考库与局部精修"
+  default_prompt: "使用 $verdantflare-crew-character，按角色设计专员规范完成定妆设定图、五视图、16:9 视觉档案卡或锁脸多角度参考库制作与返修。"

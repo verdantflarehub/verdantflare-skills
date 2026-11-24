@@ -9,7 +9,7 @@ description: 基于已批准歌曲，导演、审核并装配音乐 MV（支持 
 
 本技能以已批准 Master WAV 为唯一音频与时间线事实源，负责音乐 MV 的导演企划、角色与分镜视觉资产制作、生成单元编排、逐镜质检与成片装配，覆盖两种模式：**30 秒高潮故事版**（按 Block 逐段精修）与 **90 秒+ 全长 TV Version 素材池模式**（按 `2.5x–3x` 剪辑冗余比拆分为 `10s` 生成单元，支持 `9:16` 全屏与 `16:9` 漫画三联叠画混合画幅）。
 
-AI 短剧与 MV 阶段成果默认同步到原 Studio 项目（沿用真实 `project_id`）；根目录 `project.json` 为本领域时钟与编排文档，`.vf/project.json` 为服务维护的通用 ProjectManifest 投影，旧 `project.yaml` 只允许一次性导入。只请求某阶段时完成该阶段，不自动重做音乐或整支 MV；不用于单张角色图（转 `verdantflare-image` / `verdantflare-image-character`）、单镜独立视频（转 `verdantflare-video`）或歌曲制作（转 `verdantflare-music`）。MCP 能力缺失不自动换模型，也不操作 GPU/部署。
+AI 短剧与 MV 阶段成果默认同步到原 Studio 项目（沿用真实 `project_id`）；根目录 `project.json` 为本领域时钟与编排文档，`.vf/project.json` 为服务维护的通用 ProjectManifest 投影，旧 `project.yaml` 只允许一次性导入。只请求某阶段时完成该阶段，不自动重做音乐或整支 MV；不用于单张角色图（转 `verdantflare-image` / `verdantflare-crew-character`）、单镜独立视频（转 `verdantflare-video`）或歌曲制作（转 `verdantflare-music`）。MCP 能力缺失不自动换模型，也不操作 GPU/部署。
 
 ## 2. 能力清单与按任务读取
 

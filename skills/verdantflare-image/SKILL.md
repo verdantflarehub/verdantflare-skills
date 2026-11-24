@@ -11,7 +11,7 @@ description: 通过 VerdantFlare Image MCP 执行文生图（T2I）、图生图/
 
 **模型选型与自动路由**：上层专员或调用方通过逻辑模型入参 `model` 选引擎，渠道网关由本技能内部自动映射（失败不静默切渠道）——默认 **GPT Image 2.6**（`engine="codex"`，`gpt-image-2.6-sunburst`）；指定 **Nano Banana 2 / 2.1 / Pro** 时默认一律走 **Google Flow**（`engine="google-flow"`，`nano2` / `nano21` / `nano-pro`，支持免费 `2k`/`4k` 超分），仅显式指定时用 Google AI Studio（`gemini`）；另有 **Grok**（单图轻编辑）与 **MOSS-Image**（文字海报/坐标排版，不保人脸一致）。生成产物在展示与同步前必须完成 K09 `image.rate_content`。
 
-人物五视图、半身照或 16:9 档案卡先读[人物设定技能](../verdantflare-image-character/SKILL.md)；Project/World 接入遵循[共同接入规则](../_shared/project-world.md)，认证排查见[环境说明](../ENVIRONMENT.md)。
+人物五视图、半身照或 16:9 档案卡先读[人物设定技能](../verdantflare-crew-character/SKILL.md)；Project/World 接入遵循[共同接入规则](../_shared/project-world.md)，认证排查见[环境说明](../ENVIRONMENT.md)。
 
 ## 2. 能力清单与按任务读取
 
