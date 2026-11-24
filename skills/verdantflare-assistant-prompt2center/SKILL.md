@@ -3,7 +3,7 @@ name: verdantflare-assistant-prompt2center
 description: 抓取公开链接提示词落盘 Google Drive，经 VF Station（默认 GPT Image 2.6，可选 Nano Banana 2.1）出图，预览确认后按三类分类（美女/帅哥/动物）与两级强校验分步沉淀至 VF Center，支持单图无缝扩充为多图。用于个人助理灵感沉淀与多图追加任务；不用于非公开受限内容抓取或绕过人工预览直接入库。
 ---
 
-# 提示词沉淀 → 出图 → VF Center 灵感资产（v1.1.0）
+# 提示词沉淀 → 出图 → VF Center 灵感资产（v1.1.1）
 
 ## 1. 范围与边界
 
