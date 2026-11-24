@@ -54,8 +54,10 @@ GENERIC_DIMENSION_HINTS = {
     'rules': ('规则', '约束', '默认值', '例外', '写法', 'rule', 'constraint'),
     'acceptance': ('验收', '验证', '门禁', '交付', '评分', 'acceptance', 'verify'),
 }
-PROFILES = ('auto', 'atomic', 'craft', 'crew', 'director')
+PROFILES = ('auto', 'atomic', 'craft', 'crew', 'director', 'meta', 'write', 'agent')
 NON_ATOMIC_PROFILES = frozenset({'craft', 'crew', 'director'})
+# Tiered and personal-tooling skills must be named <prefix>-<profile>-<object>.
+PROFILE_WORDS = {name: (name,) for name in ('craft', 'crew', 'director', 'meta', 'write', 'agent')}
 CREW_LEAK_PATTERNS = (
     ('model weight filename', re.compile(r'\.(?:safetensors|ckpt|gguf)\b', re.I)),
     ('ComfyUI node id', re.compile(r'\bNode\s*#?\d+\b', re.I)),
@@ -422,11 +424,26 @@ def matrix_errors(root):
 
 def resolve_profile(root, profile='auto'):
     if profile == 'auto':
-        for candidate in ('craft', 'crew', 'director'):
-            if f'-{candidate}-' in root.name or root.name.endswith(f'-{candidate}'):
-                return candidate
+        parts = root.name.split('-')
+        # Prefer the second segment (e.g. verdantflare-meta-agent is meta), then any segment.
+        for segments in (parts[1:2], parts):
+            for candidate, words in PROFILE_WORDS.items():
+                if any(word in segments for word in words):
+                    return candidate
         return 'atomic'
     return profile
+
+
+def profile_name_errors(name, active_profile):
+    """craft/crew/director/meta skills must use exactly three segments with the tier word second."""
+    words = PROFILE_WORDS.get(active_profile)
+    if not words:
+        return []
+    parts = name.split('-')
+    if len(parts) == 3 and parts[1] in words and all(parts):
+        return []
+    shape = ' or '.join(f'<prefix>-{word}-<object>' for word in words)
+    return [f'SKILL.md: {active_profile} skill name {name!r} must have exactly three segments: {shape}']
 
 
 def profile_leak_warnings(label, text, active_profile):
@@ -476,6 +493,8 @@ def lint(root, style='generic', allow_placeholders=False, structure=True, profil
         if path.name == 'SKILL.md' and path.parent == root:
             skill_links = linked_paths(tokens)
             errors.extend(metadata_errors(root, meta))
+            if structure:
+                errors.extend(profile_name_errors(root.name, active_profile))
             if structure:
                 errors.extend(entry_errors(root, '\n'.join(text.splitlines()[offset:]), tokens, layout))
                 if layout == 'legacy':
@@ -645,7 +664,7 @@ def main():
     check.add_argument('skill_dir', type=Path)
     check.add_argument('--style', choices=('generic', 'numbered'), default='generic')
     check.add_argument('--profile', choices=PROFILES, default='auto',
-                       help='skill role profile (auto detects *-craft-*, *-crew-*, *-director-*)')
+                       help='skill role profile (auto detects *-craft-*, *-crew-*, *-director-*, *-meta-*, *-write-*, *-agent-*)')
     check.add_argument('--allow-placeholders', action='store_true')
     args = parser.parse_args()
     try:

@@ -1,9 +1,9 @@
 ---
-name: verdantflare-download
+name: verdantflare-meta-download
 description: 通用 HTTP(S) 下载与资料研究。用户要求下载文件、保存网页、图片、音视频、文档、数据集或压缩包，或给出资源链接、平台分享口令要求总结、分析、拆解或研究时自动触发。下载后按实际文件类型读取并引用证据。
 ---
 
-# 通用下载与资料研究（verdantflare-download）
+# 通用下载与资料研究（verdantflare-meta-download）
 
 ## 1. 范围与边界
 

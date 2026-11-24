@@ -196,6 +196,50 @@ class SkillToolTests(unittest.TestCase):
                 self.assertEqual([], errs)
                 self.assertTrue(any(expected in w for w in warns), warns)
 
+    def tiered_skill(self, slug):
+        self.root = self.base / slug
+        self.entry(
+            front=f'name: {slug}\ndescription: Demo.',
+            body='# Demo\n\n## 1. 范围与边界\n\nText.\n\n## 2. 能力清单与按任务读取\n\n'
+                 '| 原子能力 | 入口文档 |\n| :-- | :-- |\n'
+                 '| 示例交付 | [01.plan.entrypoint.md](references/01.plan.entrypoint.md) |\n\n'
+                 '## 3. 工具与命令\n\nText.\n',
+        )
+        self.write_capability('01.plan')
+        return self.root
+
+    def test_profile_three_segment_naming(self):
+        for slug, profile in (('mk-crew-faceswap', 'crew'), ('verdantflare-craft-camera', 'craft'),
+                              ('mk-director-drama', 'director'), ('verdantflare-meta-skill', 'meta'),
+                              ('verdantflare-meta-agent', 'meta'), ('verdantflare-write-markdown', 'write'),
+                              ('verdantflare-agent-codex', 'agent')):
+            with self.subTest(slug=slug):
+                root = self.tiered_skill(slug)
+                self.assertEqual(profile, tool.resolve_profile(root))
+                self.assertEqual(([], []), tool.lint(root, style='numbered'))
+        for slug in ('mk-crew-face-swap', 'crew-faceswap', 'mk-face-crew-swap', 'verdantflare-write-plan-doc',
+                     'agent-codex', 'verdantflare-agent-codex-cli'):
+            with self.subTest(slug=slug):
+                errors = tool.lint(self.tiered_skill(slug), style='numbered')[0]
+                self.assertTrue(any('must have exactly three segments' in e for e in errors), errors)
+        # Atomic skills may use two or three segments
+        for slug in ('verdantflare-video', 'verdantflare-character-face'):
+            with self.subTest(slug=slug):
+                root = self.tiered_skill(slug)
+                self.assertEqual('atomic', tool.resolve_profile(root))
+                self.assertEqual(([], []), tool.lint(root, style='numbered'))
+
+    def test_tooling_profiles_skip_leak_warnings(self):
+        for slug in ('verdantflare-meta-demo', 'verdantflare-write-demo', 'verdantflare-agent-demo'):
+            with self.subTest(slug=slug):
+                root = self.tiered_skill(slug)
+                self.write_capability(
+                    '01.plan',
+                    body='# Demo：01.plan\n\n## 1. 输入与输出\n\nIn.\n\n## 2. 分类\n\nC.\n\n'
+                         '## 3. 工作流\n\nScan for .safetensors and Node 6 leaks.\n\n## 4. 规范\n\nR.\n\n## 5. 验收\n\nA.\n',
+                )
+                self.assertEqual(([], []), tool.lint(root, style='numbered'))
+
     def test_entry_structure_rules(self):
         self.standard(sections=('1. 编码规范', '2. 范围与边界', '3. 能力清单与按任务读取', '4. 工具与命令'))
         self.assertEqual(([], []), tool.lint(self.root))

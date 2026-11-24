@@ -5,7 +5,7 @@
   "updated_at": "2026-11-21T19:35:00+08:00",
   "description": "抓取公开链接提示词落盘 Google Drive，经 VF Station 出图（支持单图新建与既有单图扩充为多图/Edit 迭代），按三类业务分类（美女/帅哥/动物）与两级参数强校验分步上传至 VF Center。",
   "required_tools": [
-    "verdantflare-download",
+    "verdantflare-meta-download",
     "verdantflare-image",
     "vf_center.publish_resource"
   ]

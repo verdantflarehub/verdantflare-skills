@@ -9,7 +9,7 @@ description: 抓取公开链接提示词落盘 Google Drive，经 VF Station（�
 
 本技能面向 VF 个人助理执行“公开提示词抓取清洗 → VF Station 受控出图 → D6 预览确认 → VF Center 两级强校验分步沉淀”闭环，覆盖新建作品组（单图或首批多图）与对既有作品组（`resource_id`）无缝追加第 2..N 张图或 Edit 迭代图。
 
-抓取清洗复用 `verdantflare-download`，受控出图复用 `verdantflare-image`，最终经 `vf_center.publish_resource` 对应内部接口入库；仅处理公开链接或用户提供的提示词，不绕过人工 D6 预览确认直接写库。本技能为仓库内个人助理技能，安装方式见 `references/install.md`。
+抓取清洗复用 `verdantflare-meta-download`，受控出图复用 `verdantflare-image`，最终经 `vf_center.publish_resource` 对应内部接口入库；仅处理公开链接或用户提供的提示词，不绕过人工 D6 预览确认直接写库。本技能为仓库内个人助理技能，安装方式见 `references/install.md`。
 
 ## 2. 能力清单与按任务读取
 
@@ -22,7 +22,7 @@ description: 抓取公开链接提示词落盘 Google Drive，经 VF Station（�
 
 ## 3. 工具与命令
 
-本技能元数据位于 [meta.json](meta.json)，依赖通用技能 `verdantflare-download`、`verdantflare-image` 与接口工具 `vf_center.publish_resource`。核心分步上传端点如下（两级必填参数与幂等校验见能力入口）：
+本技能元数据位于 [meta.json](meta.json)，依赖通用技能 `verdantflare-meta-download`、`verdantflare-image` 与接口工具 `vf_center.publish_resource`。核心分步上传端点如下（两级必填参数与幂等校验见能力入口）：
 
 ```text
 POST /internal/assistant/resources

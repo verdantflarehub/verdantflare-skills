@@ -6,7 +6,7 @@
 
 | 全局技能                                                                | 跨项目用途           |
 | ----------------------------------------------------------------------- | -------------------- |
-| [verdantflare-download](verdantflare-download/SKILL.md)                 | 通用下载与资料研究   |
+| [verdantflare-meta-download](verdantflare-meta-download/SKILL.md)       | 通用下载与资料研究   |
 | [verdantflare-reverse-prompt](verdantflare-reverse-prompt/SKILL.md)     | 单图场景反推提示词   |
 | [verdantflare-write-markdown](verdantflare-write-markdown/SKILL.md)     | 文档编写、格式与检查 |
 | [verdantflare-write-plan](verdantflare-write-plan/SKILL.md)             | 研发计划与验收       |

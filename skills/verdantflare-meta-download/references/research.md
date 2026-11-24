@@ -9,7 +9,7 @@
 全局安装后从任意项目调用。以下 PowerShell 命令中，`$source` 为用户提供的分享文本，`$skill` 指向本技能目录。Python 依赖为 httpx、PyYAML、yt-dlp；抽帧使用 ffmpeg 和 ffprobe。
 
 ```powershell
-$skill = Join-Path $env:USERPROFILE '.agents/skills/verdantflare-download'
+$skill = Join-Path $env:USERPROFILE '.agents/skills/verdantflare-meta-download'
 python -X utf8 "$skill/scripts/download.py" --input "$source" --output-dir "./.tmp/download-research" --research
 ```
 
