@@ -39,6 +39,6 @@
 
 旧安装使用 `VERDANTFLARE_VIDEO_API_KEY`、`VERDANTFLARE_VIDEO_S3_ACCESS_KEY`、`VERDANTFLARE_VIDEO_S3_SECRET_KEY`，平台文件位于 `%LOCALAPPDATA%/VerdantFlare/Video/.env` 或 `~/.config/verdantflare/video/.env`。这些不是Studio MCP的必填变量。
 
-旧安装器会下载API/S3配置及 `mc`，不是Studio登录修复工具。新任务不自动执行这些安装器，不让Skill持有S3或供应商凭据。现存任务按原模型、渠道、任务ID恢复，详见 [SD2说明](verdantflare-video/references/sd2-workflow.md)。
+旧安装器会下载API/S3配置及 `mc`，不是Studio登录修复工具。新任务不自动执行这些安装器，不让Skill持有S3或供应商凭据。现存任务按原模型、渠道、任务ID恢复，详见 [SD2说明](verdantflare-video/references/04.ref2v.entrypoint.md)。
 
 文件保存与跨电脑恢复见 [统一客户端入口](_shared/project-world-client.md)。独立安装包缺少共享资源时，应补齐同版本依赖或使用宿主提供的对应能力，不臆造配置、工具名或项目ID。

@@ -16,21 +16,44 @@ except ImportError as exc:
                      f'"{Path(__file__).with_name("requirements.txt")}"') from exc
 
 DIMENSIONS = ('category', 'workflow', 'rules', 'acceptance')
+DIMENSION_LABELS = {'category': '分类', 'workflow': '工作流', 'rules': '规范', 'acceptance': '验收'}
 NAME = re.compile(r'[a-z0-9]+(?:-[a-z0-9]+)*\Z')
-CATEGORY = re.compile(r'C\d+\.[a-z0-9]+(?:-[a-z0-9]+)*\Z')
+CAPABILITY_ID = re.compile(r'(0[1-9]|[1-9]\d)\.([a-z0-9]+(?:-[a-z0-9]+)*)\Z')
+ENTRYPOINT_FILE = re.compile(r'((?:0[1-9]|[1-9]\d)\.[a-z0-9]+(?:-[a-z0-9]+)*)\.entrypoint\.md\Z')
+CAPABILITY_DIM_FILE = re.compile(
+    r'((?:0[1-9]|[1-9]\d)\.[a-z0-9]+(?:-[a-z0-9]+)*)\.(category|workflow|rules|acceptance)\.md\Z')
+COMMON_FILE = re.compile(r'00\.common\.(category|workflow|rules|acceptance)\.md\Z')
+# Legacy 01.base-* + Cx.<slug>-<dim>.md compatibility patterns.
 MATRIX_FILE = re.compile(r'(C\d+\.[a-z0-9]+(?:-[a-z0-9]+)*)-(category|workflow|rules|acceptance)\.md\Z')
 # ASCII-only boundaries: Python treats CJK as word characters, so \b misses "TODO定义".
-PLACEHOLDER = re.compile(r'(?<![A-Za-z0-9_])(?:TODO|TBD)(?![A-Za-z0-9_])|\{\{[^{}\n]+\}\}|<(?:skill-name|slug|Cx|填写[^>]*|技能中文名称|分类中文名称|main_script|evaluator_script)>')
+PLACEHOLDER = re.compile(
+    r'(?<![A-Za-z0-9_])(?:TODO|TBD)(?![A-Za-z0-9_])|\{\{[^{}\n]+\}\}|'
+    r'<(?:skill-name|slug|Cx|capability|填写[^>]*|技能中文名称|分类中文名称|main_script|evaluator_script)>')
 INLINE_CODE = re.compile(r'(`+).+?\1')
 XML_TAG = re.compile(r'</?[A-Za-z][^<>]*>')
 RESERVED = ('anthropic', 'claude')
 MAX_NAME, MAX_DESCRIPTION = 64, 1024
-# Entry budget: SKILL.md is a router; details live in the four base references.
+# Entry budget: SKILL.md is a router; details live in capability entrypoints and optional 00.common.*.md.
 MAX_ENTRY_CHARS, MAX_ENTRY_CODE_LINES, MAX_ENTRY_H3 = 4000, 20, 3
 MAX_REFERENCE_CHARS = 10000
+MAX_CAPABILITY_LABEL_CHARS = 12
 # Required H2 order (scope, reading route, tools); a repo-mandated coding section may come first.
 ENTRY_SECTIONS = (('范围', 'scope'), ('读取', 'read'), ('工具', 'tool'))
 OPTIONAL_FIRST_SECTION = ('编码', 'coding')
+# Each NN.<cap>.entrypoint.md must declare input/output followed by category, workflow, rules, acceptance.
+ENTRYPOINT_SECTIONS = (
+    ('输入与输出', ('输入', '输出', 'input', 'output')),
+    ('分类', ('分类', 'category')),
+    ('工作流', ('工作流', '流程', 'workflow')),
+    ('规范', ('规范', '规则', 'rules')),
+    ('验收', ('验收', 'acceptance')),
+)
+GENERIC_DIMENSION_HINTS = {
+    'category': ('分类', '边界', '适用', '分支', 'category', 'scope'),
+    'workflow': ('流程', '执行', '操作', '恢复', 'workflow', 'procedure'),
+    'rules': ('规则', '约束', '默认值', '例外', '写法', 'rule', 'constraint'),
+    'acceptance': ('验收', '验证', '门禁', '交付', '评分', 'acceptance', 'verify'),
+}
 MD = MarkdownIt('commonmark').enable('table')
 # Parse rejected browser schemes too so the linter can diagnose them.
 # Tokens are inspected only; this tool never renders or opens these URLs.
@@ -92,6 +115,12 @@ def anchors(tokens):
     return result
 
 
+def linked_paths(tokens):
+    """Return normalized relative link paths from markdown tokens."""
+    return {unquote(urlsplit(child.attrGet('href') or '').path)
+            for token in tokens for child in token.children or [] if child.type == 'link_open'}
+
+
 def check_style(tokens, label):
     errors, counters = [], []
     h1 = 0
@@ -147,7 +176,18 @@ def repo_root(root):
     return None
 
 
-def entry_errors(root, body, tokens):
+def detect_layout(root):
+    """Use capability-entrypoint layout by default; fall back to legacy 01.base-* when present."""
+    refs = root / 'references'
+    if refs.is_dir():
+        if any(ENTRYPOINT_FILE.fullmatch(f.name) for f in refs.glob('*.md')):
+            return 'capability'
+        if any((refs / f'01.base-{dim}.md').is_file() for dim in DIMENSIONS):
+            return 'legacy'
+    return 'capability'
+
+
+def entry_errors(root, body, tokens, layout):
     """Enforce the uniform entry shape: a short router with three fixed H2 sections."""
     errors = []
     if len(body) > MAX_ENTRY_CHARS:
@@ -155,7 +195,7 @@ def entry_errors(root, body, tokens):
     code = sum(t.map[1] - t.map[0] for t in tokens if t.type in ('fence', 'code_block') and t.map)
     if code > MAX_ENTRY_CODE_LINES:
         errors.append(f'SKILL.md: code blocks span {code} lines (maximum {MAX_ENTRY_CODE_LINES}); '
-                      'move full commands to 01.base-workflow.md')
+                      'move full commands to capability workflow references')
     h2, h3 = [], 0
     for i, token in enumerate(tokens):
         if token.type != 'heading_open':
@@ -174,16 +214,106 @@ def entry_errors(root, body, tokens):
             any(word in title for word in words) for title, words in zip(h2, ENTRY_SECTIONS)):
         expected = ' / '.join(words[0] for words in ENTRY_SECTIONS)
         errors.append(f'SKILL.md: H2 sections must be exactly {expected} (optional 编码规范 first): {h2}')
-    linked = {unquote(urlsplit(child.attrGet('href') or '').path)
-              for token in tokens for child in token.children or [] if child.type == 'link_open'}
-    for dim in DIMENSIONS:
-        rel = f'references/01.base-{dim}.md'
-        if rel not in linked:
-            errors.append(f'SKILL.md: must link {rel}')
+    linked = linked_paths(tokens)
+    if layout == 'legacy':
+        for dim in DIMENSIONS:
+            rel = f'references/01.base-{dim}.md'
+            if rel not in linked:
+                errors.append(f'SKILL.md: must link {rel}')
+    else:
+        refs = root / 'references'
+        if refs.is_dir():
+            for ep in sorted(f for f in refs.glob('*.md') if ENTRYPOINT_FILE.fullmatch(f.name)):
+                rel = f'references/{ep.name}'
+                if rel not in linked:
+                    errors.append(f'SKILL.md: must link capability entrypoint {rel}')
     for extra in sorted(root.glob('*.md')):
         if extra.name != 'SKILL.md':
             errors.append(f'{extra.name}: no Markdown besides SKILL.md at skill root; move into references or project docs')
+    if layout == 'capability':
+        for _, links in route_table_rows(tokens):
+            if any(COMMON_FILE.fullmatch(Path(unquote(u.path)).name) for u in links):
+                errors.append('SKILL.md: do not list 00.common.*.md as a capability row in the routing table; '
+                              'reference it from entrypoints or a note below the table')
+                break
     return errors
+
+
+def route_table_rows(tokens):
+    """Extract (left_text, right_link_parts) tuples from the first table in the reading route H2 section."""
+    in_route, in_tbody = False, False
+    rows, row, cell_inline = [], None, None
+    for i, token in enumerate(tokens):
+        if token.type == 'heading_open' and token.tag == 'h2':
+            title = plain_inline(tokens[i + 1]).lower()
+            if in_route:
+                break
+            if any(word in title for word in ENTRY_SECTIONS[1]):
+                in_route = True
+            continue
+        if not in_route:
+            continue
+        if token.type == 'tbody_open':
+            in_tbody = True
+        elif token.type == 'tbody_close' and in_tbody:
+            break
+        elif not in_tbody:
+            continue
+        elif token.type == 'tr_open':
+            row = []
+        elif token.type == 'tr_close' and row is not None:
+            rows.append(row)
+            row = None
+        elif token.type == 'td_open' and row is not None:
+            cell_inline = []
+        elif token.type == 'inline' and cell_inline is not None:
+            cell_inline.append(token)
+        elif token.type == 'td_close' and row is not None and cell_inline is not None:
+            row.append(cell_inline)
+            cell_inline = None
+    parsed = []
+    for cells in rows:
+        if len(cells) < 2:
+            continue
+        left = ' '.join(plain_inline(t) for t in cells[0]).lower()
+        links = [urlsplit(child.attrGet('href') or '')
+                 for t in cells[1] for child in (t.children or []) if child.type == 'link_open']
+        parsed.append((left, links))
+    return parsed
+
+
+def capability_label_warnings(tokens):
+    """Warn when capability names in the SKILL.md routing table are overly verbose."""
+    warnings = []
+    for left, _ in route_table_rows(tokens):
+        compact = re.sub(r'\s+', '', left)
+        if len(compact) > MAX_CAPABILITY_LABEL_CHARS:
+            warnings.append(
+                f'SKILL.md: capability label too long ({len(compact)} chars, max {MAX_CAPABILITY_LABEL_CHARS}): '
+                f'{left!r}; tighten via iterative word-reduction')
+    return warnings
+
+
+def routing_warnings(tokens):
+    """Warn when a legacy reading route table only lists the 4 generic base dimensions."""
+    parsed = route_table_rows(tokens)
+    if len(parsed) != len(DIMENSIONS):
+        return []
+    matched_dims = {}
+    for left, links in parsed:
+        if len(links) != 1 or links[0].fragment:
+            return []
+        path = unquote(links[0].path)
+        dim = next((d for d in DIMENSIONS if path == f'references/01.base-{d}.md'), None)
+        if dim is None or dim in matched_dims:
+            return []
+        if not any(hint in left for hint in GENERIC_DIMENSION_HINTS[dim]):
+            return []
+        matched_dims[dim] = left
+    if len(matched_dims) == len(DIMENSIONS):
+        return ['SKILL.md: reading route table lists only the 4 generic base dimensions; '
+                'list concrete capability phrases linking to specific references or section anchors']
+    return []
 
 
 def metadata_errors(root, meta):
@@ -205,7 +335,60 @@ def metadata_errors(root, meta):
     return errors
 
 
+def capability_errors(root, document, skill_links):
+    """Validate flat NN.<cap>.entrypoint.md + optional NN.<cap>.<dim>.md + optional 00.common.<dim>.md."""
+    errors = []
+    refs = root / 'references'
+    if not refs.is_dir():
+        return ['references: missing capability entrypoint (e.g. 01.<capability>.entrypoint.md)']
+    entrypoints, numbers, dim_files = {}, {}, []
+    for file in sorted(refs.glob('*.md')):
+        ep = ENTRYPOINT_FILE.fullmatch(file.name)
+        if ep:
+            cap = ep.group(1)
+            num = cap.split('.')[0]
+            if num in numbers and numbers[num] != cap:
+                errors.append(f'capability: duplicate numeric prefix {num} ({numbers[num]} vs {cap})')
+            numbers[num] = cap
+            entrypoints[cap] = file
+            continue
+        dim = CAPABILITY_DIM_FILE.fullmatch(file.name)
+        if dim:
+            dim_files.append((dim.group(1), dim.group(2), file))
+            continue
+        if COMMON_FILE.fullmatch(file.name):
+            continue
+        if re.match(r'^00\.common\.', file.name):
+            errors.append(f'common: malformed filename {file.name} (expected 00.common.<category|workflow|rules|acceptance>.md)')
+        elif re.match(r'^\d{2}\.', file.name):
+            errors.append(f'capability: malformed filename {file.name} '
+                          '(expected NN.<slug>.entrypoint.md or NN.<slug>.<category|workflow|rules|acceptance>.md)')
+    if not entrypoints:
+        errors.append('references: missing capability entrypoint (e.g. 01.<capability>.entrypoint.md)')
+        return errors
+    ep_links = {}
+    for cap, file in entrypoints.items():
+        try:
+            _, _, tokens, _ = document(file)
+        except (OSError, UnicodeError, ValueError, yaml.YAMLError):
+            continue
+        ep_links[cap] = {Path(p).name for p in linked_paths(tokens) if p}
+        h2 = [plain_inline(tokens[i + 1]).lower()
+              for i, token in enumerate(tokens) if token.type == 'heading_open' and token.tag == 'h2']
+        for label, keywords in ENTRYPOINT_SECTIONS:
+            if not any(any(word in title for word in keywords) for title in h2):
+                errors.append(f'references/{file.name}: missing H2 section for {label}')
+    skill_ref_names = {Path(p).name for p in skill_links if p.startswith('references/')}
+    for cap, _, file in dim_files:
+        if cap not in entrypoints:
+            errors.append(f'capability: orphan dimension file {file.name} (missing {cap}.entrypoint.md)')
+        elif file.name not in ep_links.get(cap, set()) and file.name not in skill_ref_names:
+            errors.append(f'capability: {file.name} must be linked from {cap}.entrypoint.md or SKILL.md')
+    return errors
+
+
 def matrix_errors(root):
+    """Validate legacy 01.base-* + Cx.<slug>-<dim>.md layout."""
     errors, groups, ids = [], {}, {}
     refs = root / 'references'
     for dim in DIMENSIONS:
@@ -236,6 +419,7 @@ def lint(root, style='generic', allow_placeholders=False, structure=True):
     if not (root / 'SKILL.md').is_file():
         return ['missing SKILL.md'], warnings
     repo = repo_root(root)
+    layout = detect_layout(root)
     paths = [root / 'SKILL.md']
     paths.extend(sorted((root / 'references').rglob('*.md')))
 
@@ -247,6 +431,7 @@ def lint(root, style='generic', allow_placeholders=False, structure=True):
             cache[path] = (text, meta, MD.parse(body), offset)
         return cache[path]
 
+    skill_links = set()
     for path in paths:
         label = path.relative_to(root).as_posix()
         if not path.resolve().is_relative_to(root):
@@ -258,11 +443,16 @@ def lint(root, style='generic', allow_placeholders=False, structure=True):
             errors.append(f'{label}: {exc}')
             continue
         if path.name == 'SKILL.md' and path.parent == root:
+            skill_links = linked_paths(tokens)
             errors.extend(metadata_errors(root, meta))
             if structure:
-                errors.extend(entry_errors(root, '\n'.join(text.splitlines()[offset:]), tokens))
+                errors.extend(entry_errors(root, '\n'.join(text.splitlines()[offset:]), tokens, layout))
+                if layout == 'legacy':
+                    warnings.extend(routing_warnings(tokens))
+                else:
+                    warnings.extend(capability_label_warnings(tokens))
         elif structure and len(text) > MAX_REFERENCE_CHARS:
-            warnings.append(f'{label}: {len(text)} characters (over {MAX_REFERENCE_CHARS}); split by branch or trim history')
+            warnings.append(f'{label}: {len(text)} characters (over {MAX_REFERENCE_CHARS}); split by dimension or trim history')
         skip = code_lines(tokens, offset)
         for number, line in enumerate(text.splitlines(), 1):
             if number not in skip and PLACEHOLDER.search(INLINE_CODE.sub('', line)):
@@ -300,34 +490,62 @@ def lint(root, style='generic', allow_placeholders=False, structure=True):
                 except (OSError, UnicodeError, ValueError, yaml.YAMLError) as exc:
                     errors.append(f'{loc}: cannot check {target}: {exc}')
     if structure:
-        errors.extend(matrix_errors(root))
+        if layout == 'legacy':
+            errors.extend(matrix_errors(root))
+        else:
+            errors.extend(capability_errors(root, document, skill_links))
     return errors, warnings
 
 
-def categories_from(raw):
-    categories = []
-    ids = set()
+def capabilities_from(raw):
+    """Parse comma-separated capability ids (e.g. '01.t2v,02.i2v' or 't2v,i2v')."""
     if not raw.strip():
-        return categories
-    for item in raw.split(','):
-        item = item.strip()
-        if not CATEGORY.fullmatch(item):
-            raise ValueError(f'invalid category: {item!r}')
-        cid = item.split('.')[0]
-        if cid in ids:
-            raise ValueError(f'duplicate category id: {cid}')
-        ids.add(cid)
-        categories.append(item)
-    return categories
+        return ['01.core']
+    items, seen_nums, seen_slugs = [], set(), set()
+    for idx, part in enumerate(raw.split(','), 1):
+        item = part.strip()
+        if not item:
+            raise ValueError(f'invalid capability: {item!r}')
+        if '.' not in item:
+            if not NAME.fullmatch(item):
+                raise ValueError(f'invalid capability slug: {item!r}')
+            item = f'{idx:02d}.{item}'
+        match = CAPABILITY_ID.fullmatch(item)
+        if not match:
+            raise ValueError(f'invalid capability: {item!r} (expected NN.<slug> with NN in 01..99)')
+        num, slug = match.groups()
+        if num in seen_nums:
+            raise ValueError(f'duplicate capability number: {num}')
+        if slug in seen_slugs:
+            raise ValueError(f'duplicate capability slug: {slug}')
+        seen_nums.add(num)
+        seen_slugs.add(slug)
+        items.append(item)
+    return items
 
 
-def initialize(root, categories_arg=''):
+def common_from(raw):
+    """Parse optional comma-separated 00.common.<dim>.md dimensions."""
+    if not raw.strip():
+        return []
+    dims = []
+    for part in raw.split(','):
+        dim = part.strip()
+        if dim not in DIMENSIONS:
+            raise ValueError(f'invalid common dimension: {dim!r} (expected one of {", ".join(DIMENSIONS)})')
+        if dim not in dims:
+            dims.append(dim)
+    return dims
+
+
+def initialize(root, capabilities_arg='', common_arg='', split=False):
     root = Path(root).absolute()
     if not NAME.fullmatch(root.name) or len(root.name) > MAX_NAME:
         raise ValueError(f'target directory name must be lowercase kebab-case, at most {MAX_NAME} characters')
     if any(word in root.name for word in RESERVED) and not root.name.startswith('verdantflare-agent-'):
         raise ValueError('target directory name must not contain reserved words anthropic/claude')
-    categories = categories_from(categories_arg)
+    capabilities = capabilities_from(capabilities_arg)
+    commons = common_from(common_arg)
     templates = Path(__file__).resolve().parent.parent / 'resources' / 'templates'
     outputs = {}
 
@@ -339,17 +557,25 @@ def initialize(root, categories_arg=''):
             raise ValueError(f'unresolved template variable in {filename}')
         return text
 
-    for dim in DIMENSIONS:
-        cat_links = '\n'.join(f'- [{c}](./{c}-{dim}.md)' for c in categories) or '本技能当前没有独立分支。'
-        outputs[f'references/01.base-{dim}.md'] = render(f'01.base-{dim}.template.md', category_links=cat_links)
-        for category in categories:
-            outputs[f'references/{category}-{dim}.md'] = render(f'Cx.slug-{dim}.template.md', category=category)
-    # Branch rows go right after the acceptance row so the template stays a valid, formattable table.
-    entry = render('SKILL.template.md').splitlines(keepends=True)
-    anchor = next(i for i, line in enumerate(entry) if 'references/01.base-acceptance.md' in line)
-    rows = [f'| 输入属于 `{c}` | ' + '、'.join(f'[{dim}](references/{c}-{dim}.md)' for dim in DIMENSIONS) + ' |\n'
-            for c in categories]
-    outputs['SKILL.md'] = ''.join(entry[:anchor + 1] + rows + entry[anchor + 1:])
+    for dim in commons:
+        outputs[f'references/00.common.{dim}.md'] = render(
+            '00.common.dim.template.md', dimension=dim, dimension_label=DIMENSION_LABELS[dim])
+
+    common_links = ('、'.join(f'[公共{DIMENSION_LABELS[d]}](./00.common.{d}.md)' for d in commons)
+                    or '无（本能力无跨能力共享文档，需要时按需补充 `00.common.<维度>.md`）。')
+    ep_template = 'NN.cap.entrypoint-split.template.md' if split else 'NN.cap.entrypoint.template.md'
+    rows = []
+    for cap in capabilities:
+        outputs[f'references/{cap}.entrypoint.md'] = render(ep_template, capability=cap, common_links=common_links)
+        rows.append(f'| TODO {cap} 能力说明 | [{cap}.entrypoint.md](references/{cap}.entrypoint.md) |')
+        if split:
+            for dim in DIMENSIONS:
+                outputs[f'references/{cap}.{dim}.md'] = render(
+                    'NN.cap.dim.template.md', capability=cap, dimension=dim, dimension_label=DIMENSION_LABELS[dim])
+    common_note = ('跨能力公共文档：' + '、'.join(f'[00.common.{d}.md](references/00.common.{d}.md)' for d in commons)
+                   + '（由各能力入口引用）。' if commons else '')
+    outputs['SKILL.md'] = render('SKILL.template.md', capability_rows='\n'.join(rows), common_note=common_note)
+
     # Preflight every path before any mkdir/write; symlinks cannot redirect output.
     resolved_root = root.resolve()
     for rel in outputs:
@@ -377,9 +603,11 @@ def initialize(root, categories_arg=''):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
-    init = commands.add_parser('init', help='create a non-overwriting scaffold')
+    init = commands.add_parser('init', help='create a non-overwriting capability-entrypoint scaffold')
     init.add_argument('skill_dir', type=Path)
-    init.add_argument('--categories', default='', help='e.g. C1.local,C2.remote; adds matrix branch files')
+    init.add_argument('--capabilities', default='', help='e.g. 01.t2v,02.i2v,03.fl2v,04.ref2v (or t2v,i2v)')
+    init.add_argument('--common', default='', help='optional shared 00.common.<dim>.md files, e.g. rules,acceptance')
+    init.add_argument('--split', action='store_true', help='split each capability into 4 dimension files')
     check = commands.add_parser('lint', help='check static invariants, not business correctness')
     check.add_argument('skill_dir', type=Path)
     check.add_argument('--style', choices=('generic', 'numbered'), default='generic')
@@ -387,10 +615,10 @@ def main():
     args = parser.parse_args()
     try:
         if args.command == 'init':
-            created, skipped = initialize(args.skill_dir, args.categories)
+            created, skipped = initialize(args.skill_dir, args.capabilities, args.common, args.split)
             print(f'SCAFFOLD: created {len(created)}, preserved {len(skipped)} files; fill placeholders before delivery.')
             if skipped:
-                print('Existing files preserved; merge indexes manually when adding branches.')
+                print('Existing files preserved; merge capability rows into SKILL.md manually when adding capabilities.')
             return 0
         errors, warnings = lint(args.skill_dir, args.style, args.allow_placeholders)
         status = 'FAIL' if errors else ('SCAFFOLD ONLY (not delivery-ready)' if args.allow_placeholders else 'PASS (static checks only)')

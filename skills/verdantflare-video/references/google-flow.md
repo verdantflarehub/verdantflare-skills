@@ -6,12 +6,10 @@
 
 通过 Studio Video MCP 显式选择 `route=google-flow`，先查 `video.capabilities` 与 `video.preflight` 再提交。下表为当前 MCP 接入范围：
 
-| 模型             | 支持模式与上限                                                                                                                  |
-| :--------------- | :------------------------------------------------------------------------------------------------------------------------------ |
-| `veo-lite`       | `text_to_video` / `reference_to_video`；最多 3 张参考图（`ref_cap=3`）；4 / 6 / 8s；16:9 / 9:16；原生 720p（不支持 1080p 超分） |
-| `veo-fast`       | `text_to_video` / `reference_to_video`；最多 3 张参考图（`ref_cap=3`）；4 / 6 / 8s；16:9 / 9:16；可选 `upscale="1080p"`         |
-| `veo-quality`    | **仅 `text_to_video`**；**不支持参考图（`ref_cap=0`）**；4 / 6 / 8s；16:9 / 9:16；可选 `upscale="1080p"`                        |
-| `omni-1.2-flash` | `text_to_video` / `reference_to_video` / `video_editing`；最多 7 图 + 1 段 `.mp4` 原片（≥ 3s）；3–15s；16:9 / 9:16；可选 `upscale="1080p"` |
+- **`veo-lite`**：`text_to_video` / `reference_to_video`；最多 3 张参考图（`ref_cap=3`）；4 / 6 / 8s；16:9 / 9:16；原生 720p（不支持 1080p 超分）。
+- **`veo-fast`**：`text_to_video` / `reference_to_video`；最多 3 张参考图（`ref_cap=3`）；4 / 6 / 8s；16:9 / 9:16；可选 `upscale="1080p"`。
+- **`veo-quality`**：**仅 `text_to_video`**；**不支持参考图（`ref_cap=0`）**；4 / 6 / 8s；16:9 / 9:16；可选 `upscale="1080p"`。
+- **`omni-1.2-flash`**：`text_to_video` / `reference_to_video` / `video_editing`；最多 7 图 + 1 段 `.mp4` 原片（≥ 3s）；3–15s；16:9 / 9:16；可选 `upscale="1080p"`。
 
 ### 1.1 Omni Flash 1.2 的订阅时长与原片编辑
 

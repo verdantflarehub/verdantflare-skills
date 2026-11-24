@@ -3,7 +3,7 @@
 ## 1. 当前依据
 
 - [技能入口](../SKILL.md)：范围与工具路由。
-- [共享规则](01.base-rules.md)：角色、作者独立性和锁卷约束。
+- [公共规则](00.common.rules.md)：角色、作者独立性和锁卷约束。
 - [校验器](../scripts/native_receipts.py)：版本 1 字段及来源校验契约。
 - [回归测试](../tests/test_native_receipts.py)：合成正例、拒绝用例及主门禁集成。
 

@@ -1,50 +1,40 @@
 ---
 name: verdantflare-image
-description: 通过 VerdantFlare Image MCP 生成或编辑图像候选（默认出图模型为 GPT Image 2.6 / gpt-image-2.6-sunburst），包括人物五视图、人物半身照、角色视图、服装人台、分镜单格和局部重绘。
+description: 通过 VerdantFlare Image MCP 生成或编辑图像候选（默认出图模型为 GPT Image 2.6 / gpt-image-2.6-sunburst），覆盖文生图与视觉规格、图生图与局部重绘、多参考编辑以及 Google Flow / Google AI Studio / Grok / MOSS-Image 渠道适配。
 ---
 
 # VerdantFlare Image
 
-已绑定 Studio 项目的图像创作与返修默认完成素材传输、原项目保存及角色关联核验，沿用真实 project_id；用户无需另说同步或去网站检查。仅本地、只讨论或暂不上传的明确限定优先。按当前 Project / Artifact 契约提交并回读；只上传或本地保存不算已同步。响应未知先对账恢复，不重复收费生成；同步不自动批准、选用或发布 World。素材添加、查询、删除交由 Project 流程处理，不因此启动新的生图。
+## 1. 范围与边界
 
-**连续内容局部返修**：先固定当前较可信的项目修订、人物身份、Look、空间与相邻镜，只列本次允许变化；遮罩不是像素硬锁。新图可先作为候选归档，用户已指出漂移或存在审阅检查点时，不因任务成功便替换故事板当前图或封面。须按[执行流程的局部返修检查](references/workflow.md#4-局部返修与当前预览)核对保留项、退回失效派生图，再决定是否晋级；不新设普通生图审批。
+本技能通过 Studio Image MCP（现有网关 `image.create/edit/inpaint/status/result/rate_content` 及 `image.import*`）生成、编辑、恢复与下载具有不可变 Artifact 与 SHA-256 的图像候选。已绑定 Studio 项目的创作与返修默认完成素材传输、原项目保存及角色关联核验，沿用真实 `project_id`；仅本地、只讨论或暂不上传的明确限定优先。不负责 MV 导演或视频剪辑，仅解释或修改代码时不启动生图，不绕过 MCP/受控客户端直连供应商。
 
-交付具有不可变 Artifact 与 SHA-256 的图像候选；不负责 MV 导演或剪辑。仅解释或修改代码时不启动生图。
+**默认模型与路由红线**：未指定引擎或模型时默认使用 **GPT Image 2.6**（`engine="codex"`，默认 `model="gpt-image-2.6-sunburst"`，可选 `gpt-image-2.6-flare` 及向下兼容 `2.5`）。凡调用 Google 系列图像模型（Nano Banana 2 / 2.1 / Pro），**默认一律走 Google Flow（`engine="google-flow"`，默认 `model="nano2"`，可选 `nano21` / `nano-pro`，支持 `upscale="2k" | "4k"`）**，除非用户显式指定，否则不考虑 Google AI Studio（`engine="gemini"`）。生成产物在摘要展示与 Project/World 同步前必须完成 K09 内容分级评估并调用 `image.rate_content`。
 
-Project 归属、换电脑恢复、Artifact 保存及 World 固定资产引用遵循[共同接入规则](../_shared/project-world.md)。生成或导入结果先保存到当前 Project；确认可复用后，按 World / Character 形象基线（`docs/design/world/character/identity.md`）显式登记固定版本。
+用户要求人物五视图、人物半身照或 16:9 人物视觉档案卡时，先读[人物设定技能](../verdantflare-image-character/SKILL.md)确定版式，再由本技能出图；Project 归属、换电脑恢复、Artifact 保存及 World 固定资产引用遵循[共同接入规则](../_shared/project-world.md)，连接与认证排查见[环境说明](../ENVIRONMENT.md)。
 
-| 当前操作                               | 按需读取                                                        |
-| :------------------------------------- | :-------------------------------------------------------------- |
-| 构造生成、编辑、遮罩或导入请求         | [调用契约](references/contracts.md)                             |
-| Google Nano Banana 生图（默认走 Flow） | 见文末 Google Flow 规范；仅显式指定 AI Studio 时读 [Google 图像调用](references/google.md) |
-| MOSS-Image 文字海报与 JSON 版式文生图  | [MOSS-Image 调用](references/moss-image.md)                     |
-| 角色四视图、服装三视图、分镜或场景规格 | [视觉规格](references/visual-specs.md)                          |
-| 写实画面假纹理、过锐或质感返修         | [表面质感控制](references/surface-quality.md)                   |
-| 角色五视图合成板                       | [五视图模式选择](references/visual-specs.md#6-角色五视图合成板) |
-| 提交、轮询、恢复、下载与归档           | [执行流程](references/workflow.md)                              |
-| 生成后 18+ 分级评估步骤                | [评估步骤](references/content-rating-step.md)                   |
-| 生成后 18+ 分级评估规范                | [评估规范](references/content-rating-rubric.md)                 |
-| 使用本地客户端                         | [CLI](references/cli.md)                                        |
-| 连接或配置问题                         | [环境说明](../ENVIRONMENT.md)                                   |
+## 2. 能力清单与按任务读取
 
-用户要求人物五视图或人物半身照时，读取[人物设定技能](../verdantflare-image-character/SKILL.md)确定版式，再由本技能调用 image.edit 出图。明确点名既有三脸或衣装优先合成板时，沿用对应的[合成板规格](references/visual-specs.md#6-角色五视图合成板)。
+按要执行的原子能力直达对应入口；跨能力契约、质感控制与 K09 分级步骤见 `00.common.rules.md`：
 
-**默认出图模型与分辨率边界**：本技能将 **GPT Image 2.6**（`engine="codex"`，默认 `model="gpt-image-2.6-sunburst"`；亦支持高速变体 `gpt-image-2.6-flare` 及向下兼容 `gpt-image-2.5-sunburst` / `gpt-image-2.5-flare`）标记为默认出图模型；用户未指定引擎或模型时一律使用 `codex` / `gpt-image-2.6-sunburst`。**凡调用 Google 系列图像模型（Nano Banana 2 / 2.1 / Pro），默认一律走 Google Flow（`engine="google-flow"`，默认 `model="nano2"`，可选 `nano21` / `nano-pro`，生成时可选 `upscale="2k" | "4k"`），除非用户显式指定，否则不考虑 Google AI Studio（`engine="gemini"`）**。用户明确选择优先，模型支持以宿主能力和调用契约为准。注意各渠道对 `resolution="2k"` 与 `9:16` / `16:9` 画幅的实际像素输出（详见 [调用契约第 1.1 节](references/contracts.md#11-各渠道画幅与分辨率实际行为与防坑指南)）：`codex` 通过 `/v1/responses` 的 `[Aspect Ratio <ratio>]` 指令注入输出正确画幅，但 ChatGPT Web 端原生像素上限使 `9:16` / `16:9` 返回 `941×1672` / `1672×941` PNG（`1:1` 返回 `1254×1254`）；`gemini`（仅显式指定 Google AI Studio 时使用）通过 `generationConfig.imageConfig.imageSize="2K"` 原生返回 `1536×2752` / `2752×1536`（`9:16` / `16:9`）或 `2048×2048`（`1:1`）；`grok`（`grok-imagine-image-2.0`）原生支持 `9:16` / `16:9` `2k`（`1584×2816` / `2816×1584`）。不绕过 MCP/受控客户端直连供应商。
+| 原子能力           | 入口文档                                                              |
+| :----------------- | :-------------------------------------------------------------------- |
+| 文生图与视觉规格   | [01.t2i](references/01.t2i.entrypoint.md)                             |
+| 图生图、重绘与返修 | [02.i2i-edit](references/02.i2i-edit.entrypoint.md)                   |
+| 多渠道适配与路由   | [03.provider-adapters](references/03.provider-adapters.entrypoint.md) |
 
-**Google AI Studio（`engine="gemini"`，仅显式指定时使用）**：仅在用户明确要求走 Google AI Studio 或 `engine="gemini"` 时才读取 [Google 图像调用](references/google.md)，区分卡片展示名（`Nano Banana 2.1` / `Nano Banana Pro` / `Nano Banana 2` / `Nano Banana 2 Lite` / `Nano Banana`）与请求 `model` 编码（`gemini-nano-banana-2.1` / `gemini-3-pro-image` / `gemini-3.1-flash-image` / `gemini-3.1-flash-lite-image` / `gemini-2.5-flash-image`），不支持遮罩局部重绘（`max_Reference_masks=0`）。
+先读目标能力的 `entrypoint.md`（输入与输出 → 分类 → 工作流 → 规范 → 验收），无需通读其他能力。
 
-Grok 生成与单图编辑读取 [Grok 调用](references/grok.md)，以 `image.capabilities` 的实际模型为准；现有 REST CLI 不用于 Grok，使用 Studio MCP。
+跨能力公共文档：[00.common.rules](references/00.common.rules.md)（由各能力入口引用）。
 
-MOSS-Image 自托管文生图（`engine="moss-image"`）读取 [MOSS-Image 调用](references/moss-image.md)，经同一 Studio Image MCP 调用，面向中英文密集文字海报与原生 JSON 版式控制（`layout` 沿用现行 `meta/items` 格式与 `box_2d=[x1,y1,x2,y2]`，`items` 最多 32 项，具体坐标规则见调用说明）；支持 `width` / `height`（16 的整数倍，总像素不超过 2M，所需尺寸显式填写）、`steps` / `cfg_scale` / `seed`、独立 `negative_prompt` 与 1～3 张实验性参考图。参考图不保证人物身份一致，角色 IP 一致性出图不选 `moss-image`。该引擎不经渠道应用，不传 `channel_account_id`、`budget_limit`、`prefer_4k`、`mask` 或局部重绘参数（传入会以 `INVALID_ARGUMENT` 拒绝）。自托管本地 GPU 引擎（`moss-image` 及启用 CUDA 的 `face-fusion`）由 Image MCP 自动向 Station GPU 调度器（`:5056`）申请显存租约并执行按需冷启动（`0 -> 1`），云渠道（`codex`、`gemini`、`grok`）与 CPU 模式 `face-fusion` 不占用本地 GPU 租约；查询返回 `queued`（`waiting_gpu_lease`）属正常显存排队或冷启动，继续轮询原任务 ID，不重新提单或手动卸载其他 GPU 应用。
+## 3. 工具与命令
 
-使用真实Studio会话发现实际工具；现有网关提供 `image.create/edit/inpaint/status/result/rate_content`，不假定历史 `image.generate` 或 `image.list` 已注册。旧共享媒体令牌不能访问Project/Artifact，认证恢复见 [环境说明](../ENVIRONMENT.md)。
+主客户端为 [image_client.py](scripts/image_client.py)（已适配 Studio `/mcp` JSON-RPC 网关与 `/apps/image/artifacts/{artifact_id}/content` 受控下载及真实宽高/MIME/SHA-256 核验），环境加载脚本为 [load_env.py](scripts/load_env.py)。完整参数与恢复流程见 [02.i2i-edit.entrypoint.md](references/02.i2i-edit.entrypoint.md)。
 
-中央Artifact引用与Image原生Artifact ID需要受控适配，不因同名字段就互换。附带的 `scripts/image_client.py` 已适配 Studio `/mcp` JSON-RPC 网关与受控下载路由（`/apps/image/artifacts/{artifact_id}/content`），并在下载后自动解析真实宽高、MIME 与 `2k` 规格偏差告警，具体用法见 [CLI](references/cli.md)。
-
-描述目标画面、必要参考职责及编辑保留项即可；四段式提示词只是模板，不要求固定标签、句式或每轮只改一个变量。
-
-生成后内容分级评估（K09 强制步骤）：取得生成产物后、在交付摘要展示与 Project/World 同步之前，必须按 [评估步骤](references/content-rating-step.md) 与 [评估规范](references/content-rating-rubric.md) 评估图像本身、正向提示词与标题，并调用 `image.rate_content` 提交分级结果（`general` 与 `nsfw` 均须提交，`rubric_version` 取自规范副本文首；不确定即标 `nsfw`；提交超时用相同内容幂等重试，不重新生图）。判定为 `nsfw` 的产物在摘要中只写“N 个产物已标记为 NSFW 并隐藏”，不展示预览、链接、`ContentRef` 或提示词全文，也不同步到 Studio 项目或登记到 World。
-
-本地准备、检查及可恢复技术修复自主执行。已有任务按 ID 查询，不因等待超时重新生成；新收费尝试限定在已授权次数或预算内。下载后验证文件、实际尺寸与服务端 SHA-256，完成 `image.rate_content` 分级评估后，`general` 产物按项目受控路径归档并保留原始产物。完成所请求的技术交付后返回候选及检查结果，艺术批准由用户或上层审核记录决定。
-
-**Google Flow（Google 图像模型默认渠道）**：凡使用 Google Nano Banana 系列模型（`nano2` / `nano21` / `nano-pro`），默认传入 `--engine google-flow`（不考虑 Google AI Studio `gemini`，除非用户显式指定）。支持 `nano2`（默认）、`nano21`、`nano-pro`，画幅为 `1:1`、`16:9` 或 `9:16`，最多 3 张参考图；生成/编辑时可选 `upscale="2k" | "4k"`（默认关闭，0 积分免费超分，`4k` 需 Ultra 账号，偶发失败自动降级保留 1K 原图并标 `upscale_status="fallback_original"`）。可通过 `--budget-limit` 指定整数积分上限。
+```text
+python3 scripts/image_client.py stats
+python3 scripts/image_client.py generate --project-id <project_id> --idempotency-key <key> --prompt "<prompt>"
+python3 scripts/image_client.py status <task_id>
+python3 scripts/image_client.py download <artifact_id> --output <path>
+python3 scripts/image_client.py rate <task_id> --rating general --rubric-version "rubric v1.0"
+```

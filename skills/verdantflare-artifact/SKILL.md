@@ -1,48 +1,33 @@
 ---
 name: verdantflare-artifact
-description: Upload, read, download and verify immutable content versions through VerdantFlare Studio Artifact MCP. Use for controlled file transfer, ContentRef integrity and interrupted uploads; not for generic local file editing or build artifact management.
+description: 通过 VerdantFlare Studio Artifact MCP 上传、读取、下载并核验不可变内容版本。用于受控文件传输、ContentRef 完整性校验与中断上传恢复；不用于通用本地文件编辑或构建产物管理。
 metadata:
   version: "0.1.0"
 ---
 
 # VerdantFlare Artifact
 
-已绑定 Studio 项目中的创作、素材修改或查询，自动完成必要上传或下载，沿用真实 project_id；写入任务继续完成 Project 提交、业务关联与回读，用户无需额外提示传输或检查。明确仅本地、只讨论或只上传时遵循其范围。响应未知先对账恢复，不重复收费生成；同步不自动批准、选用或发布 World。
+## 1. 范围与边界
 
-## 1. 入口与范围
+本技能通过宿主 Studio `/mcp` 的 `artifact.write` 与 `artifact.read` 管理不可变内容版本，覆盖已绑定 Studio 项目与独立 World 草稿的受控上传、读取、下载、ContentRef 完整性核验与中断恢复；不用于通用本地文件编辑或构建产物管理。
 
-通过宿主 Studio `/mcp` 发现 `artifact.write`、`artifact.read`，按当前 Schema 调用。
-使用 `STUDIO_MCP_URL`、`STUDIO_MCP_BEARER_TOKEN`；Bearer 由服务端解析真实身份，不额外登录或提交用户/组织头。
+已绑定 Studio 项目中的创作、素材修改或查询自动完成必要上传或下载并沿用真实 `project_id`，写入任务继续交接 `verdantflare-project` 完成项目提交、业务关联与回读；明确仅本地、只讨论或只上传时遵循其范围。响应未知先对账恢复，不重复收费生成；同步不自动批准、选用或发布 World。本技能为仓库内技能，按需与 `verdantflare-project` 及 World 保存流程协同。
 
-Artifact 管内容版本；上传成功不等于已加入 Project。
-独立 World 收录、学习与创作沿实际 `world_draft_id` 写入并交回 World 流程提交；不为内容传输强制创建项目。运行时 Schema 未支持草稿来源时明确保留未同步状态。
-明确只上传时返回 ContentRef；已绑定项目的创作任务自动交接 Project 完成归档及角色关联，不等待用户再说“加入项目”。生成服务原生 Artifact 不能直接当中央 ContentRef。
+## 2. 能力清单与按任务读取
 
-## 2. 写入
+按要执行的原子能力直达对应入口：
 
-1. 确认明确文件、用途和获授权的 project_id 或 world_draft_id，按实际 Schema 恰选一个。外部来源使用 user_edit 或 user_import，不使用假项目，也不冒充 task_output、legacy_import、asset_manifest 或 world_draft_manifest。
-2. 核对 MIME、实际字节数及 SHA-256；只复用已知且有权读取的固定版本，不声称有全库哈希搜索。
-3. UTF-8 小文本可用 mode=text，最多 1 MiB 字节。二进制或大文本按[传输与恢复](references/transfer-and-recovery.md)执行 prepare、受控 PUT、commit。
-4. 校验返回版本，按任务需要读回内容。交付包含完整 ContentRef、MIME、大小、SHA-256 和验证状态。
+| 原子能力（能干什么活） | 入口文档                                                          |
+| :--------------------- | :---------------------------------------------------------------- |
+| 受控传输               | [01.transfer.entrypoint.md](references/01.transfer.entrypoint.md) |
 
-write_id 及声明在发送前固定，不含凭据。内容变化用新版本；旧版本与原始文件不覆盖。
+## 3. 工具与命令
 
-## 3. 读取与下载
+优先使用宿主 Studio `/mcp` 发现并调用 `artifact.write` 与 `artifact.read`；无宿主工具时可使用 Studio 0.5.50 的 `studio-workspace tools` 与 `call --input request.json`（完整参数与恢复流程见能力入口）。
 
-用固定 ContentRef 调用 metadata/text/download。访问路径采用项目、资产或已支持的 World 草稿时，必须带各自完整的修订或版本对，不混搭；引用与下载路径不是令牌。
-下载再次授权，写入明确本地目标，完整校验后才形成最终文件，已有不同文件不覆盖。
+```text
+studio-workspace tools
+studio-workspace call --input request.json
+```
 
-传输只走同一 Studio 的受控路径，拒绝重定向、跨域凭据转发和任意 URL 代理。
-不向 S3 直写，不索取 S3、下游服务或供应商凭据。
-
-## 4. 恢复与交接
-
-先在原任务／固定项目修订中查找可授权读取的既有 ContentRef，再决定是否传输；服务端已有完整内容时直接交接引用，不先下载到本机再上传一遍。临时下载地址失效只更新读取句柄，不换内容版本。字节与摘要通过仅证明内容完整，不能代替人物、空间或表演审核；同版完整性证据可复用，变换产生的新字节另行核验。
-
-响应未知按原 write_id/upload_id 恢复；prepared 不代表字节完整，未提交上传可完整重传，不能宣传分块断点续传。
-本地文件变更或摘要不符时停止原上传，保留记录并核对，不复用原 ID 改声明。
-
-已绑定项目的创作成果默认将服务返回的 ContentRef 交给 Project 提交并回读，角色展示及查询需要的关联由 Project 流程核验。查询时从最新项目取得固定引用，按需下载并向用户展示，不要求用户手动下载；查询不产生业务写入。明确删除候选时交给 Project 清理该候选及引用，不在 Artifact 层物理删除共享字节。
-`studio-workspace import/save-files` 会同时提交项目，不能用来执行“只上传”任务。
-独立草稿传输不使用上述项目命令；按实际 MCP 工具写入后把 ContentRef 交回原 World 保存流程，固定修订回读成功前不宣称已收录或登记资产。
-保留、释放、删除和跨环境迁移不属于隐含收尾操作。
+环境变量使用 `STUDIO_MCP_URL` 与 `STUDIO_MCP_BEARER_TOKEN`，Bearer 由服务端解析真实身份，不额外登录或提交用户/组织头。

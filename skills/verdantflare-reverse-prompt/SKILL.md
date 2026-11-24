@@ -7,21 +7,24 @@ description: 从单张场景图（实拍剧照、定妆参考图、穿搭图、�
 
 ## 1. 范围与边界
 
-本技能第一版本（v1）专用于**单张图片到结构化生图提示词**的逆向工程：通过前置视觉盘点，把单张场景图按场景类型确定性拆解为可直接复制到生图模型（如默认 GPT Image 2.6、Nano Banana、ChatGPT）的中文分块提示词，支持单人完整场景（默认八段式）、无人纯场景（七段式）与多人互动剧照（分角色八段式），并可按需切换为 `{{变量}}` 参数化模板或英文自然语言变体。本技能不处理多角度组图综合或视频抽帧反推（留待后续版本），不替代 `verdantflare-reference-learning`（整片/整曲拆解与 World 沉淀）与 `verdantflare-filmset-restore`（连续帧去人空景还原），默认不自动调用生图或视频服务，也不替代人工审美终审。
+本技能第一版本（v1）专用于**单张图片到结构化生图提示词**的逆向工程：通过前置视觉盘点，把单张场景图按场景类型确定性拆解为可直接复制到生图模型（如默认 GPT Image 2.6、Nano Banana、ChatGPT）的中文分块提示词，支持单人完整场景（默认八段式）、无人纯场景（七段式）与多人互动剧照（分角色八段式），并可按需切换为 `` `{{变量}}` `` 参数化模板或英文自然语言变体。本技能不处理多角度组图综合或视频抽帧反推（留待后续版本），不替代 `verdantflare-reference-learning`（整片/整曲拆解与 World 沉淀）与 `verdantflare-filmset-restore`（连续帧去人空景还原），默认不自动调用生图或视频服务，也不替代人工审美终审。
 
 需对反推提示词做纯文生图闭环复现验证时，协同 `verdantflare-image`（默认 `engine="codex"`，`model="gpt-image-2.6-sunburst"`）执行并按 K09 完成生成后内容分级；审阅文档排版协同 `verdantflare-meta-markdown`；如需长期留存验证样图协同 `verdantflare-meta-googledrive`。
 
-## 2. 按任务读取
+## 2. 能力清单与按任务读取
 
-| 当前任务或阶段                                            | 读取资料                                     |
-| :-------------------------------------------------------- | :------------------------------------------- |
-| 判定单图场景类型（C1 单人 / C2 无人 / C3 多人）与输出变体 | [分类与边界](references/01.base-category.md) |
-| 执行视觉盘点、逐块反推、脚本校验、变体导出与可选复现闭环  | [执行流程](references/01.base-workflow.md)   |
-| 核查可见与补全分离、去污染脱敏、防漏配对与物理描述硬规则  | [规则约束](references/01.base-rules.md)      |
-| 执行静态门禁、八维复现对照评分、失败案例排查与交付核对    | [验收标准](references/01.base-acceptance.md) |
-| 查阅三类场景完整分块 Schema、变量模板规范与英文变体格式   | [分块模板库](references/templates.md)        |
+按单图场景类型直达对应原子能力入口；跨能力硬规则、验收门禁与分块模板见公共专册：
 
-执行前先读分类与规则专册确认当前单图归属与红线，再按流程专册与模板库产出正文并运行校验脚本自检。
+| 原子能力 | 入口文档                                                                        |
+| :------- | :------------------------------------------------------------------------------ |
+| 单人反推 | [01.single-portrait.entrypoint.md](references/01.single-portrait.entrypoint.md) |
+| 空景反推 | [02.empty-scene.entrypoint.md](references/02.empty-scene.entrypoint.md)         |
+| 多人反推 | [03.multi-character.entrypoint.md](references/03.multi-character.entrypoint.md) |
+| 分块模板 | [templates.md](references/templates.md)                                         |
+
+先读目标场景能力的 `entrypoint.md` 确认六项视觉盘点与分块步骤，再结合公共规则与 `templates.md` 产出正文并运行校验脚本。
+
+跨能力公共文档：[00.common.rules.md](references/00.common.rules.md)、[00.common.acceptance.md](references/00.common.acceptance.md)（由各能力入口引用）。
 
 ## 3. 工具与命令
 
@@ -33,4 +36,4 @@ python -X utf8 scripts/prompt_lint.py parse /path/to/prompt.txt --category c1 --
 python -X utf8 -m unittest discover -s scripts -p "test_*.py"
 ```
 
-完整参数（`--variant default|template|en`、`--json`）、变体导出方式与闭环复现命令见[执行流程](references/01.base-workflow.md)。
+完整参数（`--variant default|template|en`、`--json`）、变体导出方式与闭环复现命令见各能力入口与公共规范。

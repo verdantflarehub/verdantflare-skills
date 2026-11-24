@@ -20,4 +20,4 @@ CLI 使用 `generate --route grok --project-id <项目> --idempotency-key <固�
 
 ## 3. 任务 Title
 
-任务 Title 遵循 [公共 MCP 命名规则](video-mcp.md)，不加入 xAI 生成请求、preflight 或幂等摘要；已有任务继续沿原 ID 与渠道恢复。
+任务 Title 遵循 [公共 MCP 命名规则](00.common.rules.md#5-任务-title-契约)，不加入 xAI 生成请求、preflight 或幂等摘要；已有任务继续沿原 ID 与渠道恢复。

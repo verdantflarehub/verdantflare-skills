@@ -17,14 +17,16 @@ description: 通过本机 MCP 服务向指定 VS Code Claude Code（克劳德）
 
 Agent 间委托统一先应用 `verdantflare-meta-agent`：绑定计划、稳定任务身份和关联变更，登记 Session 名称、原生地址、执行及回传目标，再按本技能能力派单。通用协作规则不替代下述宿主权限、互斥、防递归和轮次校验；投递受理不等于接收方处理或任务验收。
 
-## 3. 按任务读取
+## 3. 能力清单与按任务读取
 
-| 当前任务             | 读取资料                                     |
-| :------------------- | :------------------------------------------- |
-| 判断模式与会话能力   | [分类与边界](references/01.base-category.md) |
-| 派单、续接与故障恢复 | [执行流程](references/01.base-workflow.md)   |
-| 权限、并发及幂等约束 | [规则约束](references/01.base-rules.md)      |
-| 测试与交付判定       | [验收标准](references/01.base-acceptance.md) |
+按要执行的原子能力直达对应入口：
+
+| 原子能力（能干什么活） | 入口文档                                                          |
+| :--------------------- | :---------------------------------------------------------------- |
+| 派单续接               | [01.dispatch.entrypoint.md](references/01.dispatch.entrypoint.md) |
+| 安装启动               | [02.install.entrypoint.md](references/02.install.entrypoint.md)   |
+
+先读当前任务对应能力入口，无需通读其他能力文档。
 
 ## 4. 工具与命令
 

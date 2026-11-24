@@ -15,17 +15,17 @@ description: 规范 AI Agent 之间基于计划的委托、Session 命名与身�
 
 与 `verdantflare-meta-plan`、`verdantflare-meta-markdown` 协作维护计划门禁和文档表达，与 `verdantflare-agent-codex`、`verdantflare-agent-claude`、`verdantflare-agent-antigravity`、`verdantflare-agent-grok` 协作执行宿主通信。本技能不授予发布、提权或向无关 Session 派单的权限。
 
-## 3. 按任务读取
+## 3. 能力清单与按任务读取
 
-| 当前任务                         | 读取资料                                     |
-| :------------------------------- | :------------------------------------------- |
-| 判断是否适用、选择分支           | [分类与边界](references/01.base-category.md) |
-| 执行操作与失败恢复               | [执行流程](references/01.base-workflow.md)   |
-| 核对约束、低 Token 门禁与例外    | [规则约束](references/01.base-rules.md)      |
-| 验证、门禁与交付报告             | [验收标准](references/01.base-acceptance.md) |
-| 本机账本、消息 CLI 与持久 worker | [运行时接口](references/runtime.md)          |
+按当前要执行的原子能力直达对应入口；跨能力通用约束见 `00.common.rules.md`：
 
-先读当前任务对应专册，不要求通读全部专册。
+| 原子能力（能干什么活） | 入口文档                                                                        |
+| :--------------------- | :------------------------------------------------------------------------------ |
+| 派单委托               | [01.delegate.entrypoint.md](references/01.delegate.entrypoint.md)               |
+| 评审分工               | [02.review-division.entrypoint.md](references/02.review-division.entrypoint.md) |
+| 运行恢复               | [03.runtime.entrypoint.md](references/03.runtime.entrypoint.md)                 |
+
+先读目标能力的 `entrypoint.md`，无需通读其他能力文档；跨能力公共约束（计划绑定、Session 命名、权限与反自审红线）见 [00.common.rules.md](references/00.common.rules.md)。
 
 ## 4. 工具与命令
 

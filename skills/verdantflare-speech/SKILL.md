@@ -7,37 +7,33 @@ metadata:
 
 # VerdantFlare Speech
 
-把固定台词、参考声音和每次实际生成绑定为可追溯的 take。沿用当前项目、声线版本和用户授权；只改目标台词或词典无需重新录制声音。
+## 1. 范围与边界
 
-## 1. 能力发现
+本技能通过宿主 Studio MCP（`STUDIO_MCP_URL` + `STUDIO_MCP_BEARER_TOKEN`）将固定台词、参考声音与每次实际生成绑定为可追溯的 take，覆盖对白/旁白配音、发音词典与情绪控制、参考录音登记、音色设计规划与实验性声谱融合。沿用当前项目、声线版本与用户授权；仅改目标台词或词典无需重录参考；仅讨论文本或明确仅本地时遵循该范围。
 
-用户入口统一为宿主 Studio MCP，读取 `STUDIO_MCP_URL` 与 `STUDIO_MCP_BEARER_TOKEN`，从实际工具目录确认本次需要的能力和 Schema。Bearer 由服务端解析身份，不附加用户／组织头，不索取内部服务凭据或新增生成审批令牌。
+已接通 Speech 0.2.0 → IndexTTS2 0.2.0 → Artifact 原生产物 → Project 固定修订。本技能不启动 GPU 服务、不读取 Kubernetes Secret、不直连内部运行时；`speech.create` 调用 IndexTTS2 时由 Speech MCP 自动向 Station GPU 调度器（`:5056`）申请 `6144 MiB` 显存租约并执行按需冷启动（`0 -> 1`），`queued`（`waiting_gpu_lease`）或 `phase: loading_model` 属正常排队等待，继续轮询原任务 ID，不重复提交。歌曲与 RVC 换声交由 `verdantflare-music`，视频原生对白与口型另查 `verdantflare-video`。
 
-已通过 Studio 接通 Speech 0.2.0 → IndexTTS2 0.2.0 → Artifact 原生产物 → Project 固定修订。实际工具为 `speech.capabilities`、`speech.voices`、`speech.create`、`speech.status`、`speech.result`、`speech.rate_content`。`speech.capabilities` 返回按引擎的能力声明数组 `engines`；`speech.voices` 同时列出项目引用的 World `reference-voice` 资产（`world_voice`）与项目候选配置（`voice_profile`）。每次执行重新发现 Schema 和就绪状态；缺工具时报告当前入口缺口，继续可独立完成的准备和已有结果整理。
+## 2. 能力清单与按任务读取
 
-本技能不启动 GPU 服务、不读取 Kubernetes Secret，也不直连内部运行时；`speech.create` 调用 `IndexTTS2` 时由 Speech MCP 自动向 Station GPU 调度器（`:5056`）申请 `6144 MiB` 显存租约并执行按需冷启动（`0 -> 1`），`speech.status` 返回 `queued`（`waiting_gpu_lease`）属正常显存排队或冷启动等待，继续轮询原任务 ID，不重复提交 `speech.create`。Music 歌曲接口或视频自带音轨不自动替代独立对白生成。
+按要执行的原子能力直达对应入口；跨能力共享的 MCP 交付、过期 take 检出、`report.json` v2 与 K09 内容分级规范见 `00.common.rules.md`：
 
-## 2. 选择工作
+| 原子能力（能干什么活）   | 入口文档                                                                              |
+| :----------------------- | :------------------------------------------------------------------------------------ |
+| 对白旁白、词典与情绪控制 | [01.dialogue-narration.entrypoint.md](references/01.dialogue-narration.entrypoint.md) |
+| 声线设计                 | [02.voice-design.entrypoint.md](references/02.voice-design.entrypoint.md)             |
 
-- 用户要短录制文稿、提交录音或复用声线（含 World `reference-voice` 与项目 `voice_profile`）：读取[参考接收与版本](references/voice-reference.md)。
-- 用户要“用参考生成新声线”“录入新声音”或保存成可反复调用的声线：读取[新声线登记与试音](references/new-voice.md)，完成参考、配置、固定修订与回读。
-- 用户明确要融合两种参考的音色：读取[实验性声谱融合](references/voice-morph.md)，使用同文源制作新的参考候选，再登记与跨文本试音；不宣称身份比例或稳定音色设计模型。
-- 用户要基于参考改变年龄、性别、明亮度或设计不同音色：读取[音色设计与候选复用](references/voice-design.md)，固定参考特征、修改要求和目标描述；按实际后端执行，不把文字设计说成波形身份编辑。用户两种都需要时同时保留原参考复用与设计候选。
-- 用户要维护发音词典、逐句配音、检出过期已选 take、恢复任务、按听审返修或保存试听：读取[任务与交付](references/tasks-and-delivery.md)。
-- 生成完成后执行 18+ 内容分级评估与标记：读取[评估步骤](references/content-rating-step.md)与[评估规范](references/content-rating-rubric.md)。
-- 用户要参考旁白风格、新音色方向、连贯表演或锁定窗口配音：读取[旁白方向与时间窗口](references/narration-direction.md)。
-- 仅讨论文本或明确仅本地时遵循该范围；不因缺少生成工具而停止独立准备。
+先读目标能力的 `entrypoint.md`（输入与输出 → 分类 → 工作流 → 规范 → 验收），无需通读其他能力。
 
-## 3. 制作边界
+跨能力公共文档：[00.common.rules.md](references/00.common.rules.md)（由各能力入口引用）。
 
-先固定原台词与角色，不自行改写、拆换说话人或把表演说明念进正文。人名、地名与多音字通过项目发音词典（`lexicon_ref`）作用于 `text.sent`，保留 `text.source` 原文不篡改。只传实际后端支持的参数；情绪控制从 `emotion_vector`、`emotion_text`、`emotion_reference` 中至多选一；不承诺精确时长、非语言表演或音频驱动口型。换文本、词典、参考版本或有效参数形成新 take，保留旧结果，并通过 `generation.json` 的 `input_digest` 与 `voice_source` 检出过期已选 take。
+## 3. 工具与命令
 
-参考音频是声线的版本化组成，不能伪称为新训练权重；RVC 权重不能直接加载到 IndexTTS2。原始录音、权重、生成媒体和凭据不进入技能包或 Git。
+宿主 Studio MCP 语音工具为 `speech.capabilities`、`speech.voices`、`speech.create`、`speech.status`、`speech.result`、`speech.rate_content`（每次执行重新发现 Schema 与就绪状态）。本技能附带两份本地确定性工具脚本（完整参数与前置条件见 [02.voice-design.entrypoint.md](references/02.voice-design.entrypoint.md)）：
 
-与视频交接时固定角色、逐字台词、声线版本、实际音频及有效窗口；字幕以最终采用的音轨为准。只改语气仍保留人物与台词依据，改台词／声线／裁段则标记依赖它的口型与字幕待复核。允许采用模型原生对白时保留配对声画，不为了凑时长任意拉速后仍称口型通过；声音更换不能静默解除已有声音策略。相同 take 的听审证据复用，最终剪辑新增接缝和时序风险单独检查。
+- [prepare_voice_profile.py](scripts/prepare_voice_profile.py)：核验参考 WAV 并生成符合契约的 `profile.json` 与 `intake.json`（仅用 Python 标准库）。
+- [morph_voice_reference.py](scripts/morph_voice_reference.py)：在已授权 5090 dev 环境对同文源执行 WORLD 声谱插值融合（需 `numpy/scipy/soundfile/pyworld`）。
 
-新参考可建立新声线；仅调整情绪不等于设计不同身份。当前 IndexTTS2 接口不支持年龄、性别和身份控制；VoxCPM2 候选运行器处于开发验证，尚非 Studio 已开放能力。工具缺失时完成设计输入与已有候选登记准备，不捏造生成结果，不把情绪参数或后期变调包装为音色设计。
-
-生成后内容分级评估（K09 强制步骤）：每次 `speech.result` 取得新生成的语音 take 后、在交付摘要展示与 Project/World 归档之前，必须按[评估步骤](references/content-rating-step.md)与[评估规范](references/content-rating-rubric.md)评估转写文本（如 `report.json` 的 `asr`）、台词、正向提示词与可识别非语言声音（缺少转写能力时只依据文本资料判定，并在 `reasons` 中注明 `"未转写音频"`），调用 `speech.rate_content` 提交分级结果（`general` 与 `nsfw` 均须提交，`rubric_version` 取自规范副本文首；不确定即标 `nsfw`；提交超时用相同内容幂等重试，不重跑生成）。判定为 `nsfw` 的产物在摘要中只写“N 个产物已标记为 NSFW 并隐藏”，不展示试听链接、`ContentRef` 或台词全文，也不同步到 Studio 项目或登记到 World。
-
-生成成功、客观质量测量（`report.json` v2）、内容分级评估（`speech.rate_content`）、项目归档、声线选用与人耳听审分别报告。满幅或明显失真保留问题标记，不能靠后期降音量宣称已恢复削平波形。候选归档不自动批准或发布 World。
+```sh
+python3 scripts/prepare_voice_profile.py --reference reference.wav --content-ref reference.contentref.json --capabilities speech.capabilities.json --voice-id narrator-b --label 旁白B --out voice-candidate-v1
+python3 scripts/morph_voice_reference.py --base source-a/original.wav --base-generation source-a/generation.json --donor source-b/original.wav --donor-generation source-b/generation.json --weight 0.35 --out morph-candidate-v1
+```

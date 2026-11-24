@@ -3,47 +3,34 @@ name: verdantflare-reference-learning
 description: 拆解视频、歌曲、剧本与风格参考，学习已有拆解方法；通过 Studio MCP 读取、保存并复用数字世界成果，改写适配目标模型的提示词。用于完整分析、独立资产沉淀及方法复用，不替代媒体生成技能。
 ---
 
-# 参考拆解与成果复用
+# 参考拆解与成果复用（verdantflare-reference-learning）
 
 ## 1. 范围与边界
 
-拆解参考作品、学习已有方法，通过 Studio MCP 读取和保存固定 World 成果，适配目标模型提示词。读取与分析不强制项目；用户要求修改或制作时交接 Project 及实际生产技能。本技能不替代媒体生成、权限验证或用户效果审核。
+本技能负责拆解视频、歌曲、剧本与风格参考作品，学习已有拆解方法，通过 Studio MCP 读取和保存固定 World 成果，并将共同创作意图改写适配为目标模型提示词。读取与分析不强制绑定 Project；用户明确要求修改提示词、改图或制作时，先交接 `verdantflare-project` 新建真实项目，再由对应生产技能（`x-verdantflare-short-drama`、`verdantflare-video`、`verdantflare-image`、`verdantflare-music`、`verdantflare-speech` 或工程技能）经 Studio MCP 执行。本技能不替代媒体生成、权限验证或用户效果审核。
 
-## 2. 按任务读取
+## 2. 能力清单与按任务读取
 
-| 任务                                | 资料                                                              |
-| ----------------------------------- | ----------------------------------------------------------------- |
-| 判断读取、分析、保存与生产交接范围  | [分类与边界](references/01.base-category.md)                      |
-| 执行与交付、方法沉淀                | [执行流程](references/01.base-workflow.md)                        |
-| 固定输入、真实能力与不可信内容      | [规则约束](references/01.base-rules.md)                           |
-| 核对完成条件与未验证项              | [验收标准](references/01.base-acceptance.md)                      |
-| 完整分析与已有拆解方法学习          | [分析方法](references/analysis.md)                                |
-| 实际发现 world.analyze 后提交／恢复 | [服务任务](references/analysis-service.md)                        |
-| 直接取固定成果及 v1／v2 审核上下文  | [MCP 读取](references/mcp-results.md)                             |
-| 提示词或模型适配                    | [模型提示词](references/model-prompts.md)                         |
-| 找回导入稿、区分原件与工作正文      | [导入成果读取](references/mcp-results.md#31-读取导入的学习工作稿) |
-| 独立保存、登记与失败恢复            | [World 保存](references/world-save.md)                            |
+按要执行的原子能力直达对应入口；跨能力 MCP 读取边界、固定输入与方法复用规则见 `00.common.rules.md`：
+
+| 原子能力（能干什么活） | 入口文档                                                                        |
+| :--------------------- | :------------------------------------------------------------------------------ |
+| 媒体拆解               | [01.media-breakdown.entrypoint.md](references/01.media-breakdown.entrypoint.md) |
+| 世界归档               | [02.world-asset.entrypoint.md](references/02.world-asset.entrypoint.md)         |
+| 提示词改写             | [03.prompt-adapt.entrypoint.md](references/03.prompt-adapt.entrypoint.md)       |
+
+先读目标能力的 `entrypoint.md`；同一请求可组合拆解、读取、适配与保存，但“读取／复制”不自动触发生成，“入库”不等于安装技能。
+
+跨能力公共文档：[00.common.rules.md](references/00.common.rules.md)（由各能力入口引用）。
 
 ## 3. 工具与命令
 
-按当前宿主实际可读取／理解的类型分析。需要 MCP 时先发现 Studio 实际工具和 Schema；不能把文本提取脚本称作视频理解，也不能虚构分析服务。元数据、抽帧、ASR、听审、完整视频理解分别记录实际覆盖，无法分析的维度明确列出。局部采样不代表全片已看完。
+包内[离线检查器](scripts/check_learning.py)仅校验本地 JSON 结构（拒绝重复键与非有限数字），[中央格式投影](references/learning-contracts.generated.json)由中央契约生成、不手工修改。在具备 Python 3.10+、`jsonschema` 4、`referencing` 的环境中从技能根目录执行：
 
-事实、推断、新创作分别标注；拆解推导提示词不冒充作者原始输入。保留原版本，修改形成新修订；模型参数、相机数值、音轨和工程依赖只在实际有证据时给确定值。
+```text
+python3 scripts/check_learning.py --input path/to/learning-v1.json
+python3 scripts/check_learning.py --schema reference-learning-v2 --input path/to/learning-v2.json
+python3 scripts/check_learning.py --schema world-draft-manifest --input path/to/manifest.json
+```
 
-交给制作的参考另标适用角色、镜头、状态和可继承维度。发现原片人物或空间矛盾时保留原观察，并与本次统一制作设定分开；不能把原片每一镜同时当几何事实。核对选段是否真正包含所需事件及终态，切镜前后的两个姿势不等于连续走位。已有固定版本分析直接复用，只补缺失的信息；避免为获取一项动作再次全片拆解。
-
-## 3. 可直接交付的成果
-
-按类型给出可编辑内容、来源定位、适用条件和使用方法。提示词是核心独立成果，保留共同创作意图与各模型／任务变体。另有结构、角色关系、节奏、风格规则和工程提案等类型，不能全压成一段 Prompt。
-
-用户明确要求制作时，按目标交接实际可用的 `x-verdantflare-short-drama`、`verdantflare-video`、`verdantflare-image`、`verdantflare-music`、`verdantflare-speech` 或工程技能；只读取需要的生产技能。传递固定来源、模型变体、目标变化、参考绑定和输出去向。服务缺失则保留可用成果及缺项，不用伪造任务 ID 或成功状态补齐闭环。
-
-世界样例只读，可复制正文及完整配置；修改提示词、改图或其他创作先交接 `verdantflare-project` 新建真实项目，再由生产技能经 Studio MCP 执行。成果先保存项目修订并回读，不直接创建世界资产或用 World creation 草稿替代项目。明确要求沉淀后才选择固定项目成果登记 World。收藏与分析仍可独立保存。受控上传交由 `verdantflare-artifact`；当前接口若要求项目来源，不能创建假项目绕过独立 World 保存缺口。结构化成果的格式与离线检查见[独立保存说明](references/world-save.md#2-准备可编辑成果)，检查通过不等于完成分析或实际运行。
-
-## 4. 方法沉淀与收尾
-
-内容资产可直接作为本次创作知识使用，不必每份知识建一个 Skill。可迁移的流程先保存方法候选：来源、输入输出、步骤、例外、实际验证和失败；明确要求维护技能时才将可靠方法纳入对应技能，不自动改写已安装包。
-
-交付列出：可用成果及固定版本、如何立即使用、实际分析覆盖、未验证项，以及已保存的位置。区分本地已保存、World 已登记、工具调用成功和用户效果审核；不要把源码、模型标签或可复制文本说成全媒体能力已上线。
-
-[离线检查器](scripts/check_learning.py)仅校验结构，版本选择与依赖见[保存格式](references/world-save.md#2-准备可编辑成果)。包内[格式投影](references/learning-contracts.generated.json)由中央契约生成，不手工修改。MCP 工具和参数以实际发现为准，读取不自动触发生成或入库。
+MCP 工具与参数以运行时 `tools/list` 实际发现为准，读取不自动触发生成或入库；完整校验与服务提交流程见各能力入口。

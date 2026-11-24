@@ -46,4 +46,4 @@ Seedance 2.5 Draft 使用团队模型 `seedance_2_5_draft`，显式选择 `--rou
 
 ## 5. 任务 Title
 
-任务 Title 遵循 [公共 MCP 命名规则](video-mcp.md)，只影响展示，不作为供应商参数或会员调用身份；现有任务仍按原模型、渠道和 ID 恢复。
+任务 Title 遵循 [公共 MCP 命名规则](00.common.rules.md#5-任务-title-契约)，只影响展示，不作为供应商参数或会员调用身份；现有任务仍按原模型、渠道和 ID 恢复。

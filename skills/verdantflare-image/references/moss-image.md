@@ -2,8 +2,8 @@
 
 ## 1. 当前依据
 
-- [调用契约](contracts.md)：Studio Image MCP 工具发现、任务轮询与 Artifact 归档。
-- [生成后内容分级评估步骤](content-rating-step.md)：MOSS-Image 产物生成后的 18+ 评估与 `image.rate_content` 标记。
+- [公共契约](00.common.rules.md)：Studio Image MCP 工具发现、任务轮询与 Artifact 归档。
+- [生成后内容分级评估步骤](00.common.rules.md#4-生成后内容分级评估步骤k09-强制步骤)：MOSS-Image 产物生成后的 18+ 评估与 `image.rate_content` 标记。
 - MOSS-Image 主设计（`docs/design/app/image/moss-image.md`）：已批准的一期能力与参考图限制。
 - 多参考图参数契约（`docs/design/app/image/moss-image.md#167-多参考图参数契约待-h1`）：新模式的唯一设计依据，尚未批准或交付，不作为当前调用能力。
 
@@ -70,4 +70,4 @@
 
 ## 5. 生成后分级评估（K09）
 
-取得 `moss-image` 生成结果后，必须先按 [生成后内容分级评估步骤](content-rating-step.md) 与 [18+ 评估规范（rubric v1.0）](content-rating-rubric.md) 完成图像、正向提示词与版式文字的 18+ 评估，并调用 `image.rate_content` 提交结果（`general` 与 `nsfw` 均提交），再决定交付摘要展示与 Project 同步。
+取得 `moss-image` 生成结果后，必须先按 [生成后内容分级评估步骤](00.common.rules.md#4-生成后内容分级评估步骤k09-强制步骤) 与 [18+ 评估规范（rubric v1.0）](content-rating-rubric.md) 完成图像、正向提示词与版式文字的 18+ 评估，并调用 `image.rate_content` 提交结果（`general` 与 `nsfw` 均提交），再决定交付摘要展示与 Project 同步。

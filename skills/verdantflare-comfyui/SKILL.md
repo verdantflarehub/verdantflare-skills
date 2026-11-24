@@ -11,16 +11,19 @@ description: 通过 Studio MCP 受控操作 VerdantFlare ComfyUI 交互实例与
 
 普通单次文生图或视频生成（已挂载至 `Image MCP` / `Video MCP` `本地` 渠道的现成模型）直接交由 `verdantflare-image`、`verdantflare-video` 执行；项目与不可变素材同步与 `verdantflare-project`、`verdantflare-artifact` 协作。本技能不请求集群写权限、不触碰需付费解锁的模型（`paidAccess` / `Early Access`）、不在运行时动态安装自定义节点，也不以接口跑通代替人工审美终审。
 
-## 2. 按任务读取
+## 2. 能力清单与按任务读取
 
-| 当前任务                                                   | 读取资料                                     |
-| :--------------------------------------------------------- | :------------------------------------------- |
-| 区分交互实例、无头 `comfyui-api` 与媒体 `本地` 渠道入口    | [分类与边界](references/01.base-category.md) |
-| 执行模型齐套、白盒排障自愈、工作流发布与无头调用五步闭环   | [执行流程](references/01.base-workflow.md)   |
-| 核对零越权、禁付费模型、哈希配额、游标门禁与幂等键硬性约束 | [规则约束](references/01.base-rules.md)      |
-| 检查各阶段完成判据、标准错误码恢复与交付汇报要素           | [验收标准](references/01.base-acceptance.md) |
+按要执行的原子能力直达对应入口；跨能力通道边界、安全红线与标准错误码见 `00.common.rules.md`：
 
-先读当前任务对应专册；仅做无头已发布 API 调用时无需读取交互会话与实例重启细节。
+| 原子能力（能干什么活） | 入口文档                                                                  |
+| :--------------------- | :------------------------------------------------------------------------ |
+| 模型齐套               | [01.model-deps.entrypoint.md](references/01.model-deps.entrypoint.md)     |
+| 诊断自愈               | [02.diag-repair.entrypoint.md](references/02.diag-repair.entrypoint.md)   |
+| API 发布               | [03.workflow-api.entrypoint.md](references/03.workflow-api.entrypoint.md) |
+
+先读目标能力的 `entrypoint.md`；仅做无头已发布 API 调用时直达 `03.workflow-api.entrypoint.md`，无需读取交互会话与实例重启细节。
+
+跨能力公共文档：[00.common.rules.md](references/00.common.rules.md)（由各能力入口引用）。
 
 ## 3. 工具与命令
 
@@ -34,4 +37,4 @@ POST ${STUDIO_MCP_URL}/comfyuiA          # session.* / workflow.* / task.* / dia
 POST ${STUDIO_MCP_URL}/comfyui-api       # api.list / api.describe / api.invoke / task.get / task.cancel / diag.execution_trace / model.list / model.status
 ```
 
-执行前先通过当前连接执行 `tools/list` 核对实际已启用工具集与真实 `project_id`；完整工具调用顺序、参数契约与退避恢复策略见[执行流程](references/01.base-workflow.md)。
+执行前先通过当前连接执行 `tools/list` 核对实际已启用工具集与真实 `project_id`；完整工具调用顺序、参数契约与退避恢复策略见各能力入口与[公共规则](references/00.common.rules.md)。

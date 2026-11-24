@@ -29,6 +29,6 @@ AI 短剧创作与返修形成阶段成果后，默认保存到同一 Studio 项
 
 ## 4. MCP 用户授权
 
-MCP Token 即调用授权，Studio 将其解析为真实用户并按该用户权限执行。按 Project 技能的[MCP 授权与恢复](../verdantflare-project/references/mcp-authority.md)使用实际媒体入口，不另设生成批准清单、独立审批令牌、密码确认或默认零额度。
+MCP Token 即调用授权，Studio 将其解析为真实用户并按该用户权限执行。按 Project 技能的[MCP 授权与恢复](../verdantflare-project/references/00.common.rules.md)使用实际媒体入口，不另设生成批准清单、独立审批令牌、密码确认或默认零额度。
 
 沿用用户当前任务和明确限制；调用失败核对 Token 身份、业务权限及参数。结果未知时查询原任务，不改模型或重置幂等键重复生成。候选审核与作品发布不构成 MCP 工具调用前的额外认证。

@@ -29,4 +29,4 @@ Google 渠道图像模型遵循 **`display_name`（展示名）与 `model_id`（
 
 1. 提交后立即保存 `task_id` 与原 `idempotency_key`。遇到等待超时或 `submission_unknown` 先按原键核对已有任务，不自动换键重提。
 2. 下载产物后校验实际字节数、宽高、真实 MIME（JPEG / PNG）与 SHA-256，核对输出像素是否符合请求的 `1k` / `2k` / `4k` 档位。
-3. 按 [生成后内容分级评估步骤](content-rating-step.md) 与 [18+ 评估规范（rubric v1.0）](content-rating-rubric.md) 执行 K09 分级评估并调用 `image.rate_content` 提交结果，仅 `general` 产物归档至当前 Studio Project。
+3. 按 [生成后内容分级评估步骤](00.common.rules.md#4-生成后内容分级评估步骤k09-强制步骤) 与 [18+ 评估规范（rubric v1.0）](content-rating-rubric.md) 执行 K09 分级评估并调用 `image.rate_content` 提交结果，仅 `general` 产物归档至当前 Studio Project。

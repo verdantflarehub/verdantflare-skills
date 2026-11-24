@@ -1,8 +1,8 @@
 # Historical VerdantFlare SD2 API
 
-This page preserves the legacy SD2 client's request and recovery contract. It is not the current Studio execution entry and does not authorize direct API creation or S3 uploads. For new work and existing task routing, start with [SD2 workflow](sd2-workflow.md) and the tools registered by the current Studio session. Retain original task IDs and idempotency records when inspecting old submissions.
+This page preserves the legacy SD2 client's request and recovery contract. It is not the current Studio execution entry and does not authorize direct API creation or S3 uploads. For new work and existing task routing, start with [04.ref2v.entrypoint.md](04.ref2v.entrypoint.md) and the tools registered by the current Studio session. Retain original task IDs and idempotency records when inspecting old submissions.
 
-## Endpoint
+## 1. Endpoint
 
 The legacy client used its configured API base URL, for example `https://api.example.com/v1`.
 
@@ -12,7 +12,7 @@ The legacy client used its configured API base URL, for example `https://api.exa
 
 Send `Authorization: Bearer <API key>` only to the API host. For one creation intent, generate one UUID and send the identical value in both `Idempotency-Key` and the compatible `X-Request-ID`. Serialize the payload once for the single POST and bind those exact bytes to that UUID; recovery uses GET and never reconstructs a POST. Signed media-query bytes participate in request identity, so changing or refreshing them under the same UUID causes `idempotency_conflict`.
 
-## Create Request
+## 2. Create Request
 
 ```json
 {
@@ -41,35 +41,35 @@ The first content item must be non-empty text. Keep media items separate and pre
 
 Treat `invalid_model`, `invalid_messages`, `invalid_content`, `missing_prompt`, `invalid_duration`, `conflicting_duration`, `invalid_ratio`, `unsupported_resolution`, `media_limit_exceeded`, `invalid_media_url`, and `conflicting_content` as terminal local-validation errors. Correct the input only for a user-authorized new intent; do not retry the original POST.
 
-## Responses
+## 3. Responses
 
 Creation returns the public VerdantFlare ID in `id` (and may repeat it in `task_id`). The client persists this ID before the first query. A provider upstream ID is never a client field.
 
 Query responses use these public statuses:
 
-| Status | Meaning | Action |
-| --- | --- | --- |
-| `queued` | Waiting | Query again |
-| `in_progress` | Generating | Save/report `progress`, then query again |
-| `completed` | Ready | Require non-empty `metadata.url`, then download |
-| `failed` or `failure` | Terminal failure | Return `error.code` and a redacted `error.message` |
+| Status                | Meaning and action                                                   |
+| :-------------------- | :------------------------------------------------------------------- |
+| `queued`              | Waiting; query again                                                 |
+| `in_progress`         | Generating; save/report `progress`, then query again                 |
+| `completed`           | Ready; require non-empty `metadata.url`, then download               |
+| `failed` or `failure` | Terminal failure; return `error.code` and a redacted `error.message` |
 
 `completed` without `metadata.url` is a protocol error. Unknown statuses are not guessed or converted.
 
 Successful metadata may include `duration`, `ratio`, `resolution`, `framespersecond`, and `generate_audio`. Preserve only known non-sensitive fields in local state.
 
-## Submission Recovery
+## 4. Submission Recovery
 
 `GET /video-submissions/{client_request_id}` returns the owner-scoped `client_request_id`, `submission_state`, `billing_state`, safe error fields, and timestamps. Only `CONFIRMED` includes `public_task_id`.
 
-| Submission state | Action |
-| --- | --- |
-| `PREPARED` or `SENDING` | Preserve the state and query again later |
-| `CONFIRMED` | Persist `public_task_id`, then use the normal task GET |
-| `REJECTED` | Stop; do not create automatically |
-| `UNKNOWN` | Stop for reconciliation; do not label it queued or failed |
+| Submission state        | Action                                                    |
+| :---------------------- | :-------------------------------------------------------- |
+| `PREPARED` or `SENDING` | Preserve the state and query again later                  |
+| `CONFIRMED`             | Persist `public_task_id`, then use the normal task GET    |
+| `REJECTED`              | Stop; do not create automatically                         |
+| `UNKNOWN`               | Stop for reconciliation; do not label it queued or failed |
 
-## Retry Contract
+## 5. Retry Contract
 
 - Never retry `POST /videos` automatically. On a timeout, network failure, 408, 429, transient 5xx, an unparseable response, or `409 submission_in_progress`, query the Submission endpoint with the same client request ID. If recovery remains uncertain, preserve `UNKNOWN` for reconciliation.
 - GET may retry network errors, 408, 429, and transient 5xx with exponential backoff and a bounded retry limit.

@@ -1,50 +1,42 @@
 ---
 name: verdantflare-video
-description: 通过 Studio Video MCP 的真实动态渠道生成、恢复和下载视频，按已注册能力使用 H3、SD2、Grok、Google、Google Flow 与 Higgsfield 模型；核实参数、素材限制和报价并保留具体服务错误。
+description: 通过 Studio Video MCP 的真实动态渠道生成、恢复和下载视频，按已注册能力使用 H3、SD2、Grok、Google、Google Flow 与 Higgsfield 模型；覆盖文生视频、单图生视频、首尾帧视频、多参考全能视频与渠道配置指南，核实参数、素材限制和报价并保留具体服务错误。
 metadata:
   version: "0.5.7"
 ---
 
 # VerdantFlare Video
 
-换人使用 `character-swap` 子命令，传入同项目源视频与角色图 ID。详见 [Video MCP](references/video-mcp.md)。
+## 1. 范围与边界
 
-AI 短剧任务形成阶段成果后默认同步到原 Studio 项目，沿用真实 project_id；用户指定仅本地或只读讨论时遵循其范围。候选、返修与最终结果保留固定版本、修改原因、来源设定和任务记录，按当前 Project / Artifact 契约提交并回读修订；只上传或本地保存不算已同步。响应未知先对账恢复，不重复收费生成。同步不自动批准、选用或发布 World。
+本技能通过 Studio MCP 统一网关（`video.create/status/result/rate_content/capabilities/preflight/import*` 及 `video.regenerate_2k/interpolate/character_swap`）生成、恢复与下载视频；不直连底层 Runtime 或供应商，不持有或发送供应商密钥。AI 短剧阶段成果默认同步至原 Studio 项目（沿用真实 `project_id`）；仅本地或只读讨论的限定优先。Project、Artifact 与 World 生命周期遵循[共同接入规则](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-video-v0.4.1/skills/_shared/project-world.md)，认证与旧令牌排查见[环境说明](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-video-v0.4.0/skills/ENVIRONMENT.md)。
 
-本 Skill 通过 Studio MCP 统一网关调用 Video 能力。用户未指定模型或渠道时，解析当前宿主配置并核实可用性；不把历史环境的 `h3-vdn`、`h3-sol` 或工具 Schema 中的 `fal` 默认值当成全局生产默认。用户可指定模型简称（如 H3、SD2）与渠道；只有宿主已接入的组合才能提交，失败不静默换渠道。
+**默认路由与合规红线**：未指定模型或渠道时解析当前宿主配置并核实可用性（5090 本地 H3 默认 `h3-fasth3` 唯一档位 `fasth3-nvfp4`，冷备 `h3-singularity` 唯一档位 `du-0`），失败不静默换渠道；已有任务沿原模型、渠道与任务 ID 恢复。凡调用 Google 系列视频模型（Veo / Omni 1.2 Flash），**默认一律走 Google Flow（`route=google-flow`）**，仅显式指定时使用 Google AI Studio（`route=google`）。每次取得新生成视频后、在摘要展示与 Project/World 同步前，必须完成本机临时抽帧与 K09 内容分级并调用 `video.rate_content`。本地 GPU 路由排队返回 `queued`（`waiting_gpu_lease`）属正常调度等待，严禁取消重建或手动关停其他 GPU 实例。
 
-Project、Artifact 和 World 的生命周期遵循[共同接入规则](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-video-v0.4.1/skills/_shared/project-world.md)。提交前若输入来自 World，先解析并授权固定 `asset_id + asset_version_id`，再使用其中明确的 `ContentRef`；Video 输出先归档到当前 Video Project，Skill 不直接注册或升级 World 资产。
+## 2. 能力清单与按任务读取
 
-H3 Ref2VA 使用业务模型 `minimax-h3-ref2va`；`route` 单独指定推理渠道。fal 适配器使用服务端锁定的 Reference-to-Video endpoint，但注册了工具不代表fal已配置或就绪。供应商凭据留在服务端，Skill 不持有或发送 `FAL_KEY`。
+按要执行的原子能力直达对应入口；跨能力 MCP 契约与验收门禁见 `00.common.*`：
 
-创建前沿用用户名称，或用已有创作上下文生成简洁中文 Title（建议 8–16 字，单行 1–64 字），允许同名。面向用户使用服务端返回的 Title；技术 ID 保留在结构化 journal 与恢复记录。命名不改变 Prompt、幂等键或生成单元，resume 不重新 create 或补题。调用与兼容边界见 [MCP 调用说明](references/video-mcp.md)。
+| 原子能力             | 入口文档                                                        |
+| :------------------- | :-------------------------------------------------------------- |
+| 文生视频与提示词编译 | [01.t2v](references/01.t2v.entrypoint.md)                       |
+| 单图生视频与首帧条件 | [02.i2v](references/02.i2v.entrypoint.md)                       |
+| 首尾帧条件视频       | [03.fl2v](references/03.fl2v.entrypoint.md)                     |
+| 多参考全能视频与 SD2 | [04.ref2v](references/04.ref2v.entrypoint.md)                   |
+| 渠道差异与配置指南   | [05.channel-guides](references/05.channel-guides.entrypoint.md) |
 
-先用真实Studio会话发现工具，按 [MCP调用说明](references/video-mcp.md) 解析当前注册名（现有网关为 `video.create/status/result/rate_content`）与参数。遇到403或管理工具不可见，按 [环境说明](https://github.com/verdantflarehub/verdantflare-skills/blob/verdantflare-video-v0.4.0/skills/ENVIRONMENT.md) 检查是否误用了旧共享媒体令牌；不立即推断Video服务不可用。
+先读目标能力的 `entrypoint.md`（输入与输出 → 分类 → 工作流 → 规范 → 验收），无需通读其他能力。
 
-`scripts/video_client.py` 的新生成统一走 Studio：分页发现 `video.create`（兼容已注册的 `video.generate`）及输入 Schema，通过 `video.capabilities` 精确匹配渠道＋模型（含 `models[]` 别名）＋模式。没有能力声明、声明冲突或缺少参数 Schema 时停止创建。素材优先通过分块工具可恢复导入，兼容旧 `video.import` 小图片入口；导入成功不等于满足当前模型的参考限制。已注册 `video.preflight` 时在创建前调用，`can_submit=false` 必须停止。预检不等于生成实测。具体参数、预算与恢复见 [执行流程](references/workflow.md)。本版本与同名公共 API 版 Skill 的认证和参数不同，不能混用。
+跨能力公共文档：[00.common.rules](references/00.common.rules.md)、[00.common.acceptance](references/00.common.acceptance.md)（由各能力入口引用）。
 
-H3 模型支持六种画幅，Omni Reference 还有 Auto；渠道适配器里的竖屏硬编码是接入缺口，不能据此宣称模型只支持9:16。模型规格、当前代码接入范围、实时配置和GPU实测必须分别说明。
+## 3. 工具与命令
 
-接收短剧交接时消费已冻结的实际请求、参考顺序／角色、起末状态、必要事件和配对音轨，不从项目最新候选重建一套输入。核对所选端点真正消费的控制：口型端点的任务说明不能当作走位或画圈指令，多图参考不能冒充硬首尾帧。变换后的目标可读性、音画窗口和动作终态在提交前核对；输入未变复用对应证据，新视频只增加动态与声画联合检查。普通独立视频及原任务恢复不强制新增短剧准备文件。
+主客户端为 [video_client.py](scripts/video_client.py)（需 Python 3.10+），H3 提示词静态检查器为 [validate_h3_prompt.py](scripts/validate_h3_prompt.py)，Higgsfield 管理员私有 CLI 为 [higgsfield.py](scripts/higgsfield.py)。完整参数与恢复流程见 [04.ref2v.entrypoint.md](references/04.ref2v.entrypoint.md)。
 
-- H3 生成单元：按当前阶段读取 [输入模式](references/input-modes.md)、[提示词](references/prompting.md)、[MCP 契约](references/video-mcp.md)、[执行流程](references/workflow.md) 或 [校验](references/validation.md)。 新建H3任务必须按提示词文档编译六段结构和精确引用标签，并核验保存的实际请求；原任务查询与下载不新增此检查。
-- 生成后 18+ 内容分级评估（K09 强制步骤）：每次取得新生成的视频产物后、在交付摘要展示与 Project/World 同步之前，必须按 [评估步骤](references/content-rating-step.md) 与 [评估规范](references/content-rating-rubric.md) 在本机临时目录抽帧（至少每 2 秒 1 帧、全片至少 8 帧，另补镜头切换处关键帧；评估后删除临时帧文件，并在 `reasons` 中记录抽帧数量），结合连续帧序列、音轨、正向提示词与标题完成判定，调用 `video.rate_content` 提交分级结果（`general` 与 `nsfw` 均须提交，`rubric_version` 取自规范副本文首；不确定即标 `nsfw`；超时用相同内容幂等重试，不重新生成）。判定为 `nsfw` 的产物在摘要中只写“N 个产物已标记为 NSFW 并隐藏”，不展示预览、联系表、链接、`ContentRef` 或提示词全文，也不同步到 Studio 项目或登记到 World。
-- SD2：读取 [SD2 工作流](references/sd2-workflow.md)。
-- Grok：先读取 [Grok 调用](references/grok.md)，通过同一 Studio Video MCP 显式选择 `route=grok`；不要套用 H3 的参考数量、24 FPS 或提示词标签。
-- Google Flow（**Google 视频模型默认渠道**）：读取 [Google Flow 调用](references/google-flow.md)，显式选择 `route=google-flow`。**凡调用 Google 系列视频模型（Veo / Omni 1.2 Flash），默认一律走 Google Flow，除非用户显式指定，否则不考虑 Google AI Studio（`route=google`）**。**`veo-quality` 不支持参考图（`ref_cap=0`，仅 `text_to_video`），严禁携带 `references.images` 或 `mode=reference_to_video` 提交**；多参考图锁脸/场景使用 `veo-fast` / `veo-lite`（最多 3 图）或 `omni-1.2-flash`（最多 7 图，3–15 秒，并支持 `video_editing` 传入 1 段 ≥ 3 秒 `.mp4` 原片 + 最多 7 图）；`omni-1.2-flash` / `veo-fast` / `veo-quality` 生成时可选 `upscale="1080p"`（默认关闭，0 积分，偶发失败自动降级保留 720p 原片，`veo-lite` 不支持 1080p 超分）。
-- Google（Google AI Studio，**仅显式指定时使用**）：读取 [Google 调用](references/google.md)，仅在用户明确要求走 Google AI Studio / `route=google` 时选用；按实际注册的新模型与别名选择，退役模型返回 `model_retired` 时保留原错误，不自动切换收费模型。
-- Higgsfield：读取 [会员渠道与官方 Skills 适配](references/higgsfield.md)，通过同一 Studio Video MCP 显式选择 `route=higgsfield`。Seedance 2.5 Draft 的 R2V／ref2va 使用 `model=seedance_2_5_draft`、480p、4–15 秒、最多 4 图＋1 视频，不替换为普通 2.5 或首尾帧。官方 CLI 封装在本 Skill 私有运行时，仅供管理员授权维护；成员生成、查询及结果通过 Studio，会员凭据留在服务器。
-- 已有任务沿原任务记录的模型与渠道恢复，不按当前默认值重新生成。
-- 有剧情动作、连续运镜、跨镜物体或剪辑选段要求时，按[叙事动作验收](references/shot-acceptance.md)检查实际动作和可用区间，不能用首尾构图或技术成功代替动态验收。
-- 本地 H3 按基础模型独立路由并支持全链路后置交付：默认路由 `h3-fasth3`（独立 `video-minimax-h3-fasth3`，固定唯一档位 `fasth3-nvfp4` 8-NFE QAD，无 `du-0` 软回退档），冷备路由 `h3-singularity`（独立 `video-minimax-h3-singularity`，固定唯一档位 `du-0` 4-NFE，默认 `replicas: 0`）；后置可选 `postprocess.regenerate_2k`（独立 `video-minimax-h3-regenerate-2k`，CLI `--regenerate-2k` 与 `--grid-mode {budget_1440p,exact_2x}`，默认 `budget_1440p`）与 `postprocess.interpolate.profile=rife_2x`（CLI `--interpolate`）自由组合，也支持对已有 24 FPS H3 视频单独调用 `video.regenerate_2k`（CLI `regenerate-2k`）或 `video.interpolate`。开启后置阶段时等待 `delivery.status` 终态并交付 `delivery.final_artifact_id`，完整保留 `M1`（`source_artifact_id`）与 `M2`（`regenerate_2k_artifact_id`）；`P3` 插帧失败只对保留的 `M2` 单独调用 `video.interpolate` 重试，`P2` 失败只对 `M1` 调用 `video.regenerate_2k` 重试，严禁重跑已成功的 `P1` 生成。
-- 本地 H3 首帧条件（`image_guidance="first_frame"`）边界：`h3-fasth3` 与 `h3-singularity` 均支持 `image_guidance="first_frame"`（`references.images[0]` 像素尺寸须与目标输出网格精确一致，且不与 `references.videos` 混用）。链路核查未发现参数丢失证据，单图静止保持实验（边缘 `IoU 0.9983`）证明第 `0` 帧 `PackedLayout` 条件消费路径有效；但在多参考跨画风（如 3D 白模首帧叠加写实人物身份/服装参考并要求写实转换）场景下属于软条件，不保证硬几何或硬机位锁定。要求固定机位写实定妆的镜头须先在图像阶段产出同构图写实首帧定妆图并完成核验，再送入视频模型执行动作生成，详见 [输入模式](references/input-modes.md) 与 [控制证据](references/control-evidence.md)。
-- 本地 GPU 调度与排队恢复：本地推理路由（`h3-fasth3`、`h3-singularity`、`regenerate_2k`、`interpolate` 及本地超分／深度阶段）由服务端经 Station GPU 调度器（`:5056`）统一申请物理卡显存租约、执行按需冷启动（`0 -> 1`）并在 `P2 -> P3` 阶段自动原地降级显存锁，智能体无需也不得手动关停 ComfyUI 或 Blender 腾挪显存（调度器会自动回收 `idle_evictable` 空闲实例并保护 `human_protected` 人类会话）。状态返回 `queued`（含 `waiting_gpu_lease` 或 `queue_reason`）属正常显存排队或冷启动等待，继续轮询原 `task_id`，严禁取消重建或静默切往付费云渠道。
-- 每次创建任务都显式传入当前项目的 `project_id`、已解析的 `route` 和固定幂等键；不能依赖服务端猜测项目或渠道。
-- 中央Artifact的 `ContentRef` 与Video原生引用按宿主适配流程转换；不直接替换ID，不把受控下载路径当成匿名公网素材URL。
-- 所有模型和渠道都通过 Studio MCP 统一网关进入，不直接调用 Runtime。
-
-定妆交接需保留完整Look与实际首帧的并看证据；裁去袖口不构成消除袖长冲突。创建前对照真实 `image_guidance` 与制作意图：普通 `reference` 模式不得因purpose写有“first-frame anchor”而标记首帧锁定；依赖首帧控制的镜头必须核实当前渠道对应模式及回显，不能凭历史发布记录假定可用。新制作批次不恢复用户已停止的旧任务；旧请求与摘要保持不可变。
-
-首帧输入先对照本次预检的实际输出宽高，不能只按“9:16”等名义画幅判断兼容。需要适配时保持人物纵横比，记录等比缩放、补边和最终裁区，实际查看后重新导入并绑定新摘要；不能直接拉伸脸和身体。尺寸不符属于输入问题，先修输入，不据通用invalid_request误报模型不支持。首帧控制只约束起点，不是图像局部编辑，也不证明后续帧保留场景或服装。
-
-单图原外观保持与白模转写实、多参考人物替换属于不同控制任务，前者通过不能替代后者验收。混合输入失效时先用最小输入检查条件是否有效，再按实际差异缩小问题；一次同时改动多个条件只能用于排查，不能宣称唯一根因。条件编码不等于逐像素强制覆盖；必须已有合格写实关键帧才能沿该帧进入动作生成，不能靠增加定妆图或否定词弥补未证明的空间控制。
+```sh
+python scripts/video_client.py check
+python scripts/video_client.py import --project-id <project_id> --file <path> --purpose identity
+python scripts/video_client.py generate --project-id <project_id> --idempotency-key <key> --route <route> --prompt "<prompt>"
+python scripts/video_client.py result <task_id> --output <out.mp4>
+python scripts/validate_h3_prompt.py request.json preflight.json
+```

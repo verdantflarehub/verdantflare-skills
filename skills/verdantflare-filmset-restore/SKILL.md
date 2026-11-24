@@ -11,16 +11,19 @@ description: 从影视剧连续原帧去人物还原片场无人空景（Clean P
 
 图像导入、多图参考编辑与生成后内容分级协同 `verdantflare-image` 执行；人物正面半身身份照与无头服装三视图协同 `verdantflare-character-face` 执行；产物受管入库与引用审计协同 `verdantflare-meta-googledrive` 执行；审阅文档排版与结构检查协同 `verdantflare-meta-markdown` 执行；需写入 Studio 工程固定修订时再协同 `verdantflare-artifact` 与 `verdantflare-project`。
 
-## 2. 按任务读取
+## 2. 能力清单与按任务读取
 
-| 当前任务或阶段                                                   | 读取资料                                     |
-| :--------------------------------------------------------------- | :------------------------------------------- |
-| 判定单镜去人、空间扩展（五向闭合 B1／街区链式 B2）或带演员静帧   | [分类与边界](references/01.base-category.md) |
-| 连续帧比对、摇镜双锚点拆分、三层降级映射、链式推进与失败恢复     | [执行流程](references/01.base-workflow.md)   |
-| 还原硬规则、固定与可变层剥离、提示词双模板、画外地标与沙盘防漂移 | [规则约束](references/01.base-rules.md)      |
-| 核对清单、九类典型失败案例排查、量化排序门禁与审阅板交付         | [验收标准](references/01.base-acceptance.md) |
+按要执行的原子能力直达对应入口；三层分区标注、还原硬规则、提示词模板与九类失败案例验收见公共专册：
 
-执行前先读分类与规则专册确认当前批次边界与还原硬规则，再按流程专册分批出图并对照验收专册逐项自检。
+| 原子能力           | 入口文档                                                                          |
+| :----------------- | :-------------------------------------------------------------------------------- |
+| 单机位去人空景还原 | [01.clean-plate.entrypoint.md](references/01.clean-plate.entrypoint.md)           |
+| 空间闭合           | [02.space-closure.entrypoint.md](references/02.space-closure.entrypoint.md)       |
+| 片场换脸           | [03.face-swap-on-set.entrypoint.md](references/03.face-swap-on-set.entrypoint.md) |
+
+执行前先读目标能力入口与[公共规则](references/00.common.rules.md)，出图后对照[公共验收](references/00.common.acceptance.md)逐项自检。
+
+跨能力公共文档：[00.common.rules.md](references/00.common.rules.md)、[00.common.acceptance.md](references/00.common.acceptance.md)（由各能力入口引用）。
 
 ## 3. 工具与命令
 
@@ -31,4 +34,4 @@ python -X utf8 scripts/build_clean_plate_boards.py /path/to/board-spec.json
 python -X utf8 -m unittest discover -s scripts -p "test_*.py"
 ```
 
-完整 JSON 字段定义、连续帧抽帧比对命令及 `verdantflare-image` 多图编辑调用参数见[执行流程](references/01.base-workflow.md)。
+完整 JSON 字段定义、`.gdrive` 入库审计命令及 `verdantflare-image` 多图编辑调用参数见[公共验收](references/00.common.acceptance.md)与各能力入口。
