@@ -1,4 +1,0 @@
-interface:
-  display_name: "VerdantFlare Music MV"
-  short_description: "Direct and assemble a 30-second chorus MV"
-  default_prompt: "Use $verdantflare-music-mv to produce a 30-second chorus MV from this approved song."

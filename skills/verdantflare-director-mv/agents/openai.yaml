@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Director MV"
+  short_description: "音乐 MV 作品统筹导演：全局视觉母题、30s 高潮版与 TV Version 素材池编排装配"
+  default_prompt: "Use $verdantflare-director-mv to direct, coordinate crew/atomic production, and assemble a music MV from this approved song."
