@@ -28,4 +28,4 @@
 
 ## 3. 安装与验证
 
-从本目录复制完整技能包到统一安装根的同名目录。更新前核对已有副本的本地差异。安装后核对文件并从新会话验证自然语言触发。各宿主的发现方式见[安装与接入](verdantflare-meta-skill/references/05.install.entrypoint.md)。
+从本目录复制完整技能包到统一安装根的同名目录。更新前核对已有副本的本地差异。安装后核对文件并从新会话验证自然语言触发。各宿主的发现方式见[安装与接入](verdantflare-meta-skill/references/01.install.entrypoint.md)。

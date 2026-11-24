@@ -54,7 +54,8 @@ GENERIC_DIMENSION_HINTS = {
     'rules': ('规则', '约束', '默认值', '例外', '写法', 'rule', 'constraint'),
     'acceptance': ('验收', '验证', '门禁', '交付', '评分', 'acceptance', 'verify'),
 }
-PROFILES = ('auto', 'atomic', 'crew')
+PROFILES = ('auto', 'atomic', 'craft', 'crew', 'director')
+NON_ATOMIC_PROFILES = frozenset({'craft', 'crew', 'director'})
 CREW_LEAK_PATTERNS = (
     ('model weight filename', re.compile(r'\.(?:safetensors|ckpt|gguf)\b', re.I)),
     ('ComfyUI node id', re.compile(r'\bNode\s*#?\d+\b', re.I)),
@@ -421,19 +422,22 @@ def matrix_errors(root):
 
 def resolve_profile(root, profile='auto'):
     if profile == 'auto':
-        return 'crew' if '-crew-' in root.name else 'atomic'
+        for candidate in ('craft', 'crew', 'director'):
+            if f'-{candidate}-' in root.name or root.name.endswith(f'-{candidate}'):
+                return candidate
+        return 'atomic'
     return profile
 
 
-def crew_profile_warnings(label, text):
-    """Warn when a crew skill leaks low-level model weights, LoRA ratios, ComfyUI node IDs, or sampler internals."""
+def profile_leak_warnings(label, text, active_profile):
+    """Warn when a non-atomic (craft/crew/director) skill leaks low-level model weights, LoRA ratios, node IDs, or samplers."""
     warnings = []
     for number, line in enumerate(text.splitlines(), 1):
         for kind, pattern in CREW_LEAK_PATTERNS:
             match = pattern.search(line)
             if match:
                 warnings.append(
-                    f'{label}:{number}: crew profile leak ({kind}): {match.group(0)!r}; '
+                    f'{label}:{number}: {active_profile} profile leak ({kind}): {match.group(0)!r}; '
                     'delegate low-level implementation details to atomic skills')
     return warnings
 
@@ -487,8 +491,8 @@ def lint(root, style='generic', allow_placeholders=False, structure=True, profil
                 (warnings if allow_placeholders else errors).append(message)
         if style == 'numbered':
             errors.extend(check_style(tokens, label))
-        if structure and active_profile == 'crew':
-            warnings.extend(crew_profile_warnings(label, text))
+        if structure and active_profile in NON_ATOMIC_PROFILES:
+            warnings.extend(profile_leak_warnings(label, text, active_profile))
         for token in tokens:
             for child in token.children or []:
                 if child.type not in ('link_open', 'image'):
@@ -641,7 +645,7 @@ def main():
     check.add_argument('skill_dir', type=Path)
     check.add_argument('--style', choices=('generic', 'numbered'), default='generic')
     check.add_argument('--profile', choices=PROFILES, default='auto',
-                       help='skill role profile (auto detects *-crew-* as crew)')
+                       help='skill role profile (auto detects *-craft-*, *-crew-*, *-director-*)')
     check.add_argument('--allow-placeholders', action='store_true')
     args = parser.parse_args()
     try:

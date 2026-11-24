@@ -176,6 +176,26 @@ class SkillToolTests(unittest.TestCase):
         # Explicit atomic profile skips crew leak warnings
         self.assertEqual(([], []), tool.lint(crew, style='numbered', profile='atomic'))
 
+        # Craft and director profiles auto-detect and catch leaks too
+        for slug, expected in (('mk-craft-camera', 'craft profile leak'), ('mk-director-drama', 'director profile leak')):
+            with self.subTest(slug=slug):
+                self.root = self.base / slug
+                self.entry(
+                    front=f'name: {slug}\ndescription: Demo.',
+                    body='# Demo\n\n## 1. 范围与边界\n\nText.\n\n## 2. 能力清单与按任务读取\n\n'
+                         '| 原子能力 | 入口文档 |\n| :-- | :-- |\n'
+                         '| 运镜设计 | [01.plan.entrypoint.md](references/01.plan.entrypoint.md) |\n\n'
+                         '## 3. 工具与命令\n\nText.\n',
+                )
+                self.write_capability(
+                    '01.plan',
+                    body='# Demo：01.plan\n\n## 1. 输入与输出\n\nIn.\n\n## 2. 分类\n\nC.\n\n'
+                         '## 3. 工作流\n\nUse base.safetensors.\n\n## 4. 规范\n\nR.\n\n## 5. 验收\n\nA.\n',
+                )
+                errs, warns = tool.lint(self.root, style='numbered')
+                self.assertEqual([], errs)
+                self.assertTrue(any(expected in w for w in warns), warns)
+
     def test_entry_structure_rules(self):
         self.standard(sections=('1. 编码规范', '2. 范围与边界', '3. 能力清单与按任务读取', '4. 工具与命令'))
         self.assertEqual(([], []), tool.lint(self.root))
