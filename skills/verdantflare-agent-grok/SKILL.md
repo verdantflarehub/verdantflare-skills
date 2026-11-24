@@ -23,9 +23,10 @@ Agent 间委托统一先应用 `verdantflare-meta-agent`：绑定计划、稳定
 
 | 原子能力（能干什么活） | 入口文档                                                          |
 | :--------------------- | :---------------------------------------------------------------- |
-| 派单同步               | [01.dispatch.entrypoint.md](references/01.dispatch.entrypoint.md) |
+| 派单续接               | [01.dispatch.entrypoint.md](references/01.dispatch.entrypoint.md) |
+| 安装启动               | [02.install.entrypoint.md](references/02.install.entrypoint.md)   |
 
-本技能为单能力自包含结构，直接读取上述能力入口即可。
+先读当前任务对应能力入口，无需通读其他能力文档。
 
 ## 4. 工具与命令
 

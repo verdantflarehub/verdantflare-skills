@@ -24,7 +24,8 @@ Agent 间委托统一先应用 `verdantflare-meta-agent`：绑定计划、稳定
 | 原子能力（能干什么活） | 入口文档                                                                              |
 | :--------------------- | :------------------------------------------------------------------------------------ |
 | 派单续接               | [01.dispatch.entrypoint.md](references/01.dispatch.entrypoint.md)                     |
-| 维护工作区会话列表补丁 | [02.workspace-sessions.entrypoint.md](references/02.workspace-sessions.entrypoint.md) |
+| 安装启动               | [02.install.entrypoint.md](references/02.install.entrypoint.md)                       |
+| 会话补丁               | [03.workspace-sessions.entrypoint.md](references/03.workspace-sessions.entrypoint.md) |
 
 先读当前任务对应能力入口，无需通读其他能力文档。
 
@@ -40,4 +41,4 @@ python -X utf8 scripts/launch.py --call codex_capabilities
 python -X utf8 scripts/launch.py
 ```
 
-可选显示补丁由 [workspace_sessions.py](scripts/workspace_sessions.py) 管理，先运行 `python scripts/workspace_sessions.py probe`，完整操作和验证边界见 [02.workspace-sessions.entrypoint.md](references/02.workspace-sessions.entrypoint.md)。
+可选显示补丁由 [workspace_sessions.py](scripts/workspace_sessions.py) 管理，先运行 `python scripts/workspace_sessions.py probe`，完整操作和验证边界见 [03.workspace-sessions.entrypoint.md](references/03.workspace-sessions.entrypoint.md)。

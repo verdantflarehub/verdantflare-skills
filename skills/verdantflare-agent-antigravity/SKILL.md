@@ -19,10 +19,10 @@ Agent 间委托统一先应用 `verdantflare-meta-agent`：绑定计划、稳定
 
 按要执行的原子能力直达对应入口；跨能力共享规则见 `00.common.rules.md`：
 
-| 原子能力（能干什么活） | 入口文档                                                                |
-| :--------------------- | :---------------------------------------------------------------------- |
-| 派单续接               | [01.dispatch.entrypoint.md](references/01.dispatch.entrypoint.md)       |
-| 服务运维               | [02.service-ops.entrypoint.md](references/02.service-ops.entrypoint.md) |
+| 原子能力（能干什么活） | 入口文档                                                          |
+| :--------------------- | :---------------------------------------------------------------- |
+| 派单续接               | [01.dispatch.entrypoint.md](references/01.dispatch.entrypoint.md) |
+| 安装启动               | [02.install.entrypoint.md](references/02.install.entrypoint.md)   |
 
 先读当前任务对应能力入口，无需通读其他能力文档。
 
