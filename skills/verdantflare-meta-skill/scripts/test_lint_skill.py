@@ -146,6 +146,36 @@ class SkillToolTests(unittest.TestCase):
         self.assertTrue(any('missing H2 section for 输入与输出' in e for e in errors), errors)
         self.assertTrue(any('missing H2 section for 验收' in e for e in errors), errors)
 
+    def test_crew_profile_leak_detection(self):
+        crew = self.base / 'mk-crew-demo'
+        self.root = crew
+        self.entry(
+            front='name: mk-crew-demo\ndescription: Crew demo.',
+            body='# Crew\n\n## 1. 范围与边界\n\nText.\n\n## 2. 能力清单与按任务读取\n\n'
+                 '| 原子能力 | 入口文档 |\n| :-- | :-- |\n'
+                 '| 换脸交付 | [01.swap.entrypoint.md](references/01.swap.entrypoint.md) |\n\n'
+                 '## 3. 工具与命令\n\nText.\n',
+        )
+        self.write_capability('01.swap')
+        self.assertEqual(([], []), tool.lint(crew, style='numbered'))
+
+        # Auto-detected crew profile catches low-level leaks
+        self.write_capability(
+            '01.swap',
+            body='# Crew：01.swap\n\n## 1. 输入与输出\n\nIn/Out.\n\n## 2. 分类\n\nCat.\n\n'
+                 '## 3. 工作流\n\nLoad model_v2.safetensors on Node 6 with LoRA weight: 0.8 and KSampler.\n\n'
+                 '## 4. 规范\n\nRules.\n\n## 5. 验收\n\nAcc.\n',
+        )
+        errors, warnings = tool.lint(crew, style='numbered')
+        self.assertEqual([], errors)
+        joined = '\n'.join(warnings)
+        self.assertIn('model weight filename', joined)
+        self.assertIn('ComfyUI node id', joined)
+        self.assertIn('LoRA weight ratio', joined)
+        self.assertIn('low-level sampler parameter', joined)
+        # Explicit atomic profile skips crew leak warnings
+        self.assertEqual(([], []), tool.lint(crew, style='numbered', profile='atomic'))
+
     def test_entry_structure_rules(self):
         self.standard(sections=('1. 编码规范', '2. 范围与边界', '3. 能力清单与按任务读取', '4. 工具与命令'))
         self.assertEqual(([], []), tool.lint(self.root))

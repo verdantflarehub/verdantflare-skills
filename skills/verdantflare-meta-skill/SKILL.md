@@ -22,6 +22,7 @@ description: 设计、评审、新建和重构可复用技能，规定以扁平�
 | 整改沉淀 | [03.refactor.entrypoint.md](references/03.refactor.entrypoint.md) |
 | 评审验收 | [04.review.entrypoint.md](references/04.review.entrypoint.md)     |
 | 安装接入 | [05.install.entrypoint.md](references/05.install.entrypoint.md)   |
+| 专员规范 | [06.crew.entrypoint.md](references/06.crew.entrypoint.md)         |
 
 先读目标能力的 `entrypoint.md`，无需通读其他能力；跨能力公共约束见 [00.common.rules.md](references/00.common.rules.md)（由各能力入口引用）。
 
@@ -31,7 +32,7 @@ description: 设计、评审、新建和重构可复用技能，规定以扁平�
 
 ```text
 python -X utf8 scripts/lint_skill.py init /path/to/new-skill --capabilities 01.t2v,02.i2v --common rules
-python -X utf8 scripts/lint_skill.py lint /path/to/target-skill --style numbered
+python -X utf8 scripts/lint_skill.py lint /path/to/target-skill --style numbered [--profile crew]
 python -X utf8 -m unittest discover -s scripts -p test_lint_skill.py
 ```
 

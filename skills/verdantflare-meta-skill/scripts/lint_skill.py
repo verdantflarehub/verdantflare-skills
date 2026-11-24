@@ -54,6 +54,13 @@ GENERIC_DIMENSION_HINTS = {
     'rules': ('规则', '约束', '默认值', '例外', '写法', 'rule', 'constraint'),
     'acceptance': ('验收', '验证', '门禁', '交付', '评分', 'acceptance', 'verify'),
 }
+PROFILES = ('auto', 'atomic', 'crew')
+CREW_LEAK_PATTERNS = (
+    ('model weight filename', re.compile(r'\.(?:safetensors|ckpt|gguf)\b', re.I)),
+    ('ComfyUI node id', re.compile(r'\bNode\s*#?\d+\b', re.I)),
+    ('LoRA weight ratio', re.compile(r'\blora\b[^。\n]{0,24}(?:strength|weight|权重)\s*[:=：]?\s*\d+(?:\.\d+)?', re.I)),
+    ('low-level sampler parameter', re.compile(r'\b(?:ksampler|sigmas\s*[:=\[]|denoise_strength\s*[:=]|cfg_scale\s*[:=])', re.I)),
+)
 MD = MarkdownIt('commonmark').enable('table')
 # Parse rejected browser schemes too so the linter can diagnose them.
 # Tokens are inspected only; this tool never renders or opens these URLs.
@@ -412,7 +419,26 @@ def matrix_errors(root):
     return errors
 
 
-def lint(root, style='generic', allow_placeholders=False, structure=True):
+def resolve_profile(root, profile='auto'):
+    if profile == 'auto':
+        return 'crew' if '-crew-' in root.name else 'atomic'
+    return profile
+
+
+def crew_profile_warnings(label, text):
+    """Warn when a crew skill leaks low-level model weights, LoRA ratios, ComfyUI node IDs, or sampler internals."""
+    warnings = []
+    for number, line in enumerate(text.splitlines(), 1):
+        for kind, pattern in CREW_LEAK_PATTERNS:
+            match = pattern.search(line)
+            if match:
+                warnings.append(
+                    f'{label}:{number}: crew profile leak ({kind}): {match.group(0)!r}; '
+                    'delegate low-level implementation details to atomic skills')
+    return warnings
+
+
+def lint(root, style='generic', allow_placeholders=False, structure=True, profile='auto'):
     """structure=False skips the uniform layout checks; used only to unit-test link logic."""
     root = Path(root).resolve()
     errors, warnings, cache = [], [], {}
@@ -420,6 +446,7 @@ def lint(root, style='generic', allow_placeholders=False, structure=True):
         return ['missing SKILL.md'], warnings
     repo = repo_root(root)
     layout = detect_layout(root)
+    active_profile = resolve_profile(root, profile)
     paths = [root / 'SKILL.md']
     paths.extend(sorted((root / 'references').rglob('*.md')))
 
@@ -460,6 +487,8 @@ def lint(root, style='generic', allow_placeholders=False, structure=True):
                 (warnings if allow_placeholders else errors).append(message)
         if style == 'numbered':
             errors.extend(check_style(tokens, label))
+        if structure and active_profile == 'crew':
+            warnings.extend(crew_profile_warnings(label, text))
         for token in tokens:
             for child in token.children or []:
                 if child.type not in ('link_open', 'image'):
@@ -611,6 +640,8 @@ def main():
     check = commands.add_parser('lint', help='check static invariants, not business correctness')
     check.add_argument('skill_dir', type=Path)
     check.add_argument('--style', choices=('generic', 'numbered'), default='generic')
+    check.add_argument('--profile', choices=PROFILES, default='auto',
+                       help='skill role profile (auto detects *-crew-* as crew)')
     check.add_argument('--allow-placeholders', action='store_true')
     args = parser.parse_args()
     try:
@@ -620,7 +651,7 @@ def main():
             if skipped:
                 print('Existing files preserved; merge capability rows into SKILL.md manually when adding capabilities.')
             return 0
-        errors, warnings = lint(args.skill_dir, args.style, args.allow_placeholders)
+        errors, warnings = lint(args.skill_dir, args.style, args.allow_placeholders, profile=args.profile)
         status = 'FAIL' if errors else ('SCAFFOLD ONLY (not delivery-ready)' if args.allow_placeholders else 'PASS (static checks only)')
         print(f'{status}: {len(errors)} errors, {len(warnings)} warnings')
         for message in errors:
