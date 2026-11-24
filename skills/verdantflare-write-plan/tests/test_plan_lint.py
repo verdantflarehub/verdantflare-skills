@@ -1,4 +1,4 @@
-"""Single-variable mutation unit test suite (>= 18 cases) for verdantflare-meta-plan/scripts/plan_lint.py."""
+"""Single-variable mutation unit test suite (>= 18 cases) for verdantflare-write-plan/scripts/plan_lint.py."""
 from __future__ import annotations
 
 import hashlib

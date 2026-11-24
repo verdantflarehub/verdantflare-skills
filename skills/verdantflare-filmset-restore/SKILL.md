@@ -9,7 +9,7 @@ description: 从影视剧连续原帧去人物还原片场无人空景（Clean P
 
 本技能从影视剧连续镜头原帧出发，通过相邻帧遮挡比对与跨镜头共边咬合，把有人物的影视剧照还原为 100% 无人的片场空景底板（Clean Plate），支持两类空间扩展拓扑——**拓扑 B1（围合空间正交五向闭合：东向西、南向北、西向东、北向南、室外含顶俯视或室内无天花板水平剖面俯视）**与**拓扑 B2（开放街区多节点链式共边扩展：以实拍核心还原区为共边与材质锚点，沿主街动线逐节点链式推进推断扩展区，核心区外全部标推断）**，或在此基础上按“只换面孔、天空／顶棚、植物／管线、材质、服装、姿势、位置一律按原帧”硬规则制作带演员静帧参考。本技能只交付静帧场景还原与审阅参考，不替代 Blender 三维白模建模、不调用 H3 或视频生成模型、不代替用户或总导演的人工审美终审；天龙八部聚贤庄、电锯惊魂密室浴室与三国演义安喜县街区为验证案例，其裁切尺寸、时间戳与题字仅作案例说明，不写为通用默认参数。
 
-图像导入、多图参考编辑与生成后内容分级协同 `verdantflare-image` 执行；人物正面半身身份照与无头服装三视图协同 `verdantflare-character-face` 执行；产物受管入库与引用审计协同 `verdantflare-meta-googledrive` 执行；审阅文档排版与结构检查协同 `verdantflare-meta-markdown` 执行；需写入 Studio 工程固定修订时再协同 `verdantflare-artifact` 与 `verdantflare-project`。
+图像导入、多图参考编辑与生成后内容分级协同 `verdantflare-image` 执行；人物正面半身身份照与无头服装三视图协同 `verdantflare-character-face` 执行；产物受管入库与引用审计协同 `verdantflare-meta-googledrive` 执行；审阅文档排版与结构检查协同 `verdantflare-write-markdown` 执行；需写入 Studio 工程固定修订时再协同 `verdantflare-artifact` 与 `verdantflare-project`。
 
 ## 2. 能力清单与按任务读取
 

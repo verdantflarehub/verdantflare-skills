@@ -10,19 +10,19 @@ Frozen Chapter 2 from verdantflare-design commit ca1af2ea; test data only.
 
 ### 2.1 S1：新建与升级技能静态合规门禁、12 专册自包含与包级回归检查（归属 `T4.1`）
 
-- **测试对象**：新建技能 `verdantflare-skills/skills/verdantflare-meta-plan/`，联动升级后的 `verdantflare-meta-markdown`、`verdantflare-meta-agent`，以及包级回归测试 `verdantflare-skills/tests/test_agent_and_meta_skills.py`。
+- **测试对象**：新建技能 `verdantflare-skills/skills/verdantflare-write-plan/`，联动升级后的 `verdantflare-write-markdown`、`verdantflare-meta-agent`，以及包级回归测试 `verdantflare-skills/tests/test_agent_and_meta_skills.py`。
 - **执行入口与命令**：
   - 在仓库原位对三项技能运行 `lint_skill.py lint <skill_dir> --style numbered`；
-  - 将三项技能分别单独复制至 `.tmp/rd-plan-governance/isolated-skills/<skill_name>/`（无兄弟目录隔离环境）再次运行 `lint_skill.py lint --style numbered`，并断言 `verdantflare-meta-plan/references/` 完整包含既定 12 份专册且零跳出技能目录的外部本地相对链接；
-  - 运行 `python -X utf8 -m unittest verdantflare-skills/tests/test_agent_and_meta_skills.py`（已将 `verdantflare-meta-plan` 纳入 `SKILLS` 元组）；
+  - 将三项技能分别单独复制至 `.tmp/rd-plan-governance/isolated-skills/<skill_name>/`（无兄弟目录隔离环境）再次运行 `lint_skill.py lint --style numbered`，并断言 `verdantflare-write-plan/references/` 完整包含既定 12 份专册且零跳出技能目录的外部本地相对链接；
+  - 运行 `python -X utf8 -m unittest verdantflare-skills/tests/test_agent_and_meta_skills.py`（已将 `verdantflare-write-plan` 纳入 `SKILLS` 元组）；
   - 对三项技能内全部 `SKILL.md`、`references/*.md` 与 `resources/templates/*.md` 运行 `md_format.py --check` 与 `check_md.py`。
 - **量化通过判据**：原位与隔离环境 `lint_skill.py` 退出码全为 `0`（`0 errors, 0 warnings`），`SKILL.md` 严格具备四节中文二级标题且正文 `<= 4000` 字符，包级测试全绿且 `skipped == 0`，全部专册与模板 `PASS: 0 errors, 0 warnings`。
 - **反作弊红线**：禁止在 `lint_skill.py`、`test_agent_and_meta_skills.py` 或 `check_md.py` 中添加白名单跳过规则或放宽跨技能目录外逃链接禁令。
 
 ### 2.2 S2：`plan_lint.py` 五档门禁与 `check_handoff.py` 单变量变异单测矩阵（归属 `T4.1`）
 
-- **测试对象**：`verdantflare-skills/skills/verdantflare-meta-plan/scripts/plan_lint.py`、`tests/test_plan_lint.py` 及 `verdantflare-skills/skills/verdantflare-meta-agent/scripts/{check_handoff.py,test_handoff.py}`。
-- **执行入口与命令**：运行 `python -X utf8 -m unittest discover -s verdantflare-skills/skills/verdantflare-meta-plan/tests -p "test_*.py"` 与 `python -X utf8 -m unittest discover -s verdantflare-skills/skills/verdantflare-meta-agent/scripts -p "test_*.py"`，基于完整合法基线每次仅做**单变量变异**构造不少于 18 组独立正反例夹具（禁止以“规则码 A 或 B”模糊断言）：
+- **测试对象**：`verdantflare-skills/skills/verdantflare-write-plan/scripts/plan_lint.py`、`tests/test_plan_lint.py` 及 `verdantflare-skills/skills/verdantflare-meta-agent/scripts/{check_handoff.py,test_handoff.py}`。
+- **执行入口与命令**：运行 `python -X utf8 -m unittest discover -s verdantflare-skills/skills/verdantflare-write-plan/tests -p "test_*.py"` 与 `python -X utf8 -m unittest discover -s verdantflare-skills/skills/verdantflare-meta-agent/scripts -p "test_*.py"`，基于完整合法基线每次仅做**单变量变异**构造不少于 18 组独立正反例夹具（禁止以“规则码 A 或 B”模糊断言）：
   - **反例 F1（缺 TXT 原理图阻断 CP0）**：仅移除设计非空 `text` 代码块（或仅在代码块内伪造标记），断言退出码 `1` 且精确命中 `PL-CP0-TXT`；
   - **反例 F2a & F2b（配图失配阻断 CP0 与未挂载独立报错）**：`F2a` 使设计图片缺 `receipts/` 回执或内容 `SHA-256` 与后缀失配，断言退出码 `1` 且精确命中 `PL-CP0-IMG`；`F2b` 模拟 `.gdrive` 未挂载，断言退出码 `2` 且精确命中 `PL-GDRIVE-UNMOUNTED`；
   - **反例 F3a、F3b & F3c（CP0 评审缺失/未闭环、冻结切片陈旧哈希、违反反自审或越权传参分别独立阻断）**：`F3a` 缺 `t1` 或 `t2` 报告、或逐条 `[OPEN]` 与汇总行不一致，精确命中 `PL-CP0-REV`；`F3b` 修改 `t2` 被审设计正文冻结区使 `评审对象哈希` 失配（同时验证仅修改文首状态/日期或升迁 `.gdrive` 桶名仍放行），精确命中 `PL-REV-STALE`；`F3c` 在第 7 章批 `D4-A`（或未批 `D4-B`）时强传宽松模式、作者与评审助手重叠、替补者兼任同阶段双棒、试图拉 `Claude` 替补 `codex_detail` 工程细节审，或在批 `D4-B` 时会话 ID 重叠/漏标 `同源隔离会话评审：是`，分别精确命中 `PL-REV-INDEP`；
@@ -36,9 +36,9 @@ Frozen Chapter 2 from verdantflare-design commit ca1af2ea; test data only.
 
 ### 2.3 S3：四大核心目录契约、`test_verdantflare_markdown.py` 与存量零回归（归属 `T4.1`）
 
-- **测试对象**：`docs/reviews/{AGENTS,README}.md`、`docs/acceptance/{AGENTS,README}.md`、`docs/archive/{README.md,reviews/,acceptance/}`、`verdantflare-meta-markdown/scripts/{check_md.py,test_verdantflare_markdown.py}` 及 `docs/plan/*.plan.md` 存量在途计划。
+- **测试对象**：`docs/reviews/{AGENTS,README}.md`、`docs/acceptance/{AGENTS,README}.md`、`docs/archive/{README.md,reviews/,acceptance/}`、`verdantflare-write-markdown/scripts/{check_md.py,test_verdantflare_markdown.py}` 及 `docs/plan/*.plan.md` 存量在途计划。
 - **执行入口与命令**：
-  - 运行 `python -X utf8 -m unittest discover -s verdantflare-skills/skills/verdantflare-meta-markdown/scripts -p "test_*.py"`（含新增 `rd-review`、`acceptance`、受控目录非法命名失败闭合及排除 `AGENTS.md / README.md` 用例）；
+  - 运行 `python -X utf8 -m unittest discover -s verdantflare-skills/skills/verdantflare-write-markdown/scripts -p "test_*.py"`（含新增 `rd-review`、`acceptance`、受控目录非法命名失败闭合及排除 `AGENTS.md / README.md` 用例）；
   - 运行 `check_md.py` 检查新增核心目录规范与索引、本计划 `reviews / acceptance` 实例及创作分镜 `*.review.md` 样本；
   - 对 `docs/plan/` 下全部在途计划运行 `plan_lint.py check --gate draft --repo-id verdantflarehub/verdantflare-design` 与 `check_md.py` 回归检查。
 - **量化通过判据**：`test_verdantflare_markdown.py` 全绿通过（`skipped == 0`）；全部核心目录文档 `0 errors, 0 warnings`；冻结清单内历史在途计划零新增阻断。
@@ -62,9 +62,9 @@ Frozen Chapter 2 from verdantflare-design commit ca1af2ea; test data only.
 
 ### 2.6 S6：本机 `~/.agents/skills/` 双域哈希对账与安装态门禁分段验证（前半段归属 `T4.2`，后半段放行归属 `T5.1`）
 
-- **测试对象**：本机 `%USERPROFILE%/.agents/skills/{verdantflare-meta-plan,verdantflare-meta-markdown,verdantflare-meta-agent}` 安装副本及安装态 `plan_lint.py` 门禁实况行为。
+- **测试对象**：本机 `%USERPROFILE%/.agents/skills/{verdantflare-write-plan,verdantflare-write-markdown,verdantflare-meta-agent}` 安装副本及安装态 `plan_lint.py` 门禁实况行为。
 - **执行入口与命令**：
-  - **前半段（`T4.2` 执行）**：运行三项技能 `scripts/install.py` 同步至本机全局技能目录，逐文件比对仓库源码与安装态受管文件集合及 `SHA-256` 摘要；直接调用安装态 `%USERPROFILE%/.agents/skills/verdantflare-meta-plan/scripts/plan_lint.py` 对本计划执行两步核验——① 运行 `--gate cp0` 断言退出码 `0`（验证处于 `T4` 期间不发生状态互斥）；② 在 `T4.4` 签字前运行 `--gate cp1`，断言退出码 `1`（精确命中 `{PL-CP1-TASKS, PL-CP1-ACC, PL-CP1-REV}`）拦截未完成且未验真放行；
+  - **前半段（`T4.2` 执行）**：运行三项技能 `scripts/install.py` 同步至本机全局技能目录，逐文件比对仓库源码与安装态受管文件集合及 `SHA-256` 摘要；直接调用安装态 `%USERPROFILE%/.agents/skills/verdantflare-write-plan/scripts/plan_lint.py` 对本计划执行两步核验——① 运行 `--gate cp0` 断言退出码 `0`（验证处于 `T4` 期间不发生状态互斥）；② 在 `T4.4` 签字前运行 `--gate cp1`，断言退出码 `1`（精确命中 `{PL-CP1-TASKS, PL-CP1-ACC, PL-CP1-REV}`）拦截未完成且未验真放行；
   - **后半段（`T5.1` 入场执行）**：待 `T4.4` 完成双轨验真审计签署 `t4.md` 后，在 `T5.1` 呈报 `CP1` 前再次调用安装态 `plan_lint.py check docs/plan/2026.11.rd-plan-governance.plan.md --gate cp1`，断言退出码 `0` 全绿放行并记入第 5.1 节。
 - **量化通过判据**：三项技能仓库源码与安装目录受管文件集合及 `SHA-256` 100% 一致；安装态 `plan_lint.py` 对 `T4.2` 的 `cp0` 放行、签字前 `cp1` 三码精确阻断及 `T5.1` 签字后 `cp1` 放行全部精确符合预期。
 

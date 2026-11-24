@@ -9,7 +9,7 @@ description: 从单张场景图（实拍剧照、定妆参考图、穿搭图、�
 
 本技能第一版本（v1）专用于**单张图片到结构化生图提示词**的逆向工程：通过前置视觉盘点，把单张场景图按场景类型确定性拆解为可直接复制到生图模型（如默认 GPT Image 2.6、Nano Banana、ChatGPT）的中文分块提示词，支持单人完整场景（默认八段式）、无人纯场景（七段式）与多人互动剧照（分角色八段式），并可按需切换为 `` `{{变量}}` `` 参数化模板或英文自然语言变体。本技能不处理多角度组图综合或视频抽帧反推（留待后续版本），不替代 `verdantflare-reference-learning`（整片/整曲拆解与 World 沉淀）与 `verdantflare-filmset-restore`（连续帧去人空景还原），默认不自动调用生图或视频服务，也不替代人工审美终审。
 
-需对反推提示词做纯文生图闭环复现验证时，协同 `verdantflare-image`（默认 `engine="codex"`，`model="gpt-image-2.6-sunburst"`）执行并按 K09 完成生成后内容分级；审阅文档排版协同 `verdantflare-meta-markdown`；如需长期留存验证样图协同 `verdantflare-meta-googledrive`。
+需对反推提示词做纯文生图闭环复现验证时，协同 `verdantflare-image`（默认 `engine="codex"`，`model="gpt-image-2.6-sunburst"`）执行并按 K09 完成生成后内容分级；审阅文档排版协同 `verdantflare-write-markdown`；如需长期留存验证样图协同 `verdantflare-meta-googledrive`。
 
 ## 2. 能力清单与按任务读取
 

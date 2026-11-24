@@ -197,6 +197,6 @@ CLI现状见 [Image CLI](skills/verdantflare-image/references/cli.md)，实际�
 - [`verdantflare-agent-grok`](skills/verdantflare-agent-grok/SKILL.md)：调度 Grok ACP 会话并同步写入索引以在 VS Code AFK Pilot 面板展示。
 - [`verdantflare-meta-agent`](skills/verdantflare-meta-agent/SKILL.md)：规范跨智能体计划协作、会话登记、低 Token 架构门禁交接单校验与结果回传。
 - [`verdantflare-meta-googledrive`](skills/verdantflare-meta-googledrive/SKILL.md)：通过已登录的 Google Drive 桌面映射盘与项目 `.gdrive` 软连接管理 SHA-256 版本化素材。
-- [`verdantflare-meta-markdown`](skills/verdantflare-meta-markdown/SKILL.md)：按文档主类型组织浅层 Markdown 结构，探测 Prettier 执行格式化与量化检查。
-- [`verdantflare-meta-plan`](skills/verdantflare-meta-plan/SKILL.md)：提供研发计划双轨分级（简单 S0/S1 与复杂 T1–T5）、核心目录对账、确定性锁卷/评审哈希及五档 AST 自动门禁。
+- [`verdantflare-write-markdown`](skills/verdantflare-write-markdown/SKILL.md)：按文档主类型组织浅层 Markdown 结构，探测 Prettier 执行格式化与量化检查。
+- [`verdantflare-write-plan`](skills/verdantflare-write-plan/SKILL.md)：提供研发计划双轨分级（简单 S0/S1 与复杂 T1–T5）、核心目录对账、确定性锁卷/评审哈希及五档 AST 自动门禁。
 - [`verdantflare-meta-skill`](skills/verdantflare-meta-skill/SKILL.md)：统一技能入口与四份底座专册规范，提供脚手架初始化与静态结构评审工具。

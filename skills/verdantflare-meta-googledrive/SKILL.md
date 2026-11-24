@@ -13,7 +13,7 @@ description: 使用已登录的 Google Drive 桌面映射盘管理项目图片�
 
 本技能通过 Google Drive 桌面映射盘与项目 `.gdrive` 目录软连接管理跨机同步的大型素材，覆盖项目初始化与旧版目录接入、素材按内容 SHA-256 不可变版本入库、Markdown 引用审计与相对链接改写、摘要核验、被替代无引用旧版移除，以及本技能的全局安装维护。
 
-职责边界以 `git ls-files` 状态判定：已被 Git 跟踪的文件豁免入库；未跟踪或被 `.gitignore` 排除的本地文件一旦被任意 Markdown 引用（或经用户显式指定跨机复用），必须入库 `.gdrive/managed/`。本技能不负责生成素材、不自动下载外部 HTTP 资源，也不代替人工做审美通过判定；Markdown 排版与链接格式检查交由目标环境的 Markdown 治理技能（如 `verdantflare-meta-markdown`）协作处理。
+职责边界以 `git ls-files` 状态判定：已被 Git 跟踪的文件豁免入库；未跟踪或被 `.gitignore` 排除的本地文件一旦被任意 Markdown 引用（或经用户显式指定跨机复用），必须入库 `.gdrive/managed/`。本技能不负责生成素材、不自动下载外部 HTTP 资源，也不代替人工做审美通过判定；Markdown 排版与链接格式检查交由目标环境的 Markdown 治理技能（如 `verdantflare-write-markdown`）协作处理。
 
 ## 3. 能力清单与按任务读取
 

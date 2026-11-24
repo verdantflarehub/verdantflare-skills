@@ -1,4 +1,4 @@
-"""Install/update verdantflare-meta-plan into the unified skills root (default ~/.agents/skills).
+"""Install/update verdantflare-write-plan into the unified skills root (default ~/.agents/skills).
 
 Follows verdantflare-meta-skill install rules: copy the whole maintained source, exclude caches, verify file-by-file.
 An existing install that differs from the source is only replaced with --replace, after the caller has

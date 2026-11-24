@@ -9,7 +9,7 @@ description: 设计、评审、新建和重构可复用技能，规定以扁平�
 
 本技能规定所有技能的统一结构并负责设计、新建、整改、评审与安装：入口 `SKILL.md` 只做原子能力路由，每个原子能力由 `references/NN.<capability>.entrypoint.md` 统领（输入与输出 → 分类 → 工作流 → 规范 → 验收），跨能力共享内容按需写入 `references/00.common.*.md`。评审请求只输出发现与建议，修订请求才改目标技能；复用已有授权，全局安装与发布按用户实际授权执行。
 
-`skill-creator`、`beagle-skills-creator` 等可作为可选协作对象，只以名称提及、不建立链接；Markdown 排版交由目标环境的 Markdown 治理技能（如 `verdantflare-meta-markdown`）。用户明确要求与目标仓库规则优先于本技能默认建议。
+`skill-creator`、`beagle-skills-creator` 等可作为可选协作对象，只以名称提及、不建立链接；Markdown 排版交由目标环境的 Markdown 治理技能（如 `verdantflare-write-markdown`）。用户明确要求与目标仓库规则优先于本技能默认建议。
 
 ## 2. 能力清单与按任务读取
 

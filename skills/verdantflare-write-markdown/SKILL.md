@@ -1,9 +1,9 @@
 ---
-name: verdantflare-meta-markdown
+name: verdantflare-write-markdown
 description: 编写、整理和审阅任意仓库中自主维护的 Markdown，按通用规范及 README、设计、计划、变更、研发评审、研发验收、缺陷、技能文档业务规范组织内容，执行落盘后 Format、结构检查与交付流程，避免多层列表缩进。用于新增或实质修改 Markdown、长列表重构及 Format 缩进排查；目标仓库规则、第三方原文、历史归档和脚本依赖的格式契约优先。
 ---
 
-# Markdown 结构与格式化治理（verdantflare-meta-markdown）
+# Markdown 结构与格式化治理（verdantflare-write-markdown）
 
 ## 1. 编码规范
 

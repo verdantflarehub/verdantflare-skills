@@ -1,0 +1,4 @@
+interface:
+  display_name: "VerdantFlare Meta Plan"
+  short_description: "Govern simple and complex R&D plans with AST gates and hashes"
+  default_prompt: "Use $verdantflare-write-plan to classify R&D plans, scaffold simple or complex plans, compute lock and review hashes, and enforce CP0, CP1, and archive gates."

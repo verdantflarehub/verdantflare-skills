@@ -1,9 +1,9 @@
 ---
-name: verdantflare-meta-plan
+name: verdantflare-write-plan
 description: 对研发计划执行双轨分级管控（简单计划 S0/S1 与复杂研发计划 T1–T5）、核心受控目录（plan/changes/reviews/acceptance）对账、锁卷与评审确定性哈希计算及五档 AST 自动门禁检查。用于研发立项定级、编制或升级计划、审定验收流程、准备 CP0 图文方案报审、组织 T4 取证核验与抽查、呈报 CP1 人类验收及同构归档检查；不替代具体业务方案设计与人工终审决策。
 ---
 
-# 研发计划分级管控与核心目录治理（verdantflare-meta-plan）
+# 研发计划分级管控与核心目录治理（verdantflare-write-plan）
 
 ## 1. 编码规范
 
@@ -16,7 +16,7 @@ description: 对研发计划执行双轨分级管控（简单计划 S0/S1 与复
 - **双轨分流**：按影响域将计划分为 `简单计划`（2～3 步，支持 `S0` 零人工参与或 `S1` 单点确认，免独立评审验收目录）与 `复杂研发计划`（固定 `T1–T5` 五阶段与 `CP0 / CP1` 双门禁）。
 - **验收三方分工**：执行者起草验收流程并亲自取证；Codex（或 `D4-A` 非作者研发替补）修订流程、包办工程细节与全仓防漏，并全面核验验收结果；Claude 做架构核验、修订定稿验收流程，并只抽查 Codex 评价 `1～2` 项。不以怀疑造假为前提，不重跑、不全面复核。
 - **人类单一决定**：`CP0` 与 `CP1` 各只有一个动作——批准，或不批准并给意见；`T5` 只设 `T5.1` 一项，批准后助手直接收尾。
-- **协作边界**：Markdown 排版与 Prettier 格式化交 `verdantflare-meta-markdown`；跨智能体交接单低 Token 校验交 `verdantflare-meta-agent`；图片受管入库交 `verdantflare-meta-googledrive`。目标仓库 `AGENTS.md` 有细化规则时叠加生效。
+- **协作边界**：Markdown 排版与 Prettier 格式化交 `verdantflare-write-markdown`；跨智能体交接单低 Token 校验交 `verdantflare-meta-agent`；图片受管入库交 `verdantflare-meta-googledrive`。目标仓库 `AGENTS.md` 有细化规则时叠加生效。
 
 ## 3. 能力清单与按任务读取
 

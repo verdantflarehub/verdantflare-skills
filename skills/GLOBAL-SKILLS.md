@@ -8,8 +8,8 @@
 | ----------------------------------------------------------------------- | -------------------- |
 | [verdantflare-download](verdantflare-download/SKILL.md)                 | 通用下载与资料研究   |
 | [verdantflare-reverse-prompt](verdantflare-reverse-prompt/SKILL.md)     | 单图场景反推提示词   |
-| [verdantflare-meta-markdown](verdantflare-meta-markdown/SKILL.md)       | 文档编写、格式与检查 |
-| [verdantflare-meta-plan](verdantflare-meta-plan/SKILL.md)               | 研发计划与验收       |
+| [verdantflare-write-markdown](verdantflare-write-markdown/SKILL.md)     | 文档编写、格式与检查 |
+| [verdantflare-write-plan](verdantflare-write-plan/SKILL.md)             | 研发计划与验收       |
 | [verdantflare-meta-skill](verdantflare-meta-skill/SKILL.md)             | 技能设计与安装       |
 | [verdantflare-meta-googledrive](verdantflare-meta-googledrive/SKILL.md) | 跨机素材管理         |
 | [verdantflare-meta-agent](verdantflare-meta-agent/SKILL.md)             | 多助手协作           |
@@ -22,7 +22,7 @@
 - [verdantflare-agent-claude](verdantflare-agent-claude/SKILL.md) 用于Claude 调度。
 - [verdantflare-agent-codex](verdantflare-agent-codex/SKILL.md) 用于Codex 调度。
 - [verdantflare-agent-grok](verdantflare-agent-grok/SKILL.md) 用于Grok 调度。
-- [verdantflare-technical-whitepaper](verdantflare-technical-whitepaper/SKILL.md) 用于技术白皮书与架构图。
+- [verdantflare-write-whitepaper](verdantflare-write-whitepaper/SKILL.md) 用于技术白皮书与架构图。
 
 本目录其余 Studio、媒体与项目业务技能按项目或产品交付要求安装。
 

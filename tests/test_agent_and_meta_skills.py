@@ -16,10 +16,10 @@ SKILLS = (
     "verdantflare-agent-codex",
     "verdantflare-agent-grok",
     "verdantflare-meta-googledrive",
-    "verdantflare-meta-markdown",
+    "verdantflare-write-markdown",
     "verdantflare-meta-skill",
     "verdantflare-meta-agent",
-    "verdantflare-meta-plan",
+    "verdantflare-write-plan",
 )
 LEGACY_PREFIX_PATTERN = re.compile(r"(?:mk-agent-|mk-meta-|mk_agent_|MK_AGENT_|MK_PRETTIER|test_mk_markdown)")
 

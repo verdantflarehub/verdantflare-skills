@@ -1,5 +1,5 @@
 ---
-name: verdantflare-technical-whitepaper
+name: verdantflare-write-whitepaper
 description: 编制和修订图文技术白皮书、总体架构图与部署架构图，分离技术图与文档说明，检查业务边界、配色语义和图文一致性。用于白皮书或技术架构配图任务；不用于宣传海报，不代表研发、部署或审核授权。
 ---
 
