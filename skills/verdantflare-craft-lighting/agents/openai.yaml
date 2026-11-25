@@ -1,0 +1,4 @@
+interface:
+  display_name: "光影工艺专家"
+  short_description: "光向与可读性咨询，给出可比较方案、问题定位与复核办法。"
+  default_prompt: "使用 $verdantflare-craft-lighting，读取本轮委托中的证据，对光源动机、明暗关系、肤色及主题揭示给出专业意见。"

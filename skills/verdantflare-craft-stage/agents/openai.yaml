@@ -1,0 +1,4 @@
+interface:
+  display_name: "音乐舞台工艺专家"
+  short_description: "乐句与舞台揭示诊断，给出可比较方案、问题定位与复核办法。"
+  default_prompt: "使用 $verdantflare-craft-stage，读取本轮委托中的证据，对母带节拍、唇形、舞步相位与揭示时点给出专业意见。"

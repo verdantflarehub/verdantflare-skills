@@ -1,0 +1,4 @@
+interface:
+  display_name: "戏剧叙事与对白工艺专家"
+  short_description: "知情范围与潜台词咨询，给出可比较方案、问题定位与复核办法。"
+  default_prompt: "使用 $verdantflare-craft-dialogue，读取本轮委托中的证据，对人物知情顺序、潜台词、悬念与反应给出专业意见。"

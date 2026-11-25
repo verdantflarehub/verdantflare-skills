@@ -1,0 +1,4 @@
+interface:
+  display_name: "剪辑与连续性工艺专家"
+  short_description: "剪点与连续性诊断，给出可比较方案、问题定位与复核办法。"
+  default_prompt: "使用 $verdantflare-craft-editing，读取本轮委托中的证据，对剪点选择、动作连续、缺失覆盖及版本恢复给出专业意见。"

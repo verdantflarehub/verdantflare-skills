@@ -7,13 +7,13 @@ description: 音乐 MV 作品统筹导演技能（Director），以已批准 Mas
 
 ## 1. 范围与边界
 
-本技能位于电影工业技能体系顶层（`director`），以已批准 Master WAV 为唯一音频与时间线事实源，负责音乐 MV 的全局导演企划、视觉母题与一致性锁定、多工种隔离派单、逐镜审核门禁与成片装配，覆盖两种作品形态：**30 秒高潮故事版**（按 Block 逐段精修）与 **90 秒+ 全长 TV Version 素材池模式**（按 `2.5x–3x` 剪辑冗余比拆分为 `10s` 生成单元，支持 `9:16` 全屏与 `16:9` 漫画三联叠画混合画幅）。
+本技能位于电影工业技能体系顶层（`director`），以已批准 Master WAV 为唯一音频与时间线事实源，负责音乐 MV 的全局导演企划、视觉母题与一致性锁定、多工种隔离派单、逐镜审核门禁与成片装配，覆盖两种交付方式：**30 秒高潮故事版**（按 Block 逐段精修）与 **90 秒+ 全长 TV Version 素材池模式**（按 `2.5x–3x` 剪辑冗余比拆分为 `10s` 生成单元，支持 `9:16` 全屏与 `16:9` 漫画三联叠画混合画幅）。
 
-**导演层上下文与 Session 隔离红线**：本技能只管全局总盘、节拍对位、联合一致性基线、派单交接与终审装配，严禁陷入底层模型参数、LoRA 权重或单镜细碎返修泥潭——角色视觉设定与多角参考库交由[角色设计专员](../verdantflare-crew-character/SKILL.md)，单镜出图与视频渲染按能力入口委托[图像技能](../verdantflare-image/SKILL.md)与[视频技能](../verdantflare-video/SKILL.md)，歌曲修复交由[音乐技能](../verdantflare-music/SKILL.md)。AI 短剧与 MV 阶段成果默认同步到原 Studio 项目（沿用真实 `project_id`）；根目录 `project.json` 为本领域时钟与编排文档，`.vf/project.json` 为服务维护的通用 ProjectManifest 投影。MCP 能力缺失不自动换模型，也不操作 GPU/部署。
+**导演层上下文与 Session 隔离红线**：本技能只管全局总盘、节拍对位、联合一致性基线、派单交接与终审装配，严禁陷入底层模型参数、LoRA 权重或单镜细碎返修泥潭——角色视觉设定与多角参考库交由[角色设计专员](../verdantflare-crew-character/SKILL.md)，单镜委托由制作专员接收并按镜头要求调用[图像技能](../verdantflare-image/SKILL.md)与[视频技能](../verdantflare-video/SKILL.md)，段落派单与粗剪回收按[导演与专员交接](references/00.common.rules.md#6-段落派单与粗剪回收)执行，歌曲修复交由[音乐技能](../verdantflare-music/SKILL.md)。AI 短剧与 MV 阶段成果默认同步到原 Studio 项目（沿用真实 `project_id`）；根目录 `project.json` 为本领域时钟与编排文档，`.vf/project.json` 为服务维护的通用 ProjectManifest 投影。MCP 能力缺失不自动换模型，也不操作 GPU/部署。
 
 ## 2. 能力清单与按任务读取
 
-按目标 MV 作品形态直达对应入口：
+先按交付方式选下表入口。创作形态另按[演唱](references/03.performance.entrypoint.md)、[舞蹈](references/04.dance.entrypoint.md)、[叙事](references/05.narrative.entrypoint.md)或[混合](references/06.mixed.entrypoint.md)加载对应工作流。
 
 | 原子能力  | 入口文档                                                              |
 | :-------- | :-------------------------------------------------------------------- |
