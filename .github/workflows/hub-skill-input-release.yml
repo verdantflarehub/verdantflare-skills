@@ -1,0 +1,41 @@
+name: Publish Hub Skill Input
+on:
+  workflow_dispatch:
+    inputs:
+      releaseId:
+        description: Immutable release identifier
+        type: string
+        required: true
+permissions:
+  contents: write
+concurrency:
+  group: hub-skill-input-release
+  cancel-in-progress: false
+jobs:
+  package:
+    if: github.ref == 'refs/heads/release'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build and publish immutable input
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ inputs.releaseId }}
+        run: |
+          set -euo pipefail
+          python3 -c 'import os,re; x=os.environ["RELEASE_ID"]; assert re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,63}",x) and ".." not in x'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          tag="vf-hub-skill-input-$RELEASE_ID"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo 'Refusing to overwrite an existing release tag' >&2
+            exit 1
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=1" >/dev/null
+          archive="$RUNNER_TEMP/$tag.zip"
+          python3 -B src/hub-skill-release/build.py --source "$GITHUB_WORKSPACE" --release "$RELEASE_ID" --output "$archive"
+          test -z "$(git status --porcelain)"
+          gh release create "$tag" "$archive" --target "$GITHUB_SHA" --title "$tag" --notes 'Selected Artifact skill release input; unsigned integration candidate. Desktop installation and business execution are not certified.'
