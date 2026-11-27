@@ -1,0 +1,9 @@
+{
+  "skills": [
+    {
+      "id": "verdantflare-artifact",
+      "requires": [],
+      "files": ["SKILL.md", "agents/openai.yaml", "references/01.transfer.entrypoint.md"]
+    }
+  ]
+}
